@@ -305,7 +305,7 @@ class ChatManager:
 
     async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message("public", sender, content, reply_to_id)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id}
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time())}
         dead = []
         for ws in self.public_conns:
             try:
@@ -325,7 +325,7 @@ class ChatManager:
 
     async def broadcast_private(self, room: str, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message(room, sender, content, reply_to_id)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id}
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time())}
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -361,6 +361,7 @@ async def ws_chat_public(websocket: WebSocket):
                 await chat_manager.broadcast_public(username, content[:500], data.get("reply_to_id"))
     except WebSocketDisconnect:
         chat_manager.disconnect_public(websocket)
+        music_manager.remove(websocket)
 
 
 @app.get("/chat/public/messages")
