@@ -155,27 +155,55 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 }
 .draw-timer { color: var(--saffron); font-variant-numeric: tabular-nums; }
 
-.draw-scorebar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.draw-score-chip {
-    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 20px;
-    padding: 6px 14px; font-size: 13.5px; font-weight: 600; color: var(--text-muted);
+.draw-players-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.draw-player-card {
+    flex: 1 1 200px; display: flex; align-items: center; gap: 10px;
+    background: var(--surface-raised); border: 2px solid var(--border); border-radius: 16px;
+    padding: 9px 12px; min-width: 0; transition: border-color .2s ease, box-shadow .2s ease;
 }
-.draw-score-chip.me { color: var(--turquoise); border-color: var(--turquoise-dim); }
+.draw-player-card.me { border-color: var(--turquoise-dim); }
+.draw-player-card.turn { border-color: var(--saffron); box-shadow: 0 0 0 3px rgba(232,169,74,.16); }
+.draw-player-avatar {
+    width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+    background: var(--bg); border: 2px solid var(--turquoise-dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--turquoise); overflow: hidden;
+}
+.draw-player-card.turn .draw-player-avatar { border-color: var(--saffron); color: var(--saffron); }
+.draw-player-info { min-width: 0; flex: 1; }
+.draw-player-name-row { display: flex; align-items: center; gap: 6px; }
+.draw-player-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.draw-player-star {
+    display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 700;
+    color: var(--saffron); flex-shrink: 0;
+}
+.draw-player-role {
+    font-size: 12px; color: var(--text-muted); margin-top: 2px;
+    display: flex; align-items: center; gap: 4px;
+}
+.draw-player-card.turn .draw-player-role { color: var(--saffron); }
 
+.draw-board-frame {
+    background: linear-gradient(160deg, var(--surface-raised), var(--surface));
+    border: 1px solid var(--border); border-radius: 20px; padding: 10px; margin-bottom: 12px;
+    box-shadow: 0 12px 30px -18px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.02);
+}
 .draw-canvas-wrap {
-    background: #fff; border-radius: 14px; overflow: hidden; margin-bottom: 12px;
+    background: #fff; border-radius: 13px; overflow: hidden;
     border: 1px solid var(--border); line-height: 0;
 }
 .draw-canvas-wrap canvas {
     width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair;
 }
 
-.draw-palette { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px; }
+.draw-palette { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 12px; }
 .draw-swatch {
-    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
     border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border);
+    transition: transform .12s ease;
 }
-.draw-swatch.active { box-shadow: 0 0 0 2px var(--saffron); }
+.draw-swatch:hover { transform: scale(1.08); }
+.draw-swatch.active { box-shadow: 0 0 0 2px var(--saffron); transform: scale(1.08); }
 
 .draw-word-box {
     text-align: center; background: var(--surface-raised); border: 1px dashed var(--saffron);
@@ -183,15 +211,15 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 }
 
 .draw-options {
-    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px;
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 12px;
 }
 .draw-option-btn {
     background: var(--surface-raised); color: var(--text); border: 1px solid var(--border);
-    padding: 10px 14px; font-size: 14px; flex: 0 1 auto;
+    padding: 10px 18px; font-size: 14px; font-weight: 600; flex: 0 1 auto; border-radius: 999px;
 }
-.draw-option-btn:hover:not(:disabled) { background: var(--turquoise-dim); color: #fff; }
+.draw-option-btn:hover:not(:disabled) { background: var(--turquoise-dim); color: #fff; border-color: var(--turquoise-dim); }
 .draw-option-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.draw-option-btn.wrong { border-color: var(--danger); text-decoration: line-through; }
+.draw-option-btn.wrong { border-color: var(--danger); color: var(--danger); text-decoration: line-through; background: var(--surface-raised); }
 
 .draw-result { text-align: center; background: var(--surface-raised); border-radius: 14px; padding: 18px; }
 .draw-result-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
@@ -703,15 +731,17 @@ def drawing_page(username: str) -> str:
       <div class="status-line" id="status">در حال اتصال...</div>
       <div id="queueBox" class="queue-widget" style="display:none"></div>
 
+      <div id="playersRow" class="draw-players-row" style="display:none"></div>
+
       <div id="roundInfo" class="draw-round-info" style="display:none">
         <span id="roundLabel"></span>
         <span id="timerLabel" class="draw-timer"></span>
       </div>
 
-      <div id="scoreBar" class="draw-scorebar" style="display:none"></div>
-
-      <div id="canvasWrap" class="draw-canvas-wrap" style="display:none">
-        <canvas id="board" width="600" height="420"></canvas>
+      <div id="boardFrame" class="draw-board-frame" style="display:none">
+        <div id="canvasWrap" class="draw-canvas-wrap">
+          <canvas id="board" width="600" height="420"></canvas>
+        </div>
       </div>
 
       <div id="palette" class="draw-palette" style="display:none"></div>
@@ -750,7 +780,8 @@ def drawing_page(username: str) -> str:
     const roundInfo = document.getElementById("roundInfo");
     const roundLabel = document.getElementById("roundLabel");
     const timerLabel = document.getElementById("timerLabel");
-    const scoreBar = document.getElementById("scoreBar");
+    const playersRow = document.getElementById("playersRow");
+    const boardFrame = document.getElementById("boardFrame");
     const canvasWrap = document.getElementById("canvasWrap");
     const canvas = document.getElementById("board");
     const ctx = canvas.getContext("2d");
@@ -778,21 +809,48 @@ def drawing_page(username: str) -> str:
     }
     clearCanvas();
 
-    function renderScoreBar(scores) {
-        scoreBar.innerHTML = "";
+    function renderPlayers(scores, drawerName) {
+        playersRow.innerHTML = "";
         Object.entries(scores || {}).forEach(([name, score]) => {
-            const chip = document.createElement("div");
-            chip.className = "draw-score-chip" + (name === me ? " me" : "");
+            const isMe = name === me;
+            const isDrawer = drawerName != null && name === drawerName;
+            const card = document.createElement("div");
+            card.className = "draw-player-card" + (isMe ? " me" : "") + (isDrawer ? " turn" : "");
+
+            const avatar = document.createElement("div");
+            avatar.className = "draw-player-avatar";
+            avatar.textContent = name.slice(0, 1).toUpperCase();
+            card.appendChild(avatar);
+
+            const info = document.createElement("div");
+            info.className = "draw-player-info";
+
+            const nameRow = document.createElement("div");
+            nameRow.className = "draw-player-name-row";
             const link = document.createElement("a");
-            link.className = "profile-link";
+            link.className = "profile-link draw-player-name";
             link.href = "/profile?u=" + encodeURIComponent(name);
             link.target = "_blank";
             link.rel = "noopener";
-            link.textContent = name + ": " + score;
-            chip.appendChild(link);
-            scoreBar.appendChild(chip);
+            link.textContent = name;
+            const star = document.createElement("span");
+            star.className = "draw-player-star";
+            star.textContent = "⭐ " + score;
+            nameRow.appendChild(link);
+            nameRow.appendChild(star);
+            info.appendChild(nameRow);
+
+            if (drawerName != null) {
+                const roleEl = document.createElement("div");
+                roleEl.className = "draw-player-role";
+                roleEl.textContent = isDrawer ? "✏️ نقاش" : "👁 حدس‌زن";
+                info.appendChild(roleEl);
+            }
+
+            card.appendChild(info);
+            playersRow.appendChild(card);
         });
-        scoreBar.style.display = "flex";
+        playersRow.style.display = "flex";
     }
 
     function renderQueue(count, needed) {
@@ -932,15 +990,15 @@ def drawing_page(username: str) -> str:
         if (data.type === "waiting") {
             statusEl.style.display = "none";
             renderQueue(data.count || 1, data.needed || 2);
-            canvasWrap.style.display = "none";
-            scoreBar.style.display = "none";
+            boardFrame.style.display = "none";
+            playersRow.style.display = "none";
         }
 
         else if (data.type === "queue_timeout") {
             queueBox.style.display = "none";
             statusEl.style.display = "block";
             statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره وارد شو.";
-            canvasWrap.style.display = "none";
+            boardFrame.style.display = "none";
         }
 
         else if (data.type === "round_start") {
@@ -948,8 +1006,9 @@ def drawing_page(username: str) -> str:
             queueBox.style.display = "none";
             resetRoundUI();
             role = data.role;
-            renderScoreBar(data.scores);
-            canvasWrap.style.display = "block";
+            const drawerName = role === "drawer" ? me : data.opponent;
+            renderPlayers(data.scores, drawerName);
+            boardFrame.style.display = "block";
             roundLabel.textContent = "دور " + data.round + " از " + data.total_rounds +
                 (role === "drawer" ? " — نوبت نقاشی توئه" : " — حدس بزن " + data.opponent + " چی می‌کشه");
 
@@ -965,7 +1024,7 @@ def drawing_page(username: str) -> str:
                 drawerWordBox.style.display = "none";
                 palette.style.display = "none";
                 clearBtnWrap.style.display = "none";
-                optionsGrid.style.display = "grid";
+                optionsGrid.style.display = "flex";
                 buildOptions(data.options);
             }
 
@@ -997,7 +1056,7 @@ def drawing_page(username: str) -> str:
             clearBtnWrap.style.display = "none";
             drawerWordBox.style.display = "none";
             optionsGrid.style.display = "none";
-            renderScoreBar(data.scores);
+            renderPlayers(data.scores, data.drawer);
 
             resultPanel.style.display = "block";
             let html = "<div class='draw-result-title'>" +
@@ -1034,11 +1093,11 @@ def drawing_page(username: str) -> str:
             if (countdownTimer) clearInterval(countdownTimer);
             statusEl.style.display = "none";
             roundInfo.style.display = "none";
-            canvasWrap.style.display = "none";
+            boardFrame.style.display = "none";
             palette.style.display = "none";
             clearBtnWrap.style.display = "none";
             optionsGrid.style.display = "none";
-            renderScoreBar(data.scores);
+            renderPlayers(data.scores, null);
 
             resultPanel.style.display = "block";
             const entries = Object.entries(data.scores).sort((a, b) => b[1] - a[1]);
@@ -1056,7 +1115,7 @@ def drawing_page(username: str) -> str:
             statusEl.style.display = "block";
             statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
             roundInfo.style.display = "none";
-            canvasWrap.style.display = "none";
+            boardFrame.style.display = "none";
             palette.style.display = "none";
             clearBtnWrap.style.display = "none";
             optionsGrid.style.display = "none";
