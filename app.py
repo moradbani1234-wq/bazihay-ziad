@@ -172,7 +172,7 @@ async def support_page(request: Request):
     username = _require_login(request)
     if not username or not _is_support(username):
         return RedirectResponse("/lobby")
-    return tpl.support_page(username, await db.get_reports())
+    return tpl.support_page(username, await db.get_reports(), await db.get_active_bans())
 
 @app.post("/support/ban")
 async def support_ban(request: Request):
@@ -182,7 +182,9 @@ async def support_ban(request: Request):
     data = await request.json()
     target = str(data.get("target") or "").strip()[:64]
     scope = str(data.get("scope") or "games")
-    hours = float(data.get("hours") or 1)
+    # مدت محرومیت می‌تواند به‌صورت ساعت (hours) و/یا دقیقه (minutes) ارسال شود؛
+    # این دو با هم جمع می‌شوند تا هم محرومیت چند دقیقه‌ای هم چند ساعته ممکن باشد.
+    hours = float(data.get("hours") or 0) + float(data.get("minutes") or 0) / 60.0
     reason = str(data.get("reason") or "نقض قوانین")[:300]
     allowed = {"games","chat","drawing","tictactoe","all"}
     if not target or target == "morad" or scope not in allowed or hours <= 0 or hours > 168:
@@ -191,6 +193,20 @@ async def support_ban(request: Request):
     if data.get("report_id"):
         await db.resolve_report(int(data["report_id"]))
     return {"ok": True, "until": until}
+
+@app.post("/support/unban")
+async def support_unban(request: Request):
+    username = _require_login(request)
+    if not username or not _is_support(username):
+        return {"ok": False, "error": "forbidden"}
+    data = await request.json()
+    target = str(data.get("target") or "").strip()[:64]
+    scope = str(data.get("scope") or "all")
+    allowed = {"games","chat","drawing","tictactoe","all"}
+    if not target or scope not in allowed:
+        return {"ok": False, "error": "invalid"}
+    await db.unban_user(target, scope)
+    return {"ok": True}
 
 # ============================================================
 #                          LOBBY

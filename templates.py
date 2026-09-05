@@ -1,6 +1,7 @@
 """صفحات HTML به‌صورت رشته‌های پایتون؛ برای ساده نگه‌داشتن دیپلوی، بدون پوشه‌های جدا."""
 
 import html
+import time
 
 BASE_CSS = """
 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
@@ -53,6 +54,7 @@ p { color: var(--text-muted); }
 .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
     padding: 24px; margin-bottom: 18px;
+    box-shadow: 0 10px 30px -18px rgba(0,0,0,0.55);
 }
 
 .hero {
@@ -90,11 +92,20 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 
 .grid-links { display: grid; gap: 12px; margin-top: 6px; }
 .grid-links a {
-    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 14px;
+    background: linear-gradient(160deg, var(--surface-raised), var(--surface));
+    border: 1px solid var(--border); border-radius: 14px;
     padding: 20px; text-align: center; color: var(--text); text-decoration: none;
     font-size: 17px; font-weight: 600; transition: border-color 0.15s ease, transform 0.1s ease;
+    position: relative; overflow: hidden;
+}
+.grid-links a::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(120deg, rgba(47,169,160,0), rgba(232,169,74,.35), rgba(47,169,160,0));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity .2s ease;
 }
 .grid-links a:hover { border-color: var(--saffron); transform: translateY(-1px); }
+.grid-links a:hover::before { opacity: 1; }
 
 .chat-box {
     height: 380px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border);
@@ -208,6 +219,18 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 .admin-card { border-color:var(--saffron); }
 .report-item { padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:var(--surface-raised); }
 .report-meta { color:var(--text-muted); font-size:12px; }
+.ban-controls { flex-wrap:wrap; align-items:center; }
+.ban-unit { color:var(--text-muted); font-size:12.5px; margin-inline-end:6px; }
+.ban-row {
+    padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px;
+    background:var(--surface-raised); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+}
+.ban-scope-tag {
+    display:inline-block; margin-inline-start:8px; font-size:11.5px; font-weight:600; color:var(--saffron);
+    background:rgba(232,169,74,.12); border:1px solid rgba(232,169,74,.3); border-radius:8px; padding:2px 8px;
+}
+.unban-btn { background:transparent; color:var(--turquoise); border:1px solid var(--turquoise-dim); padding:8px 16px; }
+.unban-btn:hover { background:var(--turquoise-dim); color:#fff; }
 
 
 .game-card, .grid-links a { transition: transform .22s ease, box-shadow .22s ease, filter .22s ease; }
@@ -344,7 +367,10 @@ def leaderboard_page(username: str, rows: list[dict]) -> str:
     </div>"""
     return page_shell("رتبه‌بندی",body,username)
 
-def support_page(username: str, reports: list[dict]) -> str:
+def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None) -> str:
+    active_bans = active_bans or []
+    scope_label = {"all":"همه بخش‌ها","chat":"چت","games":"بازی‌ها","drawing":"نقاشی","tictactoe":"دوز"}
+
     items=[]
     for r in reports:
         status="حل‌شده" if r["status"]!="open" else "باز"
@@ -353,31 +379,99 @@ def support_page(username: str, reports: list[dict]) -> str:
           <div><b>گزارش {r['id']}</b> — {html.escape(r['context'])} — <span>{status}</span></div>
           <div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر گزارش‌شده: <b>{html.escape(r['target'])}</b></div>
           <p style="margin:8px 0"><b>محتوا:</b> {html.escape(r['content'])}</p>
-          <div class="draw-tools">
+          <div class="draw-tools ban-controls">
             <select class="draw-size ban-scope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
-            <input class="ban-hours" type="number" min="1" max="168" value="3" style="width:80px;margin:0" title="ساعت">
+            <input class="ban-hours" type="number" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
+            <span class="ban-unit">ساعت</span>
+            <input class="ban-minutes" type="number" min="0" max="59" step="1" value="3" style="width:70px;margin:0" title="دقیقه">
+            <span class="ban-unit">دقیقه</span>
             <button class="glow-btn" onclick="banUser({r['id']}, this)">محروم کن</button>
           </div>
         </div>""")
+
+    ban_rows=[]
+    for b in active_bans:
+        remaining = max(0, b["until_ts"] - int(time.time()))
+        h, rem = divmod(remaining, 3600)
+        m = rem // 60
+        left_txt = (f"{h} ساعت و " if h else "") + f"{m} دقیقه"
+        ban_rows.append(f"""
+        <div class="ban-row" data-target="{html.escape(b['username'])}" data-scope="{html.escape(b['scope'])}">
+          <div><b>{html.escape(b['username'])}</b> <span class="ban-scope-tag">{scope_label.get(b['scope'], b['scope'])}</span></div>
+          <div class="report-meta">دلیل: {html.escape(b.get('reason') or '—')} | باقی‌مانده: {left_txt}</div>
+          <button class="btn unban-btn" onclick="unbanUser(this)">رفع محرومیت</button>
+        </div>""")
+
     body=f"""
     <div class="card admin-card page-enter">
       <h1>🛡️ پنل پشتیبانی</h1>
-      <p>گزارش‌ها را بررسی کن و در صورت تخلف، محرومیت را فقط برای همان بخش یا برای همه بخش‌ها اعمال کن.</p>
-      <div>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div>
-      <a class="btn" href="/lobby">بازگشت</a>
+      <p>گزارش‌ها را بررسی کن، محرومیت را برای مدت دلخواه (به ساعت و دقیقه) روی همان بخش یا همهٔ بخش‌ها اعمال کن، یا کاربری را مستقیماً محروم/رفعِ‌محرومیت کن.</p>
     </div>
+
+    <div class="card">
+      <h2>🔨 محروم کردن مستقیم یک کاربر</h2>
+      <div class="draw-tools ban-controls" style="justify-content:flex-start">
+        <input type="text" id="directTarget" placeholder="نام کاربری" style="width:140px;margin:0">
+        <select class="draw-size" id="directScope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
+        <input type="number" id="directHours" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
+        <span class="ban-unit">ساعت</span>
+        <input type="number" id="directMinutes" min="0" max="59" step="1" value="10" style="width:70px;margin:0" title="دقیقه">
+        <span class="ban-unit">دقیقه</span>
+      </div>
+      <div style="margin-top:10px">
+        <input type="text" id="directReason" placeholder="دلیل محرومیت (اختیاری)" style="margin:0">
+      </div>
+      <button class="glow-btn" style="margin-top:12px" onclick="banDirect()">محروم کن</button>
+    </div>
+
+    <div class="card">
+      <h2>⏳ محرومیت‌های فعال</h2>
+      <div id="activeBans">{''.join(ban_rows) or '<p>در حال حاضر کسی محروم نیست.</p>'}</div>
+    </div>
+
+    <div class="card">
+      <h2>📄 گزارش‌ها</h2>
+      <div>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div>
+    </div>
+    <a class="btn" href="/lobby">بازگشت</a>
+
     <script>
+    async function doBan(payload, btn, okText) {{
+      const r=await fetch('/support/ban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+        body:JSON.stringify(payload)}});
+      const d=await r.json();
+      if(d.ok) {{ if(btn) {{ btn.textContent=okText; btn.disabled=true; }} location.reload(); }}
+      else alert('خطا در اعمال محرومیت (مدت را بررسی کن؛ باید بیشتر از صفر باشد)');
+    }}
+
     async function banUser(id, btn) {{
       const item=btn.closest('.report-item');
       const target=item.querySelector('.report-meta b').textContent.trim();
       const scope=item.querySelector('.ban-scope').value;
       const hours=Number(item.querySelector('.ban-hours').value);
+      const minutes=Number(item.querySelector('.ban-minutes').value);
       const reason=item.querySelector('p').textContent.replace(/^محتوا:\\s*/,'').slice(0,300);
-      const r=await fetch('/support/ban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
-        body:JSON.stringify({{report_id:id,target,scope,hours,reason}})}});
+      await doBan({{report_id:id,target,scope,hours,minutes,reason}}, btn, '✅ محروم شد');
+    }}
+
+    async function banDirect() {{
+      const target=document.getElementById('directTarget').value.trim();
+      const scope=document.getElementById('directScope').value;
+      const hours=Number(document.getElementById('directHours').value);
+      const minutes=Number(document.getElementById('directMinutes').value);
+      const reason=document.getElementById('directReason').value.trim() || 'نقض قوانین';
+      if(!target) {{ alert('نام کاربری را وارد کن'); return; }}
+      await doBan({{target,scope,hours,minutes,reason}}, null, '');
+    }}
+
+    async function unbanUser(btn) {{
+      const row=btn.closest('.ban-row');
+      const target=row.dataset.target, scope=row.dataset.scope;
+      const r=await fetch('/support/unban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+        body:JSON.stringify({{target,scope}})}});
       const d=await r.json();
-      if(d.ok) {{ btn.textContent='✅ محروم شد'; btn.disabled=true; }}
-      else alert('خطا در اعمال محرومیت');
+      if(d.ok) {{ row.remove(); }}
+      else alert('خطا در رفع محرومیت');
     }}
     </script>"""
     return page_shell("پنل پشتیبانی",body,username)
@@ -862,15 +956,15 @@ def drawing_page(username: str) -> str:
                 html += "<div>این دور امتیازی داده نشد.</div>";
             }
             resultPanel.innerHTML = html;
-            if (data.drawer !== me) {{
+            if (data.drawer !== me) {
                 const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش نقاشی";
-                rb.onclick=async()=>{{
-                    const r=await fetch("/report",{{method:"POST",headers:{{"Content-Type":"application/json"}},
-                      body:JSON.stringify({{target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing"}})}});
+                rb.onclick=async()=>{
+                    const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},
+                      body:JSON.stringify({target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing"})});
                     if((await r.json()).ok) alert("گزارش ثبت شد.");
-                }};
+                };
                 resultPanel.appendChild(rb);
-            }}
+            }
             const noteEl = document.createElement("div");
             noteEl.className = "draw-result-note";
             resultPanel.appendChild(noteEl);

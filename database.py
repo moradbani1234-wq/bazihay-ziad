@@ -113,7 +113,10 @@ async def resolve_report(report_id):
         await db.commit()
 
 async def ban_user(username,scope,hours,reason):
-    until=int(time.time()+max(1,hours)*3600)
+    # نکته: قبلاً اینجا max(1,hours)*3600 بود که هر محرومیت زیر یک ساعت
+    # (مثلاً محرومیت‌های چند دقیقه‌ای) را به‌اشتباه به یک ساعت کامل تبدیل می‌کرد.
+    # حالا حداقلِ واقعی فقط ۱ ثانیه است تا محرومیت‌های دقیقه‌ای هم درست کار کنند.
+    until=int(time.time()+max(1,hours*3600))
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""INSERT INTO bans(username,scope,until_ts,reason,created_at,active)
                             VALUES(?,?,?,?,?,1)""",(username,scope,until,reason,int(time.time())))
@@ -130,3 +133,23 @@ async def get_active_ban(username,scope):
                                 ORDER BY until_ts DESC LIMIT 1""",(username,now,*scopes))
         row=await cur.fetchone()
         return dict(row) if row else None
+
+async def unban_user(username,scope):
+    """محرومیت‌های فعالِ یک کاربر را غیرفعال می‌کند.
+    scope='all' یعنی همه محرومیت‌های آن کاربر (در هر بخشی) پاک شوند؛
+    در غیر این صورت فقط محرومیت‌های همان بخش + محرومیت‌های عمومی 'all' پاک می‌شوند."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if scope == "all":
+            await db.execute("UPDATE bans SET active=0 WHERE username=? AND active=1",(username,))
+        else:
+            await db.execute("UPDATE bans SET active=0 WHERE username=? AND active=1 AND scope IN (?,'all')",
+                             (username,scope))
+        await db.commit()
+
+async def get_active_bans(limit=200):
+    now=int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("""SELECT * FROM bans WHERE active=1 AND until_ts>?
+                                ORDER BY until_ts DESC LIMIT ?""",(now,limit))
+        return [dict(r) for r in await cur.fetchall()]
