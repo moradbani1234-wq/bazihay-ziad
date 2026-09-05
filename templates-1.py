@@ -1,0 +1,1465 @@
+"""صفحات HTML به‌صورت رشته‌های پایتون؛ برای ساده نگه‌داشتن دیپلوی، بدون پوشه‌های جدا."""
+
+import html
+import os
+import time
+from urllib.parse import quote
+
+# نام اکانت پشتیبانی از همان متغیر محیطی app.py خوانده می‌شود تا این ماژول هم
+# بداند کدام کاربر «پشتیبانی رسمی» است (برای نمایش نشان/کادر تیک‌خورده).
+SUPPORT_USERNAME = os.environ.get("SUPPORT_USERNAME", "morad")
+
+def _support_badge(inline=True):
+    cls = "support-badge" if inline else "support-badge support-badge-block"
+    return f'<span class="{cls}" title="حساب رسمی پشتیبانی">✔️ پشتیبانی</span>'
+
+
+BASE_CSS = """
+@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+
+:root {
+    --bg: #101A30;
+    --surface: #182A4A;
+    --surface-raised: #1F3459;
+    --border: #2D4670;
+    --text: #EEEAE0;
+    --text-muted: #93A2C4;
+    --turquoise: #2FA9A0;
+    --turquoise-dim: #23807A;
+    --saffron: #E8A94A;
+    --danger: #E2665E;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    margin: 0; padding: 0; direction: rtl;
+    font-size: 15px; line-height: 1.8;
+}
+
+:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+
+.nav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 22px; background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    position: relative;
+}
+.nav::after {
+    content: ""; position: absolute; bottom: -2px; right: 0; left: 0; height: 2px;
+    background: repeating-linear-gradient(-45deg, var(--turquoise) 0 6px, var(--saffron) 6px 12px);
+    opacity: 0.5;
+}
+.nav-brand { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.nav a { color: var(--turquoise); text-decoration: none; margin-inline-start: 16px; font-weight: 600; }
+.nav a:hover { color: var(--saffron); }
+
+.container { max-width: 620px; margin: 0 auto; padding: 24px 18px 60px; }
+
+h1 { font-size: 25px; font-weight: 700; margin: 0 0 14px; line-height: 1.5; }
+h2 { font-size: 18px; font-weight: 600; margin: 0 0 14px; color: var(--text); }
+p { color: var(--text-muted); }
+
+.card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; margin-bottom: 18px;
+    box-shadow: 0 10px 30px -18px rgba(0,0,0,0.55);
+}
+
+.hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, var(--surface-raised), var(--surface));
+}
+.hero::before {
+    content: ""; position: absolute; inset: -30%;
+    background-image: radial-gradient(circle, rgba(232,169,74,0.10) 0 2px, transparent 2.5px);
+    background-size: 28px 28px;
+    transform: rotate(12deg);
+    pointer-events: none;
+}
+.hero > * { position: relative; }
+
+input[type=text], input[type=password] {
+    width: 100%; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); margin-bottom: 14px; font-size: 15px;
+    font-family: inherit;
+}
+input:focus { border-color: var(--turquoise); }
+
+button, .btn {
+    background: var(--turquoise); color: #0B1626; border: none; padding: 13px 20px;
+    border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+    text-decoration: none; display: inline-block; font-family: inherit;
+    transition: background 0.15s ease;
+}
+button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
+
+.error {
+    color: var(--danger); background: rgba(226,102,94,0.1); border: 1px solid rgba(226,102,94,0.3);
+    padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 14px;
+}
+
+.grid-links { display: grid; gap: 12px; margin-top: 6px; }
+.grid-links a {
+    background: linear-gradient(160deg, var(--surface-raised), var(--surface));
+    border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; text-align: center; color: var(--text); text-decoration: none;
+    font-size: 17px; font-weight: 600; transition: border-color 0.15s ease, transform 0.1s ease;
+    position: relative; overflow: hidden;
+}
+.grid-links a::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(120deg, rgba(47,169,160,0), rgba(232,169,74,.35), rgba(47,169,160,0));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity .2s ease;
+}
+.grid-links a:hover { border-color: var(--saffron); transform: translateY(-1px); }
+.grid-links a:hover::before { opacity: 1; }
+
+.chat-box {
+    height: 380px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.msg {
+    padding: 9px 13px; border-radius: 12px 12px 12px 2px; background: var(--surface-raised);
+    max-width: 78%; font-size: 14.5px; align-self: flex-start;
+}
+.msg.me {
+    align-self: flex-end; background: var(--turquoise-dim); border-radius: 12px 12px 2px 12px;
+}
+.msg .sender { font-size: 12px; opacity: 0.65; display: block; margin-bottom: 2px; font-weight: 600; }
+.chat-input-row { display: flex; gap: 8px; }
+.chat-input-row input { flex: 1; margin-bottom: 0; }
+
+.status-line {
+    text-align: center; font-size: 15.5px; margin-bottom: 14px; color: var(--saffron); font-weight: 600;
+}
+
+.ttt-board {
+    display: grid; grid-template-columns: repeat(3, 88px); grid-template-rows: repeat(3, 88px);
+    gap: 8px; justify-content: center; margin: 20px 0;
+}
+.ttt-cell {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; font-weight: 700; cursor: pointer; user-select: none;
+    color: var(--turquoise); transition: background 0.15s ease;
+}
+.ttt-cell:hover { background: var(--border); }
+
+.word-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 6px; }
+.letter-box {
+    width: 46px; height: 46px; border: 2px solid var(--border); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 21px; font-weight: 700;
+    background: var(--surface-raised); color: var(--text);
+}
+.letter-box.correct { background: var(--turquoise-dim); border-color: var(--turquoise-dim); color: #fff; }
+.letter-box.present { background: #8A6A25; border-color: #8A6A25; color: #fff; }
+.letter-box.absent { background: var(--border); border-color: var(--border); color: var(--text-muted); }
+
+.draw-round-info {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; font-weight: 600; color: var(--text);
+}
+.draw-timer { color: var(--saffron); font-variant-numeric: tabular-nums; }
+
+.draw-scorebar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.draw-score-chip {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 20px;
+    padding: 6px 14px; font-size: 13.5px; font-weight: 600; color: var(--text-muted);
+}
+.draw-score-chip.me { color: var(--turquoise); border-color: var(--turquoise-dim); }
+
+.draw-canvas-wrap {
+    background: #fff; border-radius: 14px; overflow: hidden; margin-bottom: 12px;
+    border: 1px solid var(--border); line-height: 0;
+}
+.draw-canvas-wrap canvas {
+    width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair;
+}
+
+.draw-palette { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px; }
+.draw-swatch {
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border);
+}
+.draw-swatch.active { box-shadow: 0 0 0 2px var(--saffron); }
+
+.draw-word-box {
+    text-align: center; background: var(--surface-raised); border: 1px dashed var(--saffron);
+    border-radius: 10px; padding: 10px; margin-bottom: 12px; font-weight: 700; color: var(--saffron);
+}
+
+.draw-options {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px;
+}
+.draw-option-btn {
+    background: var(--surface-raised); color: var(--text); border: 1px solid var(--border);
+    padding: 12px 8px; font-size: 14px;
+}
+.draw-option-btn:hover:not(:disabled) { background: var(--turquoise-dim); color: #fff; }
+.draw-option-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.draw-option-btn.wrong { border-color: var(--danger); text-decoration: line-through; }
+
+.draw-result { text-align: center; background: var(--surface-raised); border-radius: 14px; padding: 18px; }
+.draw-result-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.draw-result-note { margin-top: 10px; color: var(--text-muted); font-size: 13.5px; }
+
+
+.report-btn {
+    margin-inline-start: 8px; padding: 3px 7px; border-radius: 7px;
+    background: transparent; border: 1px solid var(--danger); color: var(--danger);
+    font-size: 11px; cursor: pointer; opacity: .75;
+}
+.report-btn:hover { opacity: 1; background: rgba(226,102,94,.12); }
+.draw-tools { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; }
+.draw-tool, .draw-size {
+    background:var(--surface-raised); color:var(--text); border:1px solid var(--border);
+    padding:8px 12px; border-radius:10px; cursor:pointer;
+}
+.draw-tool.active, .draw-size.active { border-color:var(--saffron); box-shadow:0 0 0 2px rgba(232,169,74,.18); }
+.page-enter { animation: pageIn .35s ease both; }
+@keyframes pageIn { from {opacity:0; transform:translateY(8px) scale(.99)} to {opacity:1;transform:none} }
+.glow-btn { box-shadow:0 0 0 rgba(47,169,160,0); transition:transform .2s, box-shadow .2s; }
+.glow-btn:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(47,169,160,.2); }
+.leader-row { display:grid; grid-template-columns:42px 1fr 70px 70px; gap:8px; align-items:center; padding:12px; border-bottom:1px solid var(--border); }
+.leader-row.me { background:rgba(47,169,160,.08); border-radius:10px; }
+.rank-medal { font-size:20px; text-align:center; }
+.admin-card { border-color:var(--saffron); }
+.report-item { padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:var(--surface-raised); }
+.report-meta { color:var(--text-muted); font-size:12px; }
+.ban-controls { flex-wrap:wrap; align-items:center; }
+.ban-unit { color:var(--text-muted); font-size:12.5px; margin-inline-end:6px; }
+.ban-row {
+    padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px;
+    background:var(--surface-raised); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+}
+.ban-scope-tag {
+    display:inline-block; margin-inline-start:8px; font-size:11.5px; font-weight:600; color:var(--saffron);
+    background:rgba(232,169,74,.12); border:1px solid rgba(232,169,74,.3); border-radius:8px; padding:2px 8px;
+}
+.unban-btn { background:transparent; color:var(--turquoise); border:1px solid var(--turquoise-dim); padding:8px 16px; }
+.unban-btn:hover { background:var(--turquoise-dim); color:#fff; }
+
+
+.game-card, .grid-links a { transition: transform .22s ease, box-shadow .22s ease, filter .22s ease; }
+.grid-links a:hover { transform: translateY(-4px) scale(1.015); filter: brightness(1.06); }
+.grid-links a small { display:block; opacity:.7; font-size:11px; margin-top:4px; }
+.status-line { min-height: 24px; transition: opacity .2s ease, transform .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}
+"""
+
+
+def _nav(username: str | None) -> str:
+    if username:
+        u = html.escape(username)
+        return f"""
+        <div class="nav">
+          <div class="nav-brand">🎲 بازی‌خونه — {u}</div>
+          <div>
+            <a href="/lobby">لابی</a>
+            <a href="/leaderboard">🏆 رتبه‌بندی</a>
+            {('<a href="/support">🛡️ پشتیبانی</a>' if username == SUPPORT_USERNAME else '')}
+            <a href="/logout">خروج</a>
+          </div>
+        </div>"""
+    return """
+    <div class="nav">
+      <div class="nav-brand">🎲 بازی‌خونه</div>
+      <div><a href="/login">ورود</a></div>
+    </div>"""
+
+
+def page_shell(title: str, body: str, username: str | None = None) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+<style>{BASE_CSS}</style>
+</head>
+<body>
+{_nav(username)}
+<div class="container">
+{body}
+</div>
+</body>
+</html>"""
+
+
+def login_page(error: str | None = None) -> str:
+    err_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
+    body = f"""
+    <div class="card">
+      <h1>ورود به بازی‌خونه</h1>
+      {err_html}
+      <form method="post" action="/login">
+        <input type="text" name="username" placeholder="نام کاربری" required>
+        <input type="password" name="password" placeholder="رمز عبور" required>
+        <button type="submit">ورود</button>
+      </form>
+      <p>حساب نداری؟ <a href="/signup" style="color:var(--turquoise)">ثبت‌نام کن</a></p>
+    </div>"""
+    return page_shell("ورود", body)
+
+
+def signup_page(error: str | None = None) -> str:
+    err_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
+    body = f"""
+    <div class="card">
+      <h1>ساخت حساب جدید</h1>
+      {err_html}
+      <form method="post" action="/signup">
+        <input type="text" name="username" placeholder="نام کاربری (حداقل ۳ حرف)" required>
+        <input type="password" name="password" placeholder="رمز عبور (حداقل ۴ حرف)" required>
+        <button type="submit">ساخت حساب</button>
+      </form>
+      <p>حساب داری؟ <a href="/login" style="color:var(--turquoise)">وارد شو</a></p>
+    </div>"""
+    return page_shell("ثبت‌نام", body)
+
+
+def lobby_page(username: str) -> str:
+    body = f"""
+    <div class="card hero">
+      <h1>خوش اومدی، {html.escape(username)}!</h1>
+      <p style="margin-bottom:18px">یه بازی رو انتخاب کن، یا برو تو چت با بقیه گپ بزن.</p>
+      <div class="grid-links">
+        <a class="glow-btn" href="/game/tictactoe">⭕ دوز دو نفره زنده <small>رقابت سریع</small></a>
+        <a class="glow-btn" href="/game/drawing">🎨 نقاشی حدسی دو نفره <small>همزمان و زنده</small></a>
+        <a class="glow-btn" href="/chat/public">💬 چت عمومی <small>گفت‌وگو و گزارش</small></a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>چت خصوصی</h2>
+      <form method="post" action="/chat/private/start">
+        <input type="text" name="other" placeholder="نام کاربری طرف مقابل" required>
+        <button type="submit">شروع چت خصوصی</button>
+      </form>
+    </div>"""
+    return page_shell("لابی", body, username)
+
+
+
+def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
+    mins = max(1, (remaining + 59) // 60)
+    scope_text = {"games":"بازی‌ها", "chat":"چت‌ها", "drawing":"نقاشی", "tictactoe":"دوز", "all":"همه بخش‌ها"}.get(scope, scope)
+    body=f"""
+    <div class="card hero page-enter" style="text-align:center">
+      <div style="font-size:52px">🚫</div>
+      <h1>دسترسی موقتاً محدود شده</h1>
+      <p>شما از <b>{html.escape(scope_text)}</b> محروم هستید.</p>
+      <p>زمان باقی‌مانده: <b>{mins} دقیقه</b></p>
+      <p>دلیل: {html.escape(reason or "نقض قوانین")}</p>
+      <a class="btn glow-btn" href="/lobby">بازگشت به منو</a>
+    </div>"""
+    return page_shell("محرومیت موقت", body, username)
+
+def leaderboard_page(username: str, rows: list[dict]) -> str:
+    items=[]
+    medals=["🥇","🥈","🥉"]
+    for i,r in enumerate(rows,1):
+        medal=medals[i-1] if i<=3 else str(i)
+        cls=" me" if r["username"]==username else ""
+        items.append(f"""<div class="leader-row{cls}">
+          <div class="rank-medal">{medal}</div><div><b>{html.escape(r['username'])}</b></div>
+          <div>{r['rating']} امتیاز</div><div>{r['wins']} برد</div>
+        </div>""")
+    body=f"""
+    <div class="card hero page-enter"><h1>🏆 رتبه‌بندی</h1>
+      <p>رتبه بر اساس برد و مساوی محاسبه می‌شود؛ امتیاز بازی هم به عنوان معیار دوم ثبت می‌شود.</p>
+      <div>{''.join(items) or '<p>هنوز آماری ثبت نشده.</p>'}</div>
+      <div style="text-align:center;margin-top:16px"><a class="btn" href="/lobby">لابی</a></div>
+    </div>"""
+    return page_shell("رتبه‌بندی",body,username)
+
+def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None) -> str:
+    active_bans = active_bans or []
+    scope_label = {"all":"همه بخش‌ها","chat":"چت","games":"بازی‌ها","drawing":"نقاشی","tictactoe":"دوز"}
+
+    items=[]
+    for r in reports:
+        status="حل‌شده" if r["status"]!="open" else "باز"
+        items.append(f"""
+        <div class="report-item" data-id="{r['id']}">
+          <div><b>گزارش {r['id']}</b> — {html.escape(r['context'])} — <span>{status}</span></div>
+          <div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر گزارش‌شده: <b>{html.escape(r['target'])}</b></div>
+          <p style="margin:8px 0"><b>محتوا:</b> {html.escape(r['content'])}</p>
+          {('<img src="'+html.escape(r.get("attachment") or '')+'" style="max-width:100%;border-radius:12px;border:1px solid var(--border);margin:8px 0" alt="نقاشی گزارش‌شده">' if r.get("attachment") else '')}
+          <div class="draw-tools ban-controls">
+            <select class="draw-size ban-scope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
+            <input class="ban-hours" type="number" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
+            <span class="ban-unit">ساعت</span>
+            <input class="ban-minutes" type="number" min="0" max="59" step="1" value="3" style="width:70px;margin:0" title="دقیقه">
+            <span class="ban-unit">دقیقه</span>
+            <button class="glow-btn" onclick="banUser({r['id']}, this)">محروم کن</button>
+            <button class="btn" onclick="banReporter({r['id']}, {r['reporter']!r})">🚫 محرومیت گزارش‌دهنده</button>
+          </div>
+        </div>""")
+
+    ban_rows=[]
+    for b in active_bans:
+        remaining = max(0, b["until_ts"] - int(time.time()))
+        h, rem = divmod(remaining, 3600)
+        m = rem // 60
+        left_txt = (f"{h} ساعت و " if h else "") + f"{m} دقیقه"
+        ban_rows.append(f"""
+        <div class="ban-row" data-target="{html.escape(b['username'])}" data-scope="{html.escape(b['scope'])}">
+          <div><b>{html.escape(b['username'])}</b> <span class="ban-scope-tag">{scope_label.get(b['scope'], b['scope'])}</span></div>
+          <div class="report-meta">دلیل: {html.escape(b.get('reason') or '—')} | باقی‌مانده: {left_txt}</div>
+          <button class="btn unban-btn" onclick="unbanUser(this)">رفع محرومیت</button>
+        </div>""")
+
+    body=f"""
+    <div class="card admin-card page-enter">
+      <h1>🛡️ پنل پشتیبانی</h1>
+      <p>گزارش‌ها را بررسی کن، محرومیت را برای مدت دلخواه (به ساعت و دقیقه) روی همان بخش یا همهٔ بخش‌ها اعمال کن، یا کاربری را مستقیماً محروم/رفعِ‌محرومیت کن.</p>
+    </div>
+
+    <div class="card">
+      <h2>🔨 محروم کردن مستقیم یک کاربر</h2>
+      <div class="draw-tools ban-controls" style="justify-content:flex-start">
+        <input type="text" id="directTarget" placeholder="نام کاربری" style="width:140px;margin:0">
+        <select class="draw-size" id="directScope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
+        <input type="number" id="directHours" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
+        <span class="ban-unit">ساعت</span>
+        <input type="number" id="directMinutes" min="0" max="59" step="1" value="10" style="width:70px;margin:0" title="دقیقه">
+        <span class="ban-unit">دقیقه</span>
+      </div>
+      <div style="margin-top:10px">
+        <input type="text" id="directReason" placeholder="دلیل محرومیت (اختیاری)" style="margin:0">
+      </div>
+      <button class="glow-btn" style="margin-top:12px" onclick="banDirect()">محروم کن</button>
+    </div>
+
+    <div class="card">
+      <h2>⏳ محرومیت‌های فعال</h2>
+      <div id="activeBans">{''.join(ban_rows) or '<p>در حال حاضر کسی محروم نیست.</p>'}</div>
+    </div>
+
+    <div class="card">
+      <h2>🎵 مدیریت آهنگ چت عمومی</h2>
+      <p>از خود گوشی یک فایل آهنگ انتخاب کن؛ فایل روی سرور ذخیره می‌شود و آهنگ فعال برای همهٔ کاربران چت روم قابل پخش است.</p>
+      <input type="text" id="musicTitle" placeholder="نام آهنگ / عنوان (اختیاری)">
+      
+      <input type="file" id="musicFile" accept="audio/*" style="width:100%;margin:8px 0 12px">
+      <button class="glow-btn" onclick="setMusic()">🎵 انتخاب و فعال کردن آهنگ</button>
+      <button class="btn" onclick="clearMusic()" style="margin-inline-start:6px">⏹ قطع برای همه</button>
+      <div class="support-music-preview">ℹ️ حداکثر حجم فایل ۱۵ مگابایت. به‌خاطر محدودیت مرورگر، هر کاربر با دکمه «پخش» شروع می‌کند.</div>
+    </div>
+
+    <div class="card">
+      <h2>📄 گزارش‌ها</h2>
+      <div>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div>
+    </div>
+    <a class="btn" href="/lobby">بازگشت</a>
+
+    <script>
+    async function doBan(payload, btn, okText) {{
+      const r=await fetch('/support/ban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+        body:JSON.stringify(payload)}});
+      const d=await r.json();
+      if(d.ok) {{ if(btn) {{ btn.textContent=okText; btn.disabled=true; }} location.reload(); }}
+      else alert('خطا در اعمال محرومیت (مدت را بررسی کن؛ باید بیشتر از صفر باشد)');
+    }}
+
+    async function banUser(id, btn) {{
+      const item=btn.closest('.report-item');
+      const target=item.querySelector('.report-meta b').textContent.trim();
+      const scope=item.querySelector('.ban-scope').value;
+      const hours=Number(item.querySelector('.ban-hours').value);
+      const minutes=Number(item.querySelector('.ban-minutes').value);
+      const reason=item.querySelector('p').textContent.replace(/^محتوا:\\s*/,'').slice(0,300);
+      await doBan({{report_id:id,target,scope,hours,minutes,reason}}, btn, '✅ محروم شد');
+    }}
+
+    async function banDirect() {{
+      const target=document.getElementById('directTarget').value.trim();
+      const scope=document.getElementById('directScope').value;
+      const hours=Number(document.getElementById('directHours').value);
+      const minutes=Number(document.getElementById('directMinutes').value);
+      const reason=document.getElementById('directReason').value.trim() || 'نقض قوانین';
+      if(!target) {{ alert('نام کاربری را وارد کن'); return; }}
+      await doBan({{target,scope,hours,minutes,reason}}, null, '');
+    }}
+
+    async function banReporter(id, target) {{
+      if(!confirm('اگر گزارش بی‌مورد بوده، گزارش‌دهنده را محروم کنیم؟')) return;
+      await doBan({{report_id:id,target,scope:'chat',minutes:10,reason:'گزارش بی‌مورد'}}, null, '');
+    }}
+
+    async function setMusic() {{
+      const file=document.getElementById('musicFile').files[0];
+      const title=document.getElementById('musicTitle').value.trim();
+      const target_user='';
+      if(!file){{alert('اول یک آهنگ از گوشی انتخاب کن.');return;}}
+      if(file.size>15*1024*1024){{alert('حجم آهنگ نباید بیشتر از ۱۵ مگابایت باشد.');return;}}
+      const fd=new FormData(); fd.append('music',file);
+      const r=await fetch('/support/music?title='+encodeURIComponent(title)+'&target_user='+encodeURIComponent(target_user),{{method:'POST',body:fd}});
+      const d=await r.json();
+      if(d.ok){{alert('🎵 آهنگ فعال شد و در چت روم برای همه قرار گرفت.');}}else alert(d.error==='user_not_found'?'کاربر پیدا نشد.':d.error==='bad_audio'?'این فایل صوتی پشتیبانی نمی‌شود.':'خطا در فعال‌سازی آهنگ.');
+    }}
+    async function clearMusic() {{
+      const r=await fetch('/support/music/clear',{{method:'POST'}}); const d=await r.json();
+      if(d.ok) alert('آهنگ قطع شد.');
+    }}
+
+    async function unbanUser(btn) {{
+      const row=btn.closest('.ban-row');
+      const target=row.dataset.target, scope=row.dataset.scope;
+      const r=await fetch('/support/unban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+        body:JSON.stringify({{target,scope}})}});
+      const d=await r.json();
+      if(d.ok) {{ row.remove(); }}
+      else alert('خطا در رفع محرومیت');
+    }}
+    </script>"""
+    return page_shell("پنل پشتیبانی",body,username)
+
+def _render_messages(messages: list[dict], username: str) -> str:
+    if not messages:
+        return '<div style="opacity:0.6;text-align:center;padding:20px 0">هنوز پیامی نیست...</div>'
+    out = []
+    for m in messages:
+        cls = "msg me" if m["sender"] == username else "msg"
+        sender=html.escape(m["sender"])
+        content=html.escape(m["content"])
+        report="" if m["sender"] == username else (
+            f'<button class="report-btn" onclick="reportMsg({m["sender"]!r}, {m["content"]!r})">گزارش</button>')
+        out.append(f'<div class="{cls}"><span class="sender">{sender}</span>{content}{report}</div>')
+    return "".join(out)
+
+
+def chat_public_page(username: str, messages: list[dict]) -> str:
+    body = f"""
+    <div class="card">
+      <h1>💬 چت عمومی</h1>
+      <div class="chat-box" id="chatBox">{_render_messages(messages, username)}</div>
+      <div class="chat-input-row">
+        <input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off">
+        <button onclick="sendMsg()">ارسال</button>
+      </div>
+    </div>
+    <script>
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(wsProto + "//" + location.host + "/ws/chat/public");
+    const box = document.getElementById("chatBox");
+    const me = {username!r};
+    function addMsg(sender, content) {{
+        const div = document.createElement("div");
+        div.className = sender === me ? "msg me" : "msg";
+        div.innerHTML = "<span class='sender'></span>";
+        div.querySelector(".sender").textContent = sender;
+        div.appendChild(document.createTextNode(content));
+        if (sender !== me) {{
+            const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش";
+            rb.onclick=()=>reportMsg(sender, content);
+            div.appendChild(rb);
+        }}
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }}
+    function onMessage(ev) {{
+        const data = JSON.parse(ev.data);
+        addMsg(data.sender, data.content);
+    }};
+    async function reportMsg(target, content) {{
+        if (!confirm("این پیام را گزارش می‌کنی؟")) return;
+        const r = await fetch("/report", {{method:"POST", headers:{{"Content-Type":"application/json"}},
+            body:JSON.stringify({{target, content, context:"chat_public"}})}});
+        if ((await r.json()).ok) alert("گزارش ثبت شد.");
+    }}
+    function sendMsg() {{
+        const input = document.getElementById("msgInput");
+        const text = input.value.trim();
+        if (!text) return;
+        ws.send(JSON.stringify({{content: text}}));
+        input.value = "";
+    }}
+    document.getElementById("msgInput").addEventListener("keydown", (e) => {{
+        if (e.key === "Enter") sendMsg();
+    }});
+    box.scrollTop = box.scrollHeight;
+    </script>"""
+    return page_shell("چت عمومی", body, username)
+
+
+def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
+    body = f"""
+    <div class="card">
+      <h1>💬 چت خصوصی با {html.escape(other)}</h1>
+      <div class="chat-box" id="chatBox">{_render_messages(messages, username)}</div>
+      <div class="chat-input-row">
+        <input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off">
+        <button onclick="sendMsg()">ارسال</button>
+      </div>
+    </div>
+    <script>
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(wsProto + "//" + location.host + "/ws/chat/private/{html.escape(other)}");
+    const box = document.getElementById("chatBox");
+    const me = {username!r};
+    function addMsg(sender, content) {{
+        const div = document.createElement("div");
+        div.className = sender === me ? "msg me" : "msg";
+        div.innerHTML = "<span class='sender'></span>";
+        div.querySelector(".sender").textContent = sender;
+        div.appendChild(document.createTextNode(content));
+        if (sender !== me) {{
+            const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش";
+            rb.onclick=()=>reportMsg(sender, content);
+            div.appendChild(rb);
+        }}
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }}
+    ws.onmessage = (ev) => {{
+        const data = JSON.parse(ev.data);
+        addMsg(data.sender, data.content);
+    }};
+    async function reportMsg(target, content) {{
+        if (!confirm("این پیام را گزارش می‌کنی؟")) return;
+        const r = await fetch("/report", {{method:"POST", headers:{{"Content-Type":"application/json"}},
+            body:JSON.stringify({{target, content, context:"chat_private"}})}});
+        if ((await r.json()).ok) alert("گزارش ثبت شد.");
+    }}
+    function sendMsg() {{
+        const input = document.getElementById("msgInput");
+        const text = input.value.trim();
+        if (!text) return;
+        ws.send(JSON.stringify({{content: text}}));
+        input.value = "";
+    }}
+    document.getElementById("msgInput").addEventListener("keydown", (e) => {{
+        if (e.key === "Enter") sendMsg();
+    }});
+    box.scrollTop = box.scrollHeight;
+    </script>"""
+    return page_shell(f"چت با {other}", body, username)
+
+
+def tictactoe_page(username: str) -> str:
+    body = f"""
+    <div class="card page-enter">
+      <h1>⭕ دوز دو نفره زنده</h1>
+      <div class="status-line" id="status">🔌 اتصال به سرور...</div>
+      <div class="ttt-board" id="board"></div>
+      <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="glow-btn" onclick="location.reload()">🔁 بازی جدید / جستجوی دوباره</button><a class="btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">🏠 بازگشت به لابی</a></div>
+    </div>
+    <script>
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const boardEl = document.getElementById("board");
+    const statusEl = document.getElementById("status");
+    let ws = null, reconnectTimer = null, intentionallyLeaving = false;
+    let mySymbol = null, currentBoard = Array(9).fill("");
+
+    function connect() {{
+      statusEl.textContent = "🔌 اتصال سریع به سرور بازی...";
+      ws = new WebSocket(wsProto + "//" + location.host + "/ws/tictactoe");
+      ws.onopen = () => statusEl.textContent = "⚡ وصل شد! در حال پیدا کردن حریف...";
+      ws.onerror = () => statusEl.textContent = "⚠️ مشکل اتصال؛ دوباره تلاش می‌کنیم...";
+      ws.onclose = () => {{
+        if (!intentionallyLeaving && !reconnectTimer) {{
+          statusEl.textContent = "🔄 اتصال قطع شد؛ تلاش مجدد...";
+          reconnectTimer = setTimeout(() => {{ reconnectTimer = null; connect(); }}, 1200);
+        }}
+      }};
+      ws.onmessage = onMessage;
+    }}
+
+    function render() {{
+      boardEl.innerHTML = "";
+      currentBoard.forEach((val, i) => {{
+        const cell = document.createElement("div");
+        cell.className = "ttt-cell" + (val ? " filled" : "");
+        cell.textContent = val;
+        cell.onclick = () => {{
+          if (!val && ws && ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({{type:"move", cell:i}}));
+        }};
+        boardEl.appendChild(cell);
+      }});
+    }}
+
+    function onMessage(ev) {{
+      const data = JSON.parse(ev.data);
+      if (data.type === "waiting") {{
+        let left=30; statusEl.textContent = "⏳ در صف حریف — "+left+" ثانیه";
+        clearInterval(window.queueTimer); window.queueTimer=setInterval(()=>{{left--; statusEl.textContent="⏳ در صف حریف — "+Math.max(0,left)+" ثانیه"; if(left<=0) clearInterval(window.queueTimer);}},1000);
+      }} else if (data.type === "queue_timeout") {{
+        statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره صفحه را تازه کن.";
+      }} else if (data.type === "state") {{
+        mySymbol = data.your_symbol; currentBoard = data.board; render();
+        if (data.winner === "draw") statusEl.textContent = "🤝 مساوی شد!";
+        else if (data.winner) statusEl.textContent = data.winner === mySymbol ? "🏆 بردی!" : "😢 باختی!";
+        else statusEl.textContent = "شما: " + mySymbol + " | حریف: " + data.opponent + " | نوبت: " + (data.turn === mySymbol ? "توئه! 🔥" : "حریف");
+      }} else if (data.type === "game_won") {{
+        intentionallyLeaving = true;
+        statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
+      }} else if (data.type === "opponent_left") {{
+        statusEl.textContent = data.winner === me ? "🏆 شما برنده شدید! حریف از بازی خارج شد." : "❌ حریف بازی را ترک کرد.";
+      }}
+    }}
+
+    render();
+    connect();
+    </script>"""
+    return page_shell("دوز", body, username)
+
+
+def drawing_page(username: str) -> str:
+    body = """
+    <div class="card">
+      <h1>🎨 نقاشی حدسی دو نفره</h1>
+      <div class="status-line" id="status">در حال اتصال...</div>
+
+      <div id="roundInfo" class="draw-round-info" style="display:none">
+        <span id="roundLabel"></span>
+        <span id="timerLabel" class="draw-timer"></span>
+      </div>
+
+      <div id="scoreBar" class="draw-scorebar" style="display:none"></div>
+
+      <div id="canvasWrap" class="draw-canvas-wrap" style="display:none">
+        <canvas id="board" width="600" height="420"></canvas>
+      </div>
+
+      <div id="palette" class="draw-palette" style="display:none"></div>
+      <div id="tools" class="draw-tools" style="display:none">
+        <button class="draw-tool active" id="penTool">✏️ قلم</button>
+        <button class="draw-tool" id="eraserTool">🧽 پاک‌کن</button>
+        <button class="draw-size active" data-size="4">باریک</button>
+        <button class="draw-size" data-size="8">متوسط</button>
+        <button class="draw-size" data-size="14">ضخیم</button>
+      </div>
+      <div id="drawerWordBox" class="draw-word-box" style="display:none"></div>
+      <div style="text-align:center;display:none" id="clearBtnWrap">
+        <button id="clearBtn">🧹 پاک کردن بوم</button>
+      </div>
+
+      <div id="optionsGrid" class="draw-options" style="display:none"></div>
+
+      <div id="resultPanel" class="draw-result" style="display:none"></div>
+
+      <div style="text-align:center;margin-top:14px">
+        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
+      </div>
+    </div>
+
+    <script>
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    let ws = null;
+    let reconnectTimer = null;
+    let intentionallyLeaving = false;
+    const me = """ + f"{username!r}" + """;
+
+    const statusEl = document.getElementById("status");
+    const roundInfo = document.getElementById("roundInfo");
+    const roundLabel = document.getElementById("roundLabel");
+    const timerLabel = document.getElementById("timerLabel");
+    const scoreBar = document.getElementById("scoreBar");
+    const canvasWrap = document.getElementById("canvasWrap");
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+    const palette = document.getElementById("palette");
+    const tools = document.getElementById("tools");
+    const penTool = document.getElementById("penTool");
+    const eraserTool = document.getElementById("eraserTool");
+    const drawerWordBox = document.getElementById("drawerWordBox");
+    const clearBtnWrap = document.getElementById("clearBtnWrap");
+    const clearBtn = document.getElementById("clearBtn");
+    const optionsGrid = document.getElementById("optionsGrid");
+    const resultPanel = document.getElementById("resultPanel");
+
+    let role = null;
+    let currentColor = "#111111";
+    let currentSize = 4;
+    let tool = "pen";
+    let drawing = false;
+    let lastX = null, lastY = null;
+    let countdownTimer = null;
+
+    function clearCanvas() {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    clearCanvas();
+
+    function renderScoreBar(scores) {
+        scoreBar.innerHTML = "";
+        Object.entries(scores || {}).forEach(([name, score]) => {
+            const chip = document.createElement("div");
+            chip.className = "draw-score-chip" + (name === me ? " me" : "");
+            chip.textContent = name + ": " + score;
+            scoreBar.appendChild(chip);
+        });
+        scoreBar.style.display = "flex";
+    }
+
+    function startCountdown(seconds, onTick) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        let remaining = seconds;
+        onTick(remaining);
+        countdownTimer = setInterval(() => {
+            remaining -= 1;
+            onTick(remaining);
+            if (remaining <= 0) clearInterval(countdownTimer);
+        }, 1000);
+    }
+
+    function normPoint(x, y) {
+        return {x: x / canvas.width, y: y / canvas.height};
+    }
+
+    function canvasPos(ev) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+        const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    function drawLine(x0, y0, x1, y1, color, size = currentSize) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+    }
+
+    canvas.addEventListener("pointerdown", (ev) => {
+        if (role !== "drawer") return;
+        drawing = true;
+        const p = canvasPos(ev);
+        lastX = p.x; lastY = p.y;
+    });
+    canvas.addEventListener("pointermove", (ev) => {
+        if (role !== "drawer" || !drawing) return;
+        const p = canvasPos(ev);
+        const paintColor = tool === "eraser" ? "#ffffff" : currentColor;
+        drawLine(lastX, lastY, p.x, p.y, paintColor, currentSize);
+        const n0 = normPoint(lastX, lastY);
+        const n1 = normPoint(p.x, p.y);
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y,
+            color: tool === "eraser" ? "#ffffff" : currentColor, size: currentSize}));
+        lastX = p.x; lastY = p.y;
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(evName => {
+        canvas.addEventListener(evName, () => { drawing = false; });
+    });
+
+    clearBtn.addEventListener("click", () => {
+        clearCanvas();
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "clear"}));
+    });
+    penTool.onclick=()=>{tool="pen"; penTool.classList.add("active"); eraserTool.classList.remove("active");};
+    eraserTool.onclick=()=>{tool="eraser"; eraserTool.classList.add("active"); penTool.classList.remove("active");};
+    document.querySelectorAll(".draw-size").forEach(btn=>btn.onclick=()=>{
+        currentSize=Number(btn.dataset.size)||4;
+        document.querySelectorAll(".draw-size").forEach(x=>x.classList.remove("active"));
+        btn.classList.add("active");
+    });
+
+
+    function buildPalette(colors) {
+        palette.innerHTML = "";
+        colors.forEach((c, i) => {
+            const sw = document.createElement("div");
+            sw.className = "draw-swatch" + (i === 0 ? " active" : "");
+            sw.style.background = c;
+            sw.onclick = () => {
+                currentColor = c;
+                [...palette.children].forEach(el => el.classList.remove("active"));
+                sw.classList.add("active");
+            };
+            palette.appendChild(sw);
+        });
+        currentColor = colors[0];
+    }
+
+    function buildOptions(options) {
+        optionsGrid.innerHTML = "";
+        options.forEach((word) => {
+            const btn = document.createElement("button");
+            btn.className = "draw-option-btn";
+            btn.textContent = word;
+            btn.onclick = () => {
+                if (btn.disabled) return;
+                if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "guess", word: word}));
+            };
+            btn.dataset.word = word;
+            optionsGrid.appendChild(btn);
+        });
+    }
+
+    function resetRoundUI() {
+        resultPanel.style.display = "none";
+        roundInfo.style.display = "flex";
+        clearCanvas();
+    }
+
+    function connectDrawing() {
+        statusEl.style.display = "block";
+        statusEl.textContent = "🔌 اتصال سریع به سرور بازی...";
+        ws = new WebSocket(wsProto + "//" + location.host + "/ws/drawing");
+        ws.onopen = () => { statusEl.textContent = "⚡ وصل شد! حریف در حال پیدا شدن..."; };
+        ws.onerror = () => { statusEl.textContent = "⚠️ اتصال ناپایدار؛ دوباره تلاش می‌کنیم..."; };
+        ws.onclose = () => {
+            if (!intentionallyLeaving && !reconnectTimer) {
+                statusEl.textContent = "🔄 اتصال قطع شد؛ اتصال مجدد...";
+                reconnectTimer = setTimeout(() => { reconnectTimer=null; connectDrawing(); }, 1200);
+            }
+        };
+        ws.onmessage = onDrawingMessage;
+    }
+
+    function onDrawingMessage(ev) {
+        const data = JSON.parse(ev.data);
+
+        if (data.type === "waiting") {
+            let queueLeft=30; statusEl.textContent = "⏳ در صف حریف — "+queueLeft+" ثانیه";
+            clearInterval(window.drawQueueTimer); window.drawQueueTimer=setInterval(()=>{queueLeft--; statusEl.textContent="⏳ در صف حریف — "+Math.max(0,queueLeft)+" ثانیه"; if(queueLeft<=0) clearInterval(window.drawQueueTimer);},1000);
+            statusEl.style.display = "block";
+            canvasWrap.style.display = "none";
+            scoreBar.style.display = "none";
+        }
+
+        else if (data.type === "queue_timeout") {
+            statusEl.style.display = "block";
+            statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره وارد شو.";
+            canvasWrap.style.display = "none";
+        }
+
+        else if (data.type === "round_start") {
+            statusEl.style.display = "none";
+            resetRoundUI();
+            role = data.role;
+            renderScoreBar(data.scores);
+            canvasWrap.style.display = "block";
+            roundLabel.textContent = "دور " + data.round + " از " + data.total_rounds +
+                (role === "drawer" ? " — نوبت نقاشی توئه" : " — حدس بزن " + data.opponent + " چی می‌کشه");
+
+            if (role === "drawer") {
+                drawerWordBox.style.display = "block";
+                drawerWordBox.textContent = "کلمه‌ای که باید بکشی: " + data.word;
+                palette.style.display = "flex";
+                tools.style.display = "flex";
+                clearBtnWrap.style.display = "block";
+                optionsGrid.style.display = "none";
+                buildPalette(data.colors);
+            } else {
+                drawerWordBox.style.display = "none";
+                palette.style.display = "none";
+                clearBtnWrap.style.display = "none";
+                optionsGrid.style.display = "grid";
+                buildOptions(data.options);
+            }
+
+            startCountdown(data.duration, (remaining) => {
+                timerLabel.textContent = "⏱ " + Math.max(0, remaining) + " ثانیه";
+            });
+        }
+
+        else if (data.type === "draw") {
+            const x0 = data.x0 * canvas.width, y0 = data.y0 * canvas.height;
+            const x1 = data.x1 * canvas.width, y1 = data.y1 * canvas.height;
+            const remoteSize = Math.max(1, Math.min(30, Number(data.size) || 4));
+            drawLine(x0, y0, x1, y1, data.color || "#111111", remoteSize);
+        }
+
+        else if (data.type === "clear") {
+            clearCanvas();
+        }
+
+        else if (data.type === "guess_wrong") {
+            const btn = optionsGrid.querySelector('[data-word="' + CSS.escape(data.word) + '"]');
+            if (btn) { btn.disabled = true; btn.classList.add("wrong"); }
+        }
+
+        else if (data.type === "round_result") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            roundInfo.style.display = "none";
+            palette.style.display = "none";
+            clearBtnWrap.style.display = "none";
+            drawerWordBox.style.display = "none";
+            optionsGrid.style.display = "none";
+            renderScoreBar(data.scores);
+
+            resultPanel.style.display = "block";
+            let html = "<div class='draw-result-title'>" +
+                (data.correct ? "✅ حدس درست بود!" : "⌛ زمان تموم شد!") +
+                "</div>";
+            html += "<div>کلمه: <b>" + data.word + "</b></div>";
+            if (data.correct) {
+                html += "<div>" + data.guesser + " امتیاز " + data.points_guesser + " گرفت و " +
+                    data.drawer + " امتیاز " + data.points_drawer + " گرفت.</div>";
+            } else {
+                html += "<div>این دور امتیازی داده نشد.</div>";
+            }
+            resultPanel.innerHTML = html;
+            if (data.drawer !== me) {
+                const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش نقاشی";
+                rb.onclick=async()=>{
+                    const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},
+                      body:JSON.stringify({target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing",attachment:(canvas.toDataURL("image/jpeg",0.65)||"")})});
+                    if((await r.json()).ok) alert("گزارش ثبت شد.");
+                };
+                resultPanel.appendChild(rb);
+            }
+            const noteEl = document.createElement("div");
+            noteEl.className = "draw-result-note";
+            resultPanel.appendChild(noteEl);
+            startCountdown(data.break_seconds, (remaining) => {
+                noteEl.textContent = data.is_last
+                    ? "نمایش نتیجهٔ نهایی... " + Math.max(0, remaining)
+                    : "دور بعدی تا " + Math.max(0, remaining) + " ثانیهٔ دیگر شروع می‌شود...";
+            });
+        }
+
+        else if (data.type === "game_over") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            statusEl.style.display = "none";
+            roundInfo.style.display = "none";
+            canvasWrap.style.display = "none";
+            palette.style.display = "none";
+            clearBtnWrap.style.display = "none";
+            optionsGrid.style.display = "none";
+            renderScoreBar(data.scores);
+
+            resultPanel.style.display = "block";
+            const entries = Object.entries(data.scores).sort((a, b) => b[1] - a[1]);
+            let html = "<div class='draw-result-title'>🏁 نتیجهٔ نهایی</div>";
+            entries.forEach(([name, score]) => {
+                const tag = (data.winner === name) ? " 🏆" : "";
+                html += "<div>" + name + ": " + score + tag + "</div>";
+            });
+            if (!data.winner) html += "<div>🤝 مساوی شدید!</div>";
+            resultPanel.innerHTML = html;
+        }
+
+        else if (data.type === "game_won") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            statusEl.style.display = "block";
+            statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
+            roundInfo.style.display = "none";
+            canvasWrap.style.display = "none";
+            palette.style.display = "none";
+            clearBtnWrap.style.display = "none";
+            optionsGrid.style.display = "none";
+            resultPanel.style.display = "block";
+            resultPanel.innerHTML = "<div class='draw-result-title'>🏆 شما برنده شدید!</div><div>حریف از بازی خارج شد و برد به شما رسید.</div>";
+        }
+
+        else if (data.type === "opponent_left") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            statusEl.style.display = "block";
+            statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
+        }
+    }
+    connectDrawing();
+    </script>"""
+    return page_shell("نقاشی حدسی", body, username)
+
+
+BASE_CSS += """
+.chat-screen{max-width:720px;margin:-8px auto 0;background:linear-gradient(180deg,#0c0e20,#080914);border:1px solid #25284a;border-radius:26px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.chat-top{position:sticky;top:0;z-index:10;background:rgba(15,16,35,.96);backdrop-filter:blur(12px);border-bottom:1px solid #292c4c;padding:10px 12px}.chat-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px}.chat-title{font-weight:800;font-size:17px}.chat-top-actions{display:flex;gap:7px}.icon-btn{width:42px;height:42px;padding:0!important;border-radius:13px!important;background:#171a35!important;color:#ddd!important;border:1px solid #2a2e51!important;display:flex!important;align-items:center;justify-content:center}.icon-btn.active{box-shadow:0 0 0 2px rgba(123,92,255,.28) inset;color:#b7a8ff!important}
+.music-bar{display:flex;align-items:center;gap:9px;margin-top:9px;padding:8px 10px;border:1px solid #292d52;border-radius:15px;background:#13152d}.music-meta{min-width:0;flex:1}.music-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.music-sub{font-size:11px;color:#8388aa}.music-controls{display:flex;gap:6px}.music-controls button{padding:7px 10px;font-size:12px;background:#20244a;color:#d8d3ff;border:1px solid #363b6d}.chat-box{height:calc(100vh - 310px);min-height:430px;max-height:650px;overflow-y:auto;background:radial-gradient(circle at 50% 0,#151832 0,#090a15 65%);border:0;border-radius:0;padding:16px 13px 24px;display:flex;flex-direction:column;gap:9px;scroll-behavior:smooth}
+.msg{position:relative;padding:10px 13px 8px;border-radius:18px 18px 4px 18px;background:#191b31;border:1px solid #292d4a;max-width:82%;align-self:flex-start;box-shadow:0 6px 18px rgba(0,0,0,.14);cursor:pointer;user-select:none;-webkit-user-select:none}.msg.me{align-self:flex-end;background:#171934;border-color:#393b72;border-radius:18px 18px 18px 4px}.msg .sender{display:block;color:#a996ff;font-weight:800;font-size:13px;margin-bottom:2px}.msg .content{display:block;white-space:pre-wrap;word-break:break-word;font-size:14px}.msg-time{display:block;text-align:left;color:#626681;font-size:10px;margin-top:3px}.msg-reply{border-right:3px solid #7965ff;background:#202341;color:#9da2c1;padding:4px 7px;border-radius:7px;margin-bottom:6px;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.msg-hint{font-size:9px;color:#646985;text-align:center;margin-top:2px}.reply-bar{display:flex;gap:8px;align-items:center;background:#171a34;border-top:1px solid #2c3052;padding:9px 12px}.reply-preview{flex:1;color:#a7abca;font-size:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.chat-input-wrap{padding:10px 12px 12px;background:#0d0f20;border-top:1px solid #242743}.chat-input-row{display:flex;gap:8px;align-items:center}.chat-input-row input{margin:0!important;border-radius:17px!important;background:#171a30!important;border-color:#2b2f50!important}.send-btn{min-width:54px;height:50px;padding:0!important;border-radius:16px!important;background:#7865f7!important;color:#fff!important;font-size:21px!important}.profile-link{color:inherit;text-decoration:none}.chat-empty{opacity:.55;text-align:center;padding:55px 20px;font-size:13px}.support-music-preview{padding:9px 11px;border:1px solid var(--border);border-radius:12px;margin-top:10px;color:var(--text-muted);font-size:12px}.profile-avatar-img{width:92px;height:92px;border-radius:50%;object-fit:cover;border:2px solid #7965ff;display:block}.avatar-picker{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px;border:1px dashed #3a3f68;border-radius:16px;background:#11142a}.avatar-crop-wrap{width:190px;height:190px;border-radius:50%;overflow:hidden;background:#0a0d1b;border:2px solid #7965ff;position:relative}.avatar-crop-wrap img{position:absolute;max-width:none;transform-origin:center center;user-select:none;-webkit-user-drag:none}.zoom-row{width:100%;display:flex;align-items:center;gap:10px}.zoom-row input{flex:1;margin:0!important}.avatar-preview-hint{font-size:11px;color:var(--text-muted);text-align:center}.chat-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-left:5px;border:1px solid #454b78}.chat-avatar-fallback{display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;background:#252a4a;margin-left:5px;vertical-align:middle;font-size:15px}
+@media(max-width:600px){.container{padding:8px 5px 25px}.chat-screen{border-radius:22px 22px 0 0;margin:0 -5px}.chat-box{height:calc(100vh - 290px);min-height:430px;padding:12px 9px}.msg{max-width:86%}.chat-title{font-size:15px}.icon-btn{width:38px;height:38px}}
+"""
+
+def _nav(username):
+    if username:
+        u=html.escape(username)
+        support='<a href="/support">🛡️ پشتیبانی</a>' if username==SUPPORT_USERNAME else ''
+        return f'''<div class="nav"><div class="nav-brand">🎲 بازی‌خونه — {u}</div><div><a href="/lobby">🏠 لابی</a><a href="/messages">📨 پیام‌ها</a><a href="/profile?u={quote(username,safe='')}">👤 پروفایل</a><a href="/settings">⚙️ تنظیمات</a>{support}<a href="/logout">خروج</a></div></div>'''
+    return '<div class="nav"><div class="nav-brand">🎲 بازی‌خونه</div><div><a href="/login">ورود</a></div></div>'
+
+def lobby_page(username, prof=None, pending_count=0):
+    prof = prof or {'username': username, 'display_name': username, 'avatar': '🎮', 'wins': 0, 'losses': 0, 'points': 0}
+    avatar_html = _avatar_html(prof.get('avatar') or '🎮', cls='lobby-avatar-img')
+    safe_user = quote(username, safe='')
+    badge = f'<span class="req-badge">{pending_count}</span>' if pending_count else ''
+    body = f'''<div class="lobby-profile-card page-enter">
+      <div class="lobby-profile-top">
+        <div class="lobby-profile-info">
+          <div class="lobby-profile-name">{html.escape(prof.get('display_name') or username)}</div>
+          <div class="lobby-username">@{html.escape(username)}</div>
+          <div class="lobby-chip-row">
+            <div class="lobby-chip chip-trophy"><span>🏆</span>{prof.get('points',0)}</div>
+            <div class="lobby-chip chip-win"><span>✅</span>{prof.get('wins',0)}</div>
+            <div class="lobby-chip chip-loss"><span>❌</span>{prof.get('losses',0)}</div>
+          </div>
+        </div>
+        <a class="lobby-avatar-ring" href="/profile?u={safe_user}">{avatar_html}</a>
+      </div>
+    </div>
+    <div class="lobby-menu-grid page-enter">
+      <a class="lobby-menu-card card-gold glow-btn" href="/leaderboard">
+        <span class="lobby-menu-icon">🏆</span><b>برترین‌ها</b><small>جدول امتیازات</small>
+      </a>
+      <a class="lobby-menu-card card-violet glow-btn" href="/games">
+        <span class="lobby-menu-icon">🎮</span><b>بازی‌ها</b><small>دوز یا نقاشی</small>
+      </a>
+    </div>
+    <div class="lobby-split page-enter">
+      <a class="lobby-split-half" href="/messages">🔒 پیام‌ها{badge}</a>
+      <div class="lobby-split-divider"></div>
+      <a class="lobby-split-half" href="/chat/public">💬 چت عمومی</a>
+    </div>
+    <a class="lobby-enter-btn page-enter" href="/games">🎮 ورود به بازی</a>
+    <div style="text-align:center;margin-top:14px">
+      <a class="btn" style="background:transparent;border:1px solid var(--border);color:var(--text-muted)" href="/settings">⚙️ تنظیمات پروفایل</a>
+    </div>'''
+    return page_shell('لابی', body, username)
+
+def games_page(username):
+    body=f'''<div class="card hero page-enter game-choice"><div class="game-choice-icon">🎮</div><h1>انتخاب حالت بازی</h1><p>یکی را انتخاب کن و وارد مسابقه زنده شو. اگر وسط بازی به لابی برگردی، محروم نمی‌شی؛ حریفت برنده اعلام می‌شه.</p><div class="game-choice-grid"><a class="game-choice-card" href="/game/tictactoe"><span>⭕</span><b>دوز</b><small>دو نفره، سریع و زنده</small></a><a class="game-choice-card" href="/game/drawing"><span>🎨</span><b>نقاشی</b><small>۴ دور نقاشی و حدس</small></a></div><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    return page_shell('انتخاب بازی',body,username)
+
+def _avatar_html(avatar, cls="profile-avatar-img", alt="تصویر کاربر"):
+    avatar = avatar or "🎮"
+    if str(avatar).startswith("data:image/"):
+        return f'<img class="{cls}" src="{html.escape(str(avatar), quote=True)}" alt="{html.escape(alt)}">'
+    return f'<div class="avatar-big">{html.escape(str(avatar))}</div>' if cls == "profile-avatar-img" else f'<span class="chat-avatar-fallback">{html.escape(str(avatar)[:2])}</span>'
+
+def _friend_widget(target_username, friend_info):
+    info = friend_info or {'status': 'none', 'request_id': None}
+    status = info.get('status', 'none')
+    rid = info.get('request_id')
+    target_js = target_username.replace("'", "\\'")
+    if status == 'self':
+        return ''
+    if status == 'friends':
+        return '<button class="glow-btn friend-btn is-friend" disabled>✅ در لیست دوستان</button>'
+    if status == 'pending_outgoing':
+        return '<button class="glow-btn friend-btn is-pending" disabled>⏳ درخواست ارسال شد</button>'
+    if status == 'pending_incoming':
+        return f'''<div class="friend-request-inline" id="inlineFriendReq">
+            <button class="glow-btn accept-btn" onclick="respondInlineFriend({rid},true)">✅ قبول درخواست دوستی</button>
+            <button class="glow-btn decline-btn" onclick="respondInlineFriend({rid},false)">✖ رد کردن</button>
+        </div>
+        <script>
+        async function respondInlineFriend(requestId,accept){{
+            const wrap=document.getElementById('inlineFriendReq');
+            try{{
+                const r=await fetch('/friends/respond',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{request_id:requestId,accept:accept}})}});
+                const d=await r.json();
+                if(d.ok){{
+                    wrap.style.transition='opacity .35s,transform .35s';wrap.style.opacity='0';wrap.style.transform='scale(.9)';
+                    setTimeout(()=>location.reload(),350);
+                }}else alert('خطا در ثبت پاسخ.');
+            }}catch(e){{alert('خطا در ارتباط با سرور.');}}
+        }}
+        </script>'''
+    return f'''<button class="glow-btn friend-btn" id="friendBtn" onclick="sendFriendRequest()">➕ افزودن دوست</button>
+    <div id="friendPopWrap"></div>
+    <script>
+    async function sendFriendRequest(){{
+        const btn=document.getElementById('friendBtn');
+        btn.disabled=true;btn.textContent='⏳ در حال ارسال...';
+        try{{
+            const r=await fetch('/friends/request/'+encodeURIComponent('{target_js}'),{{method:'POST'}});
+            const d=await r.json();
+            if(d.ok){{
+                if(d.status==='friends'){{
+                    btn.classList.add('is-friend');btn.textContent='✅ در لیست دوستان';
+                    friendCelebrate();
+                }}else{{
+                    btn.classList.add('is-pending');btn.textContent='⏳ درخواست ارسال شد';
+                }}
+            }}else{{
+                btn.disabled=false;btn.textContent='➕ افزودن دوست';
+                alert(d.error==='user_not_found'?'کاربر پیدا نشد.':'خطا در ارسال درخواست.');
+            }}
+        }}catch(e){{btn.disabled=false;btn.textContent='➕ افزودن دوست';}}
+    }}
+    function friendCelebrate(){{
+        const wrap=document.getElementById('friendPopWrap');
+        const emojis=['🎉','✨','💫','🙌','⭐'];
+        for(let i=0;i<10;i++){{
+            const s=document.createElement('span');
+            s.className='friend-confetti';
+            s.textContent=emojis[i%emojis.length];
+            s.style.left=(45+Math.random()*10)+'%';
+            s.style.setProperty('--dx',(Math.random()*160-80)+'px');
+            s.style.animationDelay=(Math.random()*0.15)+'s';
+            wrap.appendChild(s);
+            setTimeout(()=>s.remove(),1200);
+        }}
+    }}
+    </script>'''
+
+def profile_page(username, prof, friend_info=None):
+    prof = prof or {'username': username, 'display_name': username, 'bio': '', 'avatar': '🎮', 'wins':0, 'losses':0, 'draws':0, 'points':0, 'correct_guesses':0, 'wrong_guesses':0}
+    total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0); correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0; wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
+    avatar_html=_avatar_html(prof.get('avatar') or '🎮')
+    is_support_account = prof['username'] == SUPPORT_USERNAME
+    name_badge = f' {_support_badge()}' if is_support_account else ''
+    support_box = '''<div class="card support-official-box page-enter">
+        <div class="support-official-icon">🛡️</div>
+        <div><b>حساب رسمی پشتیبانی</b><p style="margin:2px 0 0">پیام‌هایی که از این حساب می‌رسند از طرف تیم پشتیبانی بازی هستند.</p></div>
+    </div>''' if is_support_account else ''
+    body=f'''<div class="card hero page-enter"><div class="profile-head"><div>{avatar_html}</div><div><h1>{html.escape(prof.get('display_name') or prof['username'])}{name_badge}</h1><p style="margin:0">@{html.escape(prof['username'])}</p></div></div><p>{html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')}</p><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div><p>درصد حدس درست</p><div class="progress"><div style="width:{correct}%"></div></div><p>درصد حدس غلط</p><div class="progress"><div style="width:{wrong}%"></div></div></div>{support_box}'''
+    if prof['username']!=username:
+        body+=f'''<div class="card page-enter" style="text-align:center">{_friend_widget(prof['username'], friend_info)}</div>'''
+        body+=f'''<div class="card"><button class="glow-btn" onclick="reportUser()">🚩 گزارش کاربر</button></div><script>async function reportUser(){{const reason=prompt('دلیل گزارش:');if(!reason)return;const r=await fetch('/report',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{target:{prof['username']!r},content:reason,context:'profile'}})}});alert((await r.json()).ok?'گزارش ثبت شد.':'خطا');}}</script>'''
+    safe_user=quote(prof['username'], safe='')
+    body+=f'<div style="text-align:center"><a class="btn" href="/chat/private/{safe_user}">💬 پیام خصوصی</a> <a class="btn" href="/lobby">لابی</a></div>'
+    return page_shell('پروفایل',body,username)
+
+def settings_page(username, prof):
+    prof = prof or {"username": username, "display_name": username, "bio": "", "avatar": "🎮"}
+    avatar=prof.get('avatar') or '🎮'
+    if str(avatar).startswith('data:image/'):
+        preview=f'<img id="avatarPreview" class="profile-avatar-img" src="{html.escape(str(avatar),quote=True)}" alt="پیش‌نمایش">'
+    else:
+        preview=f'<div id="avatarFallback" class="avatar-big">{html.escape(str(avatar))}</div>'
+    body=f'''<div class="card hero page-enter"><h1>⚙️ تنظیمات پروفایل</h1><p>اطلاعاتت را ویرایش کن. عکس پروفایل روی خود دستگاه برش می‌خورد و با نوار زوم می‌توانی کادر را تنظیم کنی.</p><label>آیدی حساب</label><input type="text" value="{html.escape(username)}" disabled><label>نام نمایشی</label><input type="text" id="displayNameInput" value="{html.escape(prof.get('display_name') or username)}" maxlength="40"><label>عکس پروفایل</label><div class="avatar-picker"><div class="avatar-crop-wrap" id="cropWrap">{preview}</div><div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div><input type="file" id="avatarFile" accept="image/*" style="width:100%;margin:0"><div class="avatar-preview-hint">عکس را انتخاب کن و با نوار زوم کادر را تنظیم کن؛ بعد ذخیره کن تا بقیه هم آن را ببینند.</div></div><label style="display:block;margin-top:14px">بیوگرافی</label><textarea id="bioInput" maxlength="300" style="width:100%;min-height:110px;padding:12px;border-radius:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit">{html.escape(prof.get('bio') or '')}</textarea><button class="glow-btn" style="margin-top:12px" onclick="saveProfile()">💾 ذخیره پروفایل</button><div id="saveStatus" class="status-line" style="display:none;margin-top:10px"></div></div><div class="card page-enter"><h2>🔐 تغییر رمز عبور</h2><input type="password" id="oldPasswordInput" placeholder="رمز فعلی"><input type="password" id="newPasswordInput" placeholder="رمز جدید"><button class="glow-btn" onclick="changePass()">تغییر رمز</button></div><div style="text-align:center"><a class="btn" href="/profile?u={quote(username,safe='')}">پروفایل</a> <a class="btn" href="/lobby">لابی</a></div><script>
+let avatarData={str(avatar)!r};let img=null;let zoom=1;
+const wrap=document.getElementById('cropWrap'), z=document.getElementById('zoom'), file=document.getElementById('avatarFile');
+function applyCrop(){{if(!img)return;const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(190/sw,190/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((190-sw*scale)/2)+'px';img.style.top=((190-sh*scale)/2)+'px'}}
+function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(512/sw,512/sh)*zoom;const dw=sw*scale,dh=sh*scale;ctx.drawImage(img,(512-dw)/2,(512-dh)/2,dw,dh);avatarData=c.toDataURL('image/jpeg',0.78)}}
+z.oninput=()=>{{zoom=Number(z.value);applyCrop();makeCrop()}};
+file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f);const next=new Image();next.onload=()=>{{img=next;zoom=1;z.value='1';wrap.innerHTML='';wrap.appendChild(img);applyCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
+async function saveProfile(){{const status=document.getElementById('saveStatus');try{{if(img)makeCrop();const payload={{display_name:document.getElementById('displayNameInput').value.trim(),bio:document.getElementById('bioInput').value.trim(),avatar:avatarData}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();status.style.display='block';status.textContent=d.ok?'✅ پروفایل با موفقیت ذخیره شد.':(d.error==='image_too_large'?'❌ عکس خیلی بزرگ است.':'❌ ذخیره پروفایل ناموفق بود.');status.style.color=d.ok?'var(--turquoise)':'var(--danger)'}}catch(e){{status.style.display='block';status.textContent='❌ خطا در ارتباط با سرور.';status.style.color='var(--danger)'}}}}
+async function changePass(){{try{{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:document.getElementById('oldPasswordInput').value,new_password:document.getElementById('newPasswordInput').value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}catch(e){{alert('خطا در ارتباط با سرور.')}}}}
+</script>'''
+    return page_shell('تنظیمات',body,username)
+
+def _fmt_time(ts):
+    try:return time.strftime('%H:%M', time.localtime(int(ts)))
+    except Exception:return '--:--'
+
+def _render_messages(messages, username):
+    if not messages:return '<div class="chat-empty">✨ هنوز پیامی نیست... اولین پیام رو بفرست!</div>'
+    by_id={int(m.get('id') or 0):m for m in messages}; out=[]
+    for m in messages:
+        mid=int(m.get('id') or 0); sender=m['sender']; content=m['content']; cls='msg me' if sender==username else 'msg'; ref=by_id.get(int(m.get('reply_to_id') or 0)); reply=f'<div class="msg-reply">↩️ {html.escape(ref["sender"])}: {html.escape(ref["content"])}</div>' if ref else ''
+        safe_sender=quote(sender, safe='')
+        av=m.get('avatar') or '🎮'
+        if str(av).startswith('data:image/'):
+            avatar_html=f'<img class="chat-avatar" src="{html.escape(str(av),quote=True)}" alt="">'
+        else:
+            avatar_html=f'<span class="chat-avatar-fallback">{html.escape(str(av)[:2])}</span>'
+        sender_link=f'<a class="profile-link" href="/profile?u={safe_sender}">{avatar_html}{html.escape(sender)}{(" "+_support_badge()) if sender==SUPPORT_USERNAME else ""}</a>'
+        out.append(f'<div class="{cls}" data-id="{mid}" data-sender="{html.escape(sender)}" data-content="{html.escape(content)}"><span class="sender">{sender_link}</span>{reply}<span class="content">{html.escape(content)}</span><span class="msg-time">{_fmt_time(m.get("created_at"))}</span></div>')
+    return ''.join(out)
+
+def chat_public_page(username,messages):
+    body=f'''<div class="chat-screen"><div class="chat-top"><div class="chat-toolbar"><div class="chat-top-actions"><a class="icon-btn" href="/lobby">‹</a><button class="icon-btn active" id="soundBtn">🔊</button><button class="icon-btn" id="musicBtn">🎵</button></div><div class="chat-title">💬 چت عمومی</div><button class="icon-btn" id="shareBtn">↗</button></div><div class="music-bar" id="musicBar" style="display:none"><div style="font-size:22px">🎵</div><div class="music-meta"><div class="music-name" id="musicName">—</div><div class="music-sub" id="musicSub">آهنگ فعال چت روم</div></div><div class="music-controls"><button id="playMusic">▶ پخش</button><button id="stopMusic">⏹ قطع</button></div><audio id="roomAudio" preload="none"></audio></div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username)}</div><div class="reply-bar" id="replyBar" style="display:none"><span class="reply-preview" id="replyPreview"></span><button class="icon-btn" id="cancelReply">✕</button></div><div class="chat-input-wrap"><div class="chat-input-row"><button class="send-btn" onclick="sendMsg()">➤</button><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off" maxlength="500"></div><div class="msg-hint">برای ریپلای، روی پیام موردنظر دوبار لمس/کلیک کن • برای پروفایل، روی نام کاربر بزن</div></div></div><script>
+    const wsProto=location.protocol==='https:'?'wss:':'ws:';const me={username!r},SUPPORT_USER={SUPPORT_USERNAME!r},box=document.getElementById('chatBox'),input=document.getElementById('msgInput'),replyBar=document.getElementById('replyBar'),replyPreview=document.getElementById('replyPreview');let replyId=null,lastId=0,ws=null,reconnect=null,soundOn=true;const audio=document.getElementById('roomAudio');document.querySelectorAll('.msg[data-id]').forEach(e=>lastId=Math.max(lastId,Number(e.dataset.id)||0));
+    function esc(v){{const d=document.createElement('div');d.textContent=v;return d.innerHTML}}function fmt(ts){{const d=new Date(Number(ts)*1000);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}}function replyTo(el){{replyId=Number(el.dataset.id);replyBar.style.display='flex';replyPreview.textContent='↩️ پاسخ به '+el.dataset.sender+': '+el.dataset.content;input.focus()}}function bindMsg(el){{let lastTap=0;el.addEventListener('dblclick',()=>replyTo(el));el.addEventListener('touchend',e=>{{const now=Date.now();if(now-lastTap<330){{e.preventDefault();replyTo(el)}}lastTap=now}})}}document.querySelectorAll('.msg[data-id]').forEach(bindMsg);document.getElementById('cancelReply').onclick=()=>{{replyId=null;replyBar.style.display='none'}};
+    function addMsg(m){{if(!m||!m.id||Number(m.id)<=lastId)return;lastId=Number(m.id);const d=document.createElement('div');d.className=m.sender===me?'msg me':'msg';d.dataset.id=m.id;d.dataset.sender=m.sender;d.dataset.content=m.content;d.innerHTML='<span class="sender"><a class="profile-link" href="/profile?u='+encodeURIComponent(m.sender)+'">'+(m.avatar&&String(m.avatar).startsWith('data:image/')?'<img class="chat-avatar" src="'+esc(m.avatar)+'" alt="">':'<span class="chat-avatar-fallback">🎮</span>')+esc(m.sender)+(m.sender===SUPPORT_USER?' <span class="support-badge">✔️ پشتیبانی</span>':'')+'</a></span>'+(m.reply_to_id?'<div class="msg-reply">↩️ پاسخ به پیام قبلی</div>':'')+'<span class="content"></span><span class="msg-time">'+fmt(m.created_at)+'</span>';d.querySelector('.content').textContent=m.content;box.appendChild(d);bindMsg(d);box.scrollTop=box.scrollHeight}}
+    function handleMusic(m){{if(!m)return;document.getElementById('musicBar').style.display='flex';document.getElementById('musicName').textContent=m.title||'آهنگ چت روم';document.getElementById('musicSub').textContent=m.target_user?'🎧 اختصاص داده‌شده برای '+m.target_user+' • قابل پخش برای همه':'🎧 آهنگ فعال چت روم • قابل پخش برای همه';if(audio.dataset.src!==m.url){{audio.pause();audio.src=m.url;audio.dataset.src=m.url;audio.load()}}}}
+    async function loadMusic(){{try{{const r=await fetch('/chat/public/music',{{cache:'no-store'}});const d=await r.json();if(d.music)handleMusic(d.music)}}catch(e){{}}}}
+    function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/public');ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='music')handleMusic(d.music);else if(d.type==='music_clear'){{audio.pause();audio.removeAttribute('src');document.getElementById('musicBar').style.display='none'}}else if(d.sender)addMsg(d)}};ws.onclose=()=>{{if(!reconnect)reconnect=setTimeout(()=>{{reconnect=null;connect()}},1200)}}}}
+    async function poll(){{try{{const r=await fetch('/chat/public/messages?after='+lastId,{{cache:'no-store'}});const d=await r.json();if(d.ok)d.messages.forEach(addMsg)}}catch(e){{}}}}
+    function sendMsg(){{const t=input.value.trim();if(!t)return;const payload={{content:t,reply_to_id:replyId}};if(ws&&ws.readyState===1)ws.send(JSON.stringify(payload));else{{poll();return}}input.value='';replyId=null;replyBar.style.display='none'}}input.addEventListener('keydown',e=>{{if(e.key==='Enter'){{e.preventDefault();sendMsg()}}}});
+    document.getElementById('playMusic').onclick=async()=>{{try{{audio.volume=soundOn?1:0;await audio.play()}}catch(e){{alert('برای پخش، یک بار روی دکمه پخش بزن')}}}};document.getElementById('stopMusic').onclick=()=>{{audio.pause();audio.currentTime=0}};document.getElementById('soundBtn').onclick=()=>{{soundOn=!soundOn;audio.muted=!soundOn;document.getElementById('soundBtn').textContent=soundOn?'🔊':'🔇'}};document.getElementById('musicBtn').onclick=()=>{{const b=document.getElementById('musicBar');b.style.display=b.style.display==='none'?'flex':'none'}};document.getElementById('shareBtn').onclick=async()=>{{try{{await navigator.share({{title:'چت عمومی',url:location.href}})}}catch(e){{try{{await navigator.clipboard.writeText(location.href);alert('لینک چت کپی شد')}}catch(_){{}}}}}};loadMusic();connect();setInterval(poll,1400);setInterval(loadMusic,3000);box.scrollTop=box.scrollHeight;
+    </script>'''
+    return page_shell('چت عمومی',body,username)
+
+def chat_private_page(username,other,messages):
+    other_badge = f' {_support_badge()}' if other==SUPPORT_USERNAME else ''
+    body=f'''<div class="chat-screen"><div class="chat-top"><div class="chat-toolbar"><a class="icon-btn" href="/lobby">‹</a><div class="chat-title">💌 {html.escape(other)}{other_badge}</div><a class="icon-btn" href="/profile?u={quote(other,safe='')}">👤</a></div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username)}</div><div class="reply-bar" id="replyBar" style="display:none"><span class="reply-preview" id="replyPreview"></span><button class="icon-btn" id="cancelReply">✕</button></div><div class="chat-input-wrap"><div class="chat-input-row"><button class="send-btn" onclick="sendMsg()">➤</button><input type="text" id="msgInput" placeholder="پیام خصوصی..." autocomplete="off" maxlength="500"></div><div class="msg-hint">برای ریپلای، روی پیام دوبار لمس/کلیک کن</div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',me={username!r},SUPPORT_USER={SUPPORT_USERNAME!r},box=document.getElementById('chatBox'),input=document.getElementById('msgInput'),replyBar=document.getElementById('replyBar'),replyPreview=document.getElementById('replyPreview');let replyId=null,lastId=0,ws=null,reconnect=null;document.querySelectorAll('.msg[data-id]').forEach(e=>lastId=Math.max(lastId,Number(e.dataset.id)||0));function esc(v){{const d=document.createElement('div');d.textContent=v;return d.innerHTML}}function fmt(ts){{const d=new Date(Number(ts)*1000);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}}function replyTo(el){{replyId=Number(el.dataset.id);replyBar.style.display='flex';replyPreview.textContent='↩️ پاسخ به '+el.dataset.sender+': '+el.dataset.content;input.focus()}}function bind(el){{let t=0;el.addEventListener('dblclick',()=>replyTo(el));el.addEventListener('touchend',e=>{{let n=Date.now();if(n-t<330){{e.preventDefault();replyTo(el)}}t=n}})}}document.querySelectorAll('.msg[data-id]').forEach(bind);document.getElementById('cancelReply').onclick=()=>{{replyId=null;replyBar.style.display='none'}};function addMsg(m){{if(!m.id||Number(m.id)<=lastId)return;lastId=Number(m.id);const d=document.createElement('div');d.className=m.sender===me?'msg me':'msg';d.dataset.id=m.id;d.dataset.sender=m.sender;d.dataset.content=m.content;d.innerHTML='<span class="sender">'+esc(m.sender)+(m.sender===SUPPORT_USER?' <span class="support-badge">✔️ پشتیبانی</span>':'')+'</span>'+(m.reply_to_id?'<div class="msg-reply">↩️ پاسخ به پیام قبلی</div>':'')+'<span class="content"></span><span class="msg-time">'+fmt(m.created_at)+'</span>';d.querySelector('.content').textContent=m.content;box.appendChild(d);bind(d);box.scrollTop=box.scrollHeight}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{html.escape(other)}');ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.sender)addMsg(d)}};ws.onclose=()=>{{if(!reconnect)reconnect=setTimeout(()=>{{reconnect=null;connect()}},1200)}}}}function sendMsg(){{const t=input.value.trim();if(!t||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({{content:t,reply_to_id:replyId}}));input.value='';replyId=null;replyBar.style.display='none'}}input.addEventListener('keydown',e=>{{if(e.key==='Enter'){{e.preventDefault();sendMsg()}}}});connect();box.scrollTop=box.scrollHeight;</script>'''
+    return page_shell('چت خصوصی',body,username)
+
+def _time_ago(ts):
+    try:
+        diff = int(time.time()) - int(ts)
+    except Exception:
+        return ''
+    if diff < 60: return 'همین الان'
+    if diff < 3600: return f'{diff//60} دقیقه پیش'
+    if diff < 86400: return f'{diff//3600} ساعت پیش'
+    return f'{diff//86400} روز پیش'
+
+def messages_page(username, requests, friends, conversations):
+    req_count = len(requests)
+
+    if requests:
+        req_items = ''.join(
+            f'''<div class="inbox-row" id="req-{r['id']}">
+                <a class="inbox-avatar-link" href="/profile?u={quote(r['requester'],safe='')}">{_avatar_html(r.get('avatar'),cls='chat-avatar-fallback' if not str(r.get('avatar') or '').startswith('data:image/') else 'inbox-avatar-img')}</a>
+                <div class="inbox-meta"><a class="profile-link" href="/profile?u={quote(r['requester'],safe='')}"><b>{html.escape(r.get('display_name') or r['requester'])}</b>{(' '+_support_badge()) if r['requester']==SUPPORT_USERNAME else ''}</a><div class="inbox-sub">درخواست دوستی • {_time_ago(r['created_at'])}</div></div>
+                <div class="inbox-actions">
+                    <button class="req-accept" onclick="respondReq({r['id']},true)">✅</button>
+                    <button class="req-decline" onclick="respondReq({r['id']},false)">✖</button>
+                </div>
+            </div>''' for r in requests)
+    else:
+        req_items = '<div class="chat-empty">📭 درخواست دوستی جدیدی نداری</div>'
+
+    if friends:
+        friend_items = ''.join(
+            f'''<a class="inbox-row inbox-row-link" href="/chat/private/{quote(f['username'],safe='')}">
+                {_avatar_html(f.get('avatar'),cls='chat-avatar-fallback' if not str(f.get('avatar') or '').startswith('data:image/') else 'inbox-avatar-img')}
+                <div class="inbox-meta"><b>{html.escape(f.get('display_name') or f['username'])}</b>{(' '+_support_badge()) if f['username']==SUPPORT_USERNAME else ''}<div class="inbox-sub">@{html.escape(f['username'])}</div></div>
+                <div class="inbox-actions"><span class="inbox-chat-icon">💬</span></div>
+            </a>''' for f in friends)
+    else:
+        friend_items = '<div class="chat-empty">👥 هنوز دوستی اضافه نکردی<br><small>با سرچ کاربر شروع کن</small></div>'
+
+    if conversations:
+        conv_items = ''.join(
+            f'''<a class="inbox-row inbox-row-link" href="/chat/private/{quote(c['other'],safe='')}">
+                {_avatar_html(c.get('avatar'),cls='chat-avatar-fallback' if not str(c.get('avatar') or '').startswith('data:image/') else 'inbox-avatar-img')}
+                <div class="inbox-meta"><b>{html.escape(c.get('display_name') or c['other'])}</b>{(' '+_support_badge()) if c['other']==SUPPORT_USERNAME else ''}<div class="inbox-sub">{'شما: ' if c['sender']==username else ''}{html.escape((c.get('content') or '')[:40])}</div></div>
+                <div class="inbox-actions"><span class="inbox-time">{_time_ago(c['created_at'])}</span></div>
+            </a>''' for c in conversations)
+    else:
+        conv_items = '<div class="chat-empty">💬 هنوز پیامی ندارید<br><small>با سرچ کاربر شروع کن</small></div>'
+
+    badge = f'<span class="req-badge">{req_count}</span>' if req_count else ''
+    body = f'''<div class="inbox-screen page-enter">
+      <div class="inbox-top">
+        <a class="icon-btn" href="/lobby">‹</a>
+        <div class="chat-title">📨 پیام‌ها</div>
+        <a class="icon-btn" href="/chat/public">💬</a>
+      </div>
+      <div class="inbox-search-wrap">
+        <input type="text" id="userSearch" placeholder="🔍 جستجوی کاربر..." autocomplete="off">
+        <div id="searchResults" class="inbox-search-results" style="display:none"></div>
+      </div>
+      <div class="inbox-tabs">
+        <button class="inbox-tab" data-tab="requests" onclick="showTab('requests')">درخواست‌ها{badge}</button>
+        <button class="inbox-tab" data-tab="friends" onclick="showTab('friends')">دوستان</button>
+        <button class="inbox-tab active" data-tab="conversations" onclick="showTab('conversations')">مکالمات</button>
+      </div>
+      <div class="inbox-list" id="tab-requests" style="display:none">{req_items}</div>
+      <div class="inbox-list" id="tab-friends" style="display:none">{friend_items}</div>
+      <div class="inbox-list" id="tab-conversations">{conv_items}</div>
+    </div>
+    <script>
+    const SUPPORT_USER={SUPPORT_USERNAME!r};
+    function showTab(name){{
+        document.querySelectorAll('.inbox-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+        document.querySelectorAll('.inbox-list').forEach(l=>l.style.display=(l.id==='tab-'+name?'':'none'));
+    }}
+    async function respondReq(id,accept){{
+        const row=document.getElementById('req-'+id);
+        try{{
+            const r=await fetch('/friends/respond',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{request_id:id,accept:accept}})}});
+            const d=await r.json();
+            if(d.ok && row){{
+                row.style.transition='opacity .35s,transform .35s,max-height .35s';
+                row.style.transform='translateX('+(accept?'40px':'-40px')+')';
+                row.style.opacity='0';
+                setTimeout(()=>{{row.style.maxHeight='0';row.style.padding='0';row.style.margin='0'}},200);
+                setTimeout(()=>{{row.remove();if(!document.querySelectorAll('#tab-requests .inbox-row').length){{document.getElementById('tab-requests').innerHTML='<div class="chat-empty">📭 درخواست دوستی جدیدی نداری</div>'}}}},380);
+            }}
+        }}catch(e){{alert('خطا در ارتباط با سرور.');}}
+    }}
+    let searchTimer=null;
+    const searchInput=document.getElementById('userSearch'), searchResults=document.getElementById('searchResults');
+    searchInput.addEventListener('input',()=>{{
+        clearTimeout(searchTimer);
+        const q=searchInput.value.trim();
+        if(!q){{searchResults.style.display='none';searchResults.innerHTML='';return;}}
+        searchTimer=setTimeout(async()=>{{
+            try{{
+                const r=await fetch('/friends/search?q='+encodeURIComponent(q));
+                const d=await r.json();
+                if(d.ok){{
+                    searchResults.innerHTML=d.users.length?d.users.map(u=>
+                        '<a class="inbox-row inbox-row-link" href="/chat/private/'+encodeURIComponent(u.username)+'">'+
+                        (String(u.avatar||'').startsWith('data:image/')?'<img class="inbox-avatar-img" src="'+u.avatar+'">':'<span class="chat-avatar-fallback">'+(u.avatar||'🎮')+'</span>')+
+                        '<div class="inbox-meta"><b>'+(u.display_name||u.username)+'</b>'+(u.username===SUPPORT_USER?' <span class="support-badge">✔️ پشتیبانی</span>':'')+'<div class="inbox-sub">@'+u.username+'</div></div>'+
+                        '<div class="inbox-actions"><span class="inbox-chat-icon">💬</span></div></a>'
+                    ).join(''):'<div class="chat-empty">کاربری پیدا نشد</div>';
+                    searchResults.style.display='block';
+                }}
+            }}catch(e){{}}
+        }},300);
+    }});
+    </script>'''
+    return page_shell('پیام‌ها', body, username)
+
+
+BASE_CSS += """
+.game-choice{text-align:center;overflow:hidden}.game-choice-icon{font-size:58px;filter:drop-shadow(0 8px 18px rgba(47,169,160,.22));animation:floatGame 2.8s ease-in-out infinite}.game-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0}.game-choice-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:24px 12px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(145deg,var(--surface-raised),var(--surface));color:var(--text);text-decoration:none;transform:translateZ(0);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.game-choice-card span{font-size:46px}.game-choice-card b{font-size:19px}.game-choice-card small{color:var(--text-muted)}.game-choice-card:hover{transform:translateY(-5px);border-color:var(--turquoise);box-shadow:0 12px 30px rgba(47,169,160,.16)}.ttt-cell{transform:translateZ(0);transition:transform .16s ease,background .16s ease,box-shadow .16s ease}.ttt-cell:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(47,169,160,.12)}.draw-result{animation:pageIn .25s ease both}.card{transform:translateZ(0)}@keyframes floatGame{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}@media(max-width:520px){.game-choice-grid{grid-template-columns:1fr}.ttt-board{grid-template-columns:repeat(3,minmax(70px,88px));grid-template-rows:repeat(3,minmax(70px,88px))}}@media(prefers-reduced-motion:reduce){.game-choice-icon{animation:none}}
+"""
+
+BASE_CSS += """
+/* ===================== لابی جدید ===================== */
+.lobby-profile-card{background:linear-gradient(160deg,#241d45,#161331);border:1px solid #3a3172;border-radius:22px;padding:20px;margin-bottom:16px;box-shadow:0 14px 34px -16px rgba(0,0,0,.55)}
+.lobby-profile-top{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.lobby-profile-name{font-size:19px;font-weight:800;color:#f1c9ff}
+.lobby-username{color:var(--text-muted);font-size:12.5px;margin-top:2px}
+.lobby-chip-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.lobby-chip{display:flex;align-items:center;gap:5px;background:#171335;border:1px solid #3a3172;border-radius:20px;padding:5px 12px;font-size:12.5px;font-weight:700}
+.chip-trophy{color:#ffce54}.chip-win{color:#63e6a3}.chip-loss{color:#ff8a8a}
+.lobby-avatar-ring{position:relative;display:block;border-radius:50%;padding:4px;background:conic-gradient(from 0deg,#ffce54,#ff7ac6,#7c5cff,#ffce54);animation:ringSpin 5s linear infinite;flex-shrink:0}
+.lobby-avatar-img,.lobby-profile-top .avatar-big{width:74px;height:74px;border-radius:50%;object-fit:cover;display:block;background:#161331;border:3px solid #161331}
+.lobby-profile-top .avatar-big{display:flex;align-items:center;justify-content:center;font-size:34px}
+@keyframes ringSpin{to{transform:rotate(360deg)}}
+.lobby-menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.lobby-menu-card{display:flex;flex-direction:column;align-items:center;gap:3px;padding:20px 8px;border-radius:20px;text-align:center;text-decoration:none;color:#fff;border:1px solid rgba(255,255,255,.08)}
+.lobby-menu-card b{font-size:15.5px}
+.lobby-menu-card small{opacity:.85;font-size:11px}
+.lobby-menu-icon{font-size:34px;margin-bottom:2px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))}
+.card-gold{background:linear-gradient(160deg,#ff9a3c,#e0692a)}
+.card-violet{background:linear-gradient(160deg,#8b6bff,#5a3fcf)}
+.lobby-split{display:flex;align-items:stretch;border-radius:18px;overflow:hidden;background:linear-gradient(90deg,#ffb545,#ff9a1f);margin-bottom:16px;box-shadow:0 10px 24px -12px rgba(255,154,31,.5)}
+.lobby-split-half{flex:1;text-align:center;padding:16px 6px;color:#241300;font-weight:800;text-decoration:none;font-size:14px;position:relative}
+.lobby-split-divider{width:1px;background:rgba(0,0,0,.18)}
+.req-badge{position:absolute;top:6px;left:50%;margin-right:38px;background:#ff3b5c;color:#fff;font-size:10px;font-weight:800;border-radius:10px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;animation:badgePulse 1.6s ease-in-out infinite}
+@keyframes badgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+.lobby-enter-btn{display:block;text-align:center;padding:18px;border-radius:18px;background:linear-gradient(160deg,#3ee08f,#189e58);color:#04220f;font-weight:900;font-size:17px;text-decoration:none;box-shadow:0 14px 30px -12px rgba(30,180,110,.55);transition:transform .18s ease}
+.lobby-enter-btn:hover{transform:translateY(-3px) scale(1.01)}
+
+/* ===================== دکمهٔ دوستی در پروفایل ===================== */
+.friend-btn{position:relative;background:linear-gradient(160deg,#7c5cff,#5636d6)!important;color:#fff!important;box-shadow:0 10px 24px -10px rgba(124,92,255,.6)}
+.friend-btn.is-pending{background:#2b2f52!important;color:#b7bce0!important;box-shadow:none}
+.friend-btn.is-friend{background:linear-gradient(160deg,#3ee08f,#189e58)!important;color:#04220f!important}
+.friend-request-inline{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.accept-btn{background:linear-gradient(160deg,#3ee08f,#189e58)!important;color:#04220f!important}
+.decline-btn{background:transparent!important;color:var(--danger)!important;border:1px solid var(--danger)!important}
+@keyframes confettiPop{0%{opacity:0;transform:translate(0,0) scale(.4) rotate(0)}15%{opacity:1;transform:translate(0,-10px) scale(1.1) rotate(15deg)}100%{opacity:0;transform:translate(var(--dx,40px),-90px) scale(.8) rotate(60deg)}}
+.friend-confetti{position:absolute;font-size:22px;pointer-events:none;animation:confettiPop 1.1s ease-out forwards}
+#friendPopWrap{position:relative;height:0}
+
+/* ===================== صفحه پیام‌ها (Inbox) ===================== */
+.inbox-screen{max-width:720px;margin:-8px auto 0;background:linear-gradient(180deg,#0c0e20,#080914);border:1px solid #25284a;border-radius:26px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);padding-bottom:10px}
+.inbox-top{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid #292c4c;position:sticky;top:0;background:rgba(15,16,35,.96);backdrop-filter:blur(12px);z-index:5}
+.inbox-search-wrap{padding:12px;position:relative}
+.inbox-search-wrap input{width:100%;padding:13px 14px;border-radius:14px;border:1px solid #2a2e51;background:#12142c;color:var(--text);font-family:inherit;font-size:14px;margin:0}
+.inbox-search-results{position:absolute;left:12px;right:12px;top:64px;background:#13152d;border:1px solid #2a2e51;border-radius:14px;max-height:280px;overflow-y:auto;z-index:20;box-shadow:0 18px 40px rgba(0,0,0,.4)}
+.inbox-tabs{display:flex;gap:6px;padding:0 12px 10px;overflow-x:auto}
+.inbox-tab{flex:1;white-space:nowrap;position:relative;background:#141631;color:var(--text-muted);border:1px solid #262a4d;padding:10px 8px;border-radius:12px;font-size:13px;font-weight:700}
+.inbox-tab.active{background:linear-gradient(160deg,#7c5cff,#5636d6);color:#fff;border-color:transparent}
+.inbox-list{padding:4px 10px 14px;display:flex;flex-direction:column;gap:6px;min-height:160px;animation:pageIn .25s ease both}
+.inbox-row{display:flex;align-items:center;gap:10px;padding:10px;border-radius:16px;background:#12142c;border:1px solid #23264a;text-decoration:none;color:var(--text);overflow:hidden;transition:background .15s ease}
+.inbox-row-link:hover{background:#181b3a}
+.inbox-avatar-img{width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.inbox-avatar-link .chat-avatar-fallback,.inbox-row .chat-avatar-fallback{width:42px;height:42px;font-size:19px;margin:0;flex-shrink:0}
+.inbox-meta{flex:1;min-width:0}
+.inbox-meta b{font-size:14px}
+.inbox-sub{font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.inbox-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.inbox-time{font-size:10.5px;color:#646985}
+.inbox-chat-icon{font-size:16px;opacity:.7}
+.req-accept,.req-decline{width:36px;height:36px;padding:0!important;border-radius:11px!important;font-size:15px}
+.req-accept{background:linear-gradient(160deg,#3ee08f,#189e58)!important;color:#04220f!important}
+.req-decline{background:transparent!important;border:1px solid var(--danger)!important;color:var(--danger)!important}
+@media(max-width:600px){.lobby-menu-card{padding:16px 6px}.lobby-profile-name{font-size:17px}}
+@media(prefers-reduced-motion:reduce){.lobby-avatar-ring{animation:none}.req-badge{animation:none}.friend-confetti{animation:none;display:none}}
+
+/* ===================== نشان رسمی پشتیبانی ===================== */
+.support-badge{display:inline-flex;align-items:center;gap:2px;background:linear-gradient(160deg,#3fa9ff,#1c6fd8);color:#fff;font-size:10.5px;font-weight:800;border-radius:8px;padding:2px 7px;vertical-align:middle;white-space:nowrap}
+.support-official-box{display:flex;align-items:center;gap:12px;background:linear-gradient(160deg,#183a63,#102743);border:1px solid #2f6bb0}
+.support-official-icon{font-size:30px;flex-shrink:0}
+.support-official-box b{color:#7fc4ff}
+.support-official-box p{margin:0;color:var(--text-muted);font-size:12.5px}
+"""
