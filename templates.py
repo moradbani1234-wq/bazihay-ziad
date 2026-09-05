@@ -368,8 +368,9 @@ def leaderboard_page(username: str, rows: list[dict]) -> str:
     </div>"""
     return page_shell("رتبه‌بندی",body,username)
 
-def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None) -> str:
+def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None) -> str:
     active_bans = active_bans or []
+    tickets = tickets or []
     scope_label = {"all":"همه بخش‌ها","chat":"چت","games":"بازی‌ها","drawing":"نقاشی","tictactoe":"دوز"}
 
     items=[]
@@ -434,13 +435,19 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
 
     <div class="card">
       <h2>🎵 مدیریت آهنگ چت عمومی</h2>
-      <p>از خود گوشی یک فایل آهنگ انتخاب کن؛ فایل روی سرور ذخیره می‌شود و آهنگ فعال برای همهٔ کاربران چت روم قابل پخش است.</p>
+      <p>آهنگ روی سرور ذخیره می‌شود؛ برای جلوگیری از حالت رادیویی/جرجر، هیچ پخش خودکاری انجام نمی‌شود و هر کاربر خودش روی «پخش» می‌زند.</p>
       <input type="text" id="musicTitle" placeholder="نام آهنگ / عنوان (اختیاری)">
+      <input type="text" id="musicTarget" placeholder="آیدی کاربر (اختیاری؛ فقط برای همان کاربر)">
       
       <input type="file" id="musicFile" accept="audio/*" style="width:100%;margin:8px 0 12px">
       <button class="glow-btn" onclick="setMusic()">🎵 انتخاب و فعال کردن آهنگ</button>
       <button class="btn" onclick="clearMusic()" style="margin-inline-start:6px">⏹ قطع برای همه</button>
       <div class="support-music-preview">ℹ️ حداکثر حجم فایل ۱۵ مگابایت. به‌خاطر محدودیت مرورگر، هر کاربر با دکمه «پخش» شروع می‌کند.</div>
+    </div>
+
+    <div class="card admin-card">
+      <h2>🎫 تیکت‌های رسمی پشتیبانی</h2>
+      <div>{''.join(f"<div class=\"report-item\"><b>#{t['id']} — {html.escape(t['subject'])}</b><div class=\"report-meta\">از {html.escape(t['user'])} | {html.escape(t['status'])}</div><p>{html.escape(t['content'])}</p></div>" for t in tickets) or '<p>تیکتی ثبت نشده.</p>'}</div>
     </div>
 
     <div class="card">
@@ -486,13 +493,13 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
     async function setMusic() {{
       const file=document.getElementById('musicFile').files[0];
       const title=document.getElementById('musicTitle').value.trim();
-      const target_user='';
+      const target_user=document.getElementById('musicTarget').value.trim();
       if(!file){{alert('اول یک آهنگ از گوشی انتخاب کن.');return;}}
       if(file.size>15*1024*1024){{alert('حجم آهنگ نباید بیشتر از ۱۵ مگابایت باشد.');return;}}
       const fd=new FormData(); fd.append('music',file);
       const r=await fetch('/support/music?title='+encodeURIComponent(title)+'&target_user='+encodeURIComponent(target_user),{{method:'POST',body:fd}});
       const d=await r.json();
-      if(d.ok){{alert('🎵 آهنگ فعال شد و در چت روم برای همه قرار گرفت.');}}else alert(d.error==='user_not_found'?'کاربر پیدا نشد.':d.error==='bad_audio'?'این فایل صوتی پشتیبانی نمی‌شود.':'خطا در فعال‌سازی آهنگ.');
+      if(d.ok){{alert(target_user?'🎵 آهنگ فقط برای همان کاربر فعال شد.':'🎵 آهنگ آماده شد؛ پخش خودکار ندارد و هر کاربر خودش پخش می‌کند.');}}else alert(d.error==='user_not_found'?'کاربر پیدا نشد.':d.error==='bad_audio'?'این فایل صوتی پشتیبانی نمی‌شود.':'خطا در فعال‌سازی آهنگ.');
     }}
     async function clearMusic() {{
       const r=await fetch('/support/music/clear',{{method:'POST'}}); const d=await r.json();
@@ -1076,7 +1083,13 @@ def _nav(username):
     return '<div class="nav"><div class="nav-brand">🎲 بازی‌خونه</div><div><a href="/login">ورود</a></div></div>'
 
 def lobby_page(username):
-    body=f'''<div class="card hero page-enter"><h1>🎮 خوش اومدی، {html.escape(username)}!</h1><p>همه‌چیز از اینجا شروع می‌شه؛ بازی، چت، رتبه‌بندی و پروفایل.</p><div class="grid-links"><a class="glow-btn game-card" href="/games">🎮 <strong>شروع بازی</strong><small>دوز یا نقاشی — خودت انتخاب کن</small></a><a class="glow-btn" href="/chat/public">💬 چت روم <small>چت زنده، ریپلای با دوبار لمس و پروفایل کاربران</small></a><a class="glow-btn" href="/leaderboard">🏆 رتبه‌بندی <small>رقابت با بقیه بازیکن‌ها</small></a><a class="glow-btn" href="/profile?u={quote(username,safe='')}">👤 پروفایل من <small>آمار، عکس و اطلاعات حساب</small></a><a class="glow-btn" href="/settings">⚙️ تنظیمات <small>نام، بیو و عکس پروفایل</small></a></div></div><div class="card page-enter"><h2>💌 چت خصوصی</h2><p>نام کاربر را وارد کن و مستقیم وارد گفت‌وگوی خصوصی شو.</p><form method="post" action="/chat/private/start"><input type="text" name="other" placeholder="آیدی کاربر" required><button type="submit" class="glow-btn">💬 شروع چت</button></form></div>'''
+    body=f"""<div class="lobby-shell page-enter">
+      <div class="lobby-profile hero"><div class="lobby-profile-main"><a href="/profile?u={quote(username,safe='')}" class="lobby-avatar">🎮</a><div><div class="lobby-name">{html.escape(username)}</div><div class="lobby-sub">برای پروفایل کلیک کن 👆</div></div></div><div class="lobby-stats"><span>🏆 جدول امتیازات</span><span>💎 امتیاز و دستاوردها</span></div></div>
+      <div class="lobby-promo-grid"><a class="promo-card orange" href="/leaderboard"><span>🏆</span><b>برترین‌ها</b><small>جدول امتیازات</small></a><a class="promo-card purple" href="/shop"><span>🛍️</span><b>فروشگاه</b><small>با سکه خرید کن</small><em>🎁 ۲ روز</em></a></div>
+      <div class="lobby-sep">یا</div><div class="lobby-duo"><a href="/messages">🔒<b>چت خصوصی</b></a><a href="/chat/public">💬<b>چت عمومی</b></a></div>
+      <div class="lobby-sep">یا</div><a class="lobby-play" href="/games">🎮 ورود به بازی</a>
+      <div class="lobby-mini-actions"><a href="/messages">💌 پیام‌ها</a><a href="/support/ticket">🛡️ تیکت پشتیبانی</a><a href="/settings">⚙️ تنظیمات</a></div>
+    </div>"""
     return page_shell('لابی',body,username)
 
 def games_page(username):
@@ -1091,13 +1104,15 @@ def _avatar_html(avatar, cls="profile-avatar-img", alt="تصویر کاربر"):
 
 def profile_page(username, prof):
     prof = prof or {'username': username, 'display_name': username, 'bio': '', 'avatar': '🎮', 'wins':0, 'losses':0, 'draws':0, 'points':0, 'correct_guesses':0, 'wrong_guesses':0}
-    total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0); correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0; wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
-    avatar_html=_avatar_html(prof.get('avatar') or '🎮')
-    body=f'''<div class="card hero"><div class="profile-head"><div>{avatar_html}</div><div><h1>{html.escape(prof.get('display_name') or prof['username'])}</h1><p style="margin:0">@{html.escape(prof['username'])}</p></div></div><p>{html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')}</p><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div><p>درصد حدس درست</p><div class="progress"><div style="width:{correct}%"></div></div><p>درصد حدس غلط</p><div class="progress"><div style="width:{wrong}%"></div></div></div>'''
+    total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0)
+    correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0; wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
+    avatar_html=_avatar_html(prof.get('avatar') or '🎮'); is_support=prof['username']=='morad'
+    badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else ''
     if prof['username']!=username:
-        body+=f'''<div class="card"><button class="glow-btn" onclick="reportUser()">🚩 گزارش کاربر</button></div><script>async function reportUser(){{const reason=prompt('دلیل گزارش:');if(!reason)return;const r=await fetch('/report',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{target:{prof['username']!r},content:reason,context:'profile'}})}});alert((await r.json()).ok?'گزارش ثبت شد.':'خطا');}}</script>'''
-    safe_user=quote(prof['username'], safe='')
-    body+=f'<div style="text-align:center"><a class="btn" href="/chat/private/{safe_user}">💬 پیام خصوصی</a> <a class="btn" href="/lobby">لابی</a></div>'
+        actions='<div class="profile-actions"><form method="post" action="/friends/request/form"><input type="hidden" name="target" value="'+html.escape(prof['username'],quote=True)+'"><button class="glow-btn" type="submit">🤝 افزودن به دوستان</button></form><a class="btn" href="/chat/private/'+quote(prof['username'],safe='')+'">💬 پیام خصوصی</a></div>'
+    else: actions='<div class="profile-actions"><a class="btn" href="/settings">⚙️ ویرایش پروفایل</a></div>'
+    support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
+    body=f'<div class="profile-card hero page-enter"><div class="profile-head"><div>{avatar_html}</div><div><h1>{html.escape(prof.get('display_name') or prof['username'])}</h1><p style="margin:0">@{html.escape(prof['username'])}</p>{badge}</div></div><p>{html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')}</p><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>{actions}</div>{support_box}<div style="text-align:center"><a class="btn" href="/lobby">🏠 لابی</a></div>'
     return page_shell('پروفایل',body,username)
 
 def settings_page(username, prof):
@@ -1143,7 +1158,7 @@ def chat_public_page(username,messages):
     const wsProto=location.protocol==='https:'?'wss:':'ws:';const me={username!r},box=document.getElementById('chatBox'),input=document.getElementById('msgInput'),replyBar=document.getElementById('replyBar'),replyPreview=document.getElementById('replyPreview');let replyId=null,lastId=0,ws=null,reconnect=null,soundOn=true;const audio=document.getElementById('roomAudio');document.querySelectorAll('.msg[data-id]').forEach(e=>lastId=Math.max(lastId,Number(e.dataset.id)||0));
     function esc(v){{const d=document.createElement('div');d.textContent=v;return d.innerHTML}}function fmt(ts){{const d=new Date(Number(ts)*1000);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}}function replyTo(el){{replyId=Number(el.dataset.id);replyBar.style.display='flex';replyPreview.textContent='↩️ پاسخ به '+el.dataset.sender+': '+el.dataset.content;input.focus()}}function bindMsg(el){{let lastTap=0;el.addEventListener('dblclick',()=>replyTo(el));el.addEventListener('touchend',e=>{{const now=Date.now();if(now-lastTap<330){{e.preventDefault();replyTo(el)}}lastTap=now}})}}document.querySelectorAll('.msg[data-id]').forEach(bindMsg);document.getElementById('cancelReply').onclick=()=>{{replyId=null;replyBar.style.display='none'}};
     function addMsg(m){{if(!m||!m.id||Number(m.id)<=lastId)return;lastId=Number(m.id);const d=document.createElement('div');d.className=m.sender===me?'msg me':'msg';d.dataset.id=m.id;d.dataset.sender=m.sender;d.dataset.content=m.content;d.innerHTML='<span class="sender"><a class="profile-link" href="/profile?u='+encodeURIComponent(m.sender)+'">'+(m.avatar&&String(m.avatar).startsWith('data:image/')?'<img class="chat-avatar" src="'+esc(m.avatar)+'" alt="">':'<span class="chat-avatar-fallback">🎮</span>')+esc(m.sender)+'</a></span>'+(m.reply_to_id?'<div class="msg-reply">↩️ پاسخ به پیام قبلی</div>':'')+'<span class="content"></span><span class="msg-time">'+fmt(m.created_at)+'</span>';d.querySelector('.content').textContent=m.content;box.appendChild(d);bindMsg(d);box.scrollTop=box.scrollHeight}}
-    function handleMusic(m){{if(!m)return;document.getElementById('musicBar').style.display='flex';document.getElementById('musicName').textContent=m.title||'آهنگ چت روم';document.getElementById('musicSub').textContent=m.target_user?'🎧 اختصاص داده‌شده برای '+m.target_user+' • قابل پخش برای همه':'🎧 آهنگ فعال چت روم • قابل پخش برای همه';audio.src=m.url}}
+    function handleMusic(m){{if(!m)return;document.getElementById('musicBar').style.display='flex';document.getElementById('musicName').textContent=m.title||'آهنگ چت روم';document.getElementById('musicSub').textContent=m.target_user?'🎧 اختصاص داده‌شده برای '+m.target_user+' • قابل پخش برای همه':'🎧 آهنگ آمادهٔ پخش • با دکمه پخش شروع کن';audio.src=m.url}}
     async function loadMusic(){{try{{const r=await fetch('/chat/public/music',{{cache:'no-store'}});const d=await r.json();if(d.music)handleMusic(d.music)}}catch(e){{}}}}
     function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/public');ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='music')handleMusic(d.music);else if(d.type==='music_clear'){{audio.pause();audio.removeAttribute('src');document.getElementById('musicBar').style.display='none'}}else if(d.sender)addMsg(d)}};ws.onclose=()=>{{if(!reconnect)reconnect=setTimeout(()=>{{reconnect=null;connect()}},1200)}}}}
     async function poll(){{try{{const r=await fetch('/chat/public/messages?after='+lastId,{{cache:'no-store'}});const d=await r.json();if(d.ok)d.messages.forEach(addMsg)}}catch(e){{}}}}
@@ -1160,3 +1175,23 @@ def chat_private_page(username,other,messages):
 BASE_CSS += """
 .game-choice{text-align:center;overflow:hidden}.game-choice-icon{font-size:58px;filter:drop-shadow(0 8px 18px rgba(47,169,160,.22));animation:floatGame 2.8s ease-in-out infinite}.game-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0}.game-choice-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:24px 12px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(145deg,var(--surface-raised),var(--surface));color:var(--text);text-decoration:none;transform:translateZ(0);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.game-choice-card span{font-size:46px}.game-choice-card b{font-size:19px}.game-choice-card small{color:var(--text-muted)}.game-choice-card:hover{transform:translateY(-5px);border-color:var(--turquoise);box-shadow:0 12px 30px rgba(47,169,160,.16)}.ttt-cell{transform:translateZ(0);transition:transform .16s ease,background .16s ease,box-shadow .16s ease}.ttt-cell:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(47,169,160,.12)}.draw-result{animation:pageIn .25s ease both}.card{transform:translateZ(0)}@keyframes floatGame{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}@media(max-width:520px){.game-choice-grid{grid-template-columns:1fr}.ttt-board{grid-template-columns:repeat(3,minmax(70px,88px));grid-template-rows:repeat(3,minmax(70px,88px))}}@media(prefers-reduced-motion:reduce){.game-choice-icon{animation:none}}
 """
+
+
+BASE_CSS += """
+.lobby-shell{max-width:560px;margin:0 auto;padding:10px 0 35px}.lobby-profile{border:2px solid #633f8f;border-radius:24px;padding:22px;box-shadow:0 0 35px rgba(123,71,202,.2);animation:cardPop .45s ease both}.lobby-profile-main{display:flex;align-items:center;gap:14px}.lobby-avatar{width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:44px;text-decoration:none;background:linear-gradient(145deg,#f25bbd,#8554f5);border:5px solid #e889df;box-shadow:0 0 28px rgba(230,85,215,.3)}.lobby-name{font-size:25px;font-weight:900;color:#ef70ca}.lobby-sub{color:#8886a7;font-size:13px}.lobby-stats{display:flex;flex-direction:column;gap:7px;margin-top:14px;color:#8f8aa9}.lobby-promo-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:28px}.promo-card{position:relative;min-height:170px;border-radius:22px;padding:20px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-decoration:none;color:#fff;box-shadow:0 12px 30px rgba(0,0,0,.22);transition:transform .25s,filter .25s}.promo-card:hover{transform:translateY(-6px) scale(1.02);filter:brightness(1.08)}.promo-card span{font-size:46px}.promo-card b{font-size:23px}.promo-card small{font-size:14px;opacity:.9}.promo-card.orange{background:linear-gradient(145deg,#ffad0a,#f24d40)}.promo-card.purple{background:linear-gradient(145deg,#9b5cff,#7353ee)}.promo-card em{position:absolute;right:-8px;top:70px;background:#ffb71b;border:3px solid #ffd65d;color:#402700;border-radius:18px;padding:7px 10px;font-style:normal;font-weight:900;box-shadow:0 0 18px rgba(255,183,27,.45);animation:giftFloat 2s ease-in-out infinite}.lobby-sep{text-align:center;color:#777696;font-size:16px;margin:18px 0}.lobby-duo{display:grid;grid-template-columns:1fr 1fr;background:linear-gradient(145deg,#ffc400,#ffab00);border-radius:22px;overflow:hidden;box-shadow:0 12px 30px rgba(255,177,0,.2)}.lobby-duo a{min-height:120px;display:flex;align-items:center;justify-content:center;gap:8px;flex-direction:column;color:#151515;text-decoration:none;font-size:22px;transition:transform .2s}.lobby-duo a:first-child{border-left:3px solid rgba(80,50,0,.25)}.lobby-duo a:hover{transform:scale(1.03)}.lobby-play{display:flex;align-items:center;justify-content:center;min-height:92px;border-radius:20px;background:linear-gradient(145deg,#39db7a,#16ad61);color:#fff;text-decoration:none;font-size:24px;font-weight:900;box-shadow:0 12px 30px rgba(35,203,112,.25);transition:transform .2s,filter .2s}.lobby-play:hover{transform:translateY(-4px);filter:brightness(1.08)}.lobby-mini-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:18px}.lobby-mini-actions a{padding:8px 12px;border:1px solid #303257;border-radius:12px;color:#a9add0;text-decoration:none;background:#15182e}.profile-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:18px}.verified-support{display:inline-block;margin-top:7px;padding:4px 10px;border-radius:999px;background:linear-gradient(90deg,#7a5cff,#d65ee5);color:white;font-size:11px;font-weight:900;box-shadow:0 0 18px rgba(128,92,255,.35)}.support-mini-card{display:flex;flex-direction:column;gap:2px;margin:14px 0;padding:15px 17px;border:1px solid #7d61ff;border-radius:18px;background:linear-gradient(145deg,#1e1b45,#17162e);color:#fff;text-decoration:none;box-shadow:0 8px 25px rgba(113,82,255,.16)}.support-mini-card span{font-size:11px;color:#9fa4c8}.friend-row{display:flex;align-items:center;gap:10px;padding:11px;border:1px solid #2b3054;border-radius:15px;background:#15182e;margin-bottom:8px}.friend-row .avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#282d52}.friend-row .grow{flex:1}.request-actions{display:flex;gap:6px}.ticket-card textarea{width:100%;min-height:160px;padding:12px;border-radius:13px;background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit}.ticket-card input{margin-bottom:10px}@keyframes cardPop{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}@keyframes giftFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}@media(max-width:520px){.lobby-promo-grid{gap:10px}.promo-card{min-height:150px}.lobby-duo a{min-height:105px;font-size:18px}}
+"""
+
+def messages_page(username, friends, requests):
+    req_html=''.join(f"""<div class="friend-row page-enter"><div class="avatar">{html.escape(str(r.get('avatar') or '🎮')[:2])}</div><div class="grow"><b>{html.escape(r.get('display_name') or r['sender'])}</b><div class="report-meta">@{html.escape(r['sender'])} برای دوستی درخواست داده</div></div><div class="request-actions"><button onclick="respond({r['sender']!r},true)">✓</button><button class="btn" onclick="respond({r['sender']!r},false)">✕</button></div></div>""" for r in requests) or '<p style="opacity:.55;text-align:center;padding:25px">درخواست دوستی جدیدی نداری.</p>'
+    fr_html=''.join(f"""<div class="friend-row"><div class="avatar">{html.escape(str(f.get('avatar') or '🎮')[:2])}</div><div class="grow"><b>{html.escape(f.get('display_name') or f['username'])}</b><div class="report-meta">@{html.escape(f['username'])}</div></div><a class="btn" href="/chat/private/{quote(f['username'],safe='')}">💬</a></div>""" for f in friends) or '<p style="opacity:.55;text-align:center;padding:25px">هنوز دوستی نداری.</p>'
+    body=f"""<div class="card hero page-enter"><div style="display:flex;justify-content:space-between;align-items:center"><h1>💬 پیام‌ها</h1><a class="btn" href="/lobby">خانه ←</a></div><div class="tabs"><a class="active" href="/messages">💬 مکالمات</a><span>👥 دوستان</span><span>📨 درخواست‌ها <b>{len(requests)}</b></span></div><input id="userSearch" type="text" placeholder="🔎 جستجوی کاربر..." oninput="searchUser()"><div id="searchResult"></div></div><div class="card"><h2>📨 درخواست‌های دوستی</h2>{req_html}</div><div class="card"><h2>👥 دوستان من</h2>{fr_html}</div><script>async function respond(sender,accept){{const r=await fetch('/friends/respond',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{sender,accept}})}});if((await r.json()).ok)location.reload()}}let timer;async function searchUser(){{clearTimeout(timer);const q=document.getElementById('userSearch').value.trim(),box=document.getElementById('searchResult');if(!q){{box.innerHTML='';return}};timer=setTimeout(async()=>{{const r=await fetch('/profile?u='+encodeURIComponent(q));box.innerHTML=r.ok?'<a class="friend-row" href="/profile?u='+encodeURIComponent(q)+'"><div class="grow">👤 باز کردن پروفایل <b>@'+q.replace(/[<>&]/g,'')+'</b></div><span>→</span></a>':'<p class="report-meta">کاربر پیدا نشد.</p>'}},250)}}</script>"""
+    return page_shell('پیام‌ها',body,username)
+
+def support_ticket_page(username):
+    body=f"""<div class="card hero page-enter ticket-card"><h1>🛡️ تیکت پشتیبانی رسمی</h1><p>پیامت مستقیم در صف پشتیبانی ثبت می‌شود.</p><input id="subject" placeholder="موضوع تیکت" maxlength="120"><textarea id="content" maxlength="3000" placeholder="توضیحت را بنویس..."></textarea><button class="glow-btn" onclick="sendTicket()">🎫 ثبت تیکت</button><div id="status" class="status-line" style="display:none"></div></div><div style="text-align:center"><a class="btn" href="/lobby">بازگشت به منو</a></div><script>async function sendTicket(){{const subject=document.getElementById('subject').value.trim(),content=document.getElementById('content').value.trim(),s=document.getElementById('status');if(!subject||!content){{s.style.display='block';s.textContent='موضوع و توضیح را کامل کن.';return}}const r=await fetch('/support/ticket',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{subject,content}})}}),d=await r.json();s.style.display='block';s.textContent=d.ok?'✅ تیکت #'+d.ticket_id+' ثبت شد.':'❌ ثبت تیکت ناموفق بود.'}}</script>"""
+    return page_shell('تیکت پشتیبانی',body,username)
+
+
+def shop_page(username):
+    body=f"""<div class="card hero page-enter"><h1>🛍️ فروشگاه</h1><p>سکه‌ها و آیتم‌های تزئینی بازی را از این بخش مدیریت کن.</p><div class="lobby-promo-grid"><div class="promo-card purple"><span>💎</span><b>بسته سکه</b><small>به‌زودی</small></div><div class="promo-card orange"><span>🎁</span><b>آیتم ویژه</b><small>به‌زودی</small></div></div></div><div style="text-align:center"><a class="btn" href="/lobby">بازگشت به منو</a></div>"""
+    return page_shell('فروشگاه',body,username)

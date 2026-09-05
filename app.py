@@ -176,7 +176,7 @@ async def support_page(request: Request):
     username = _require_login(request)
     if not username or not _is_support(username):
         return RedirectResponse("/lobby")
-    return tpl.support_page(username, await db.get_reports(), await db.get_active_bans())
+    return tpl.support_page(username, await db.get_reports(), await db.get_active_bans(), await db.get_support_tickets())
 
 @app.post("/support/ban")
 async def support_ban(request: Request):
@@ -238,6 +238,58 @@ async def profile_page(request: Request, target: str):
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     return tpl.profile_page(username, prof)
 
+@app.post("/friends/request")
+async def friends_request(request: Request):
+    username = _require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); target=str(data.get("target") or "").strip()
+    ok, status=await db.send_friend_request(username,target)
+    return {"ok":ok,"status":status}
+
+@app.post("/friends/request/form")
+async def friends_request_form(request: Request, target: str = Form(...)):
+    username=_require_login(request)
+    if not username: return RedirectResponse('/login')
+    ok,status=await db.send_friend_request(username,target.strip())
+    return RedirectResponse('/profile?u='+quote(target.strip(),safe=''),status_code=303)
+
+@app.post("/friends/respond")
+async def friends_respond(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); sender=str(data.get("sender") or "").strip(); accept=bool(data.get("accept"))
+    ok=await db.respond_friend_request(sender,username,accept)
+    return {"ok":ok}
+
+@app.get("/friends")
+async def friends_data(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    return {"ok":True,"friends":await db.friends_for(username),"requests":await db.friend_requests_for(username)}
+
+@app.get("/messages", response_class=HTMLResponse)
+async def messages_page(request: Request):
+    username=_require_login(request)
+    if not username: return RedirectResponse("/login")
+    return tpl.messages_page(username, await db.friends_for(username), await db.friend_requests_for(username))
+
+@app.get("/support/ticket", response_class=HTMLResponse)
+async def support_ticket_page(request: Request):
+    username, blocked = await _require_scope(request, "chat")
+    if blocked: return blocked
+    return tpl.support_ticket_page(username)
+
+@app.post("/support/ticket")
+async def support_ticket_post(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); subject=str(data.get("subject") or "").strip(); content=str(data.get("content") or "").strip()
+    if not subject or not content: return {"ok":False,"error":"empty"}
+    tid=await db.create_support_ticket(username,subject,content)
+    # Also place it in the existing support report stream for backward compatibility.
+    await db.create_report(username,"morad","support_ticket",f"[{subject}]\n{content}")
+    return {"ok":True,"ticket_id":tid}
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     username = _require_login(request)
@@ -286,6 +338,12 @@ async def lobby(request: Request):
     if not username:
         return RedirectResponse("/login")
     return tpl.lobby_page(username)
+
+@app.get("/shop", response_class=HTMLResponse)
+async def shop_page(request: Request):
+    username=_require_login(request)
+    if not username: return RedirectResponse("/login")
+    return tpl.shop_page(username)
 
 @app.get("/games", response_class=HTMLResponse)
 async def games_page(request: Request):
@@ -376,9 +434,10 @@ async def ws_chat_public(websocket: WebSocket):
         await websocket.close(code=4003)
         return
     await chat_manager.connect_public(websocket)
+    websocket._drawbattle_username = username
     music_manager.add(websocket)
     current_music = await db.get_room_music("public")
-    if current_music:
+    if current_music and (not current_music.get("target_user") or current_music.get("target_user") == username):
         await websocket.send_json({"type":"music", "music":current_music})
     try:
         while True:
@@ -412,10 +471,15 @@ class MusicManager:
         self.conns: set[WebSocket] = set()
     def add(self, ws): self.conns.add(ws)
     def remove(self, ws): self.conns.discard(ws)
-    async def broadcast(self, payload):
+    async def broadcast(self, payload, target_user=None):
         dead=[]
         for ws in list(self.conns):
-            try: await ws.send_json(payload)
+            try:
+                # Targeted music is metadata-only for everyone else: it never auto-starts.
+                if target_user:
+                    owner = getattr(ws, "_drawbattle_username", None)
+                    if owner != target_user: continue
+                await ws.send_json(payload)
             except Exception: dead.append(ws)
         for ws in dead: self.conns.discard(ws)
 
@@ -441,7 +505,7 @@ async def support_music(request: Request, music: UploadFile = File(...)):
         return {"ok": False, "error": "audio_too_large"}
     await db.set_room_music_file("public", title, blob, mime, music.filename or "music", username, target)
     music_info = await db.get_room_music("public")
-    await music_manager.broadcast({"type":"music","music":music_info})
+    await music_manager.broadcast({"type":"music","music":music_info}, target_user=target or None)
     return {"ok": True, "music": music_info}
 
 @app.get("/chat/public/audio")

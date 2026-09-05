@@ -61,6 +61,22 @@ async def init_db():
                 await db.execute(f"ALTER TABLE room_music ADD COLUMN {col} {definition}")
             except Exception:
                 pass
+        await db.execute("""CREATE TABLE IF NOT EXISTS friend_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT NOT NULL, receiver TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+            UNIQUE(sender, receiver)
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_friend_receiver ON friend_requests(receiver,status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_friend_sender ON friend_requests(sender,status)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS friends (
+            user1 TEXT NOT NULL, user2 TEXT NOT NULL, created_at INTEGER NOT NULL,
+            PRIMARY KEY(user1,user2)
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS support_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT NOT NULL, subject TEXT NOT NULL, content TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
@@ -254,3 +270,77 @@ async def clear_room_music(room):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE room_music SET active=0 WHERE room=?", (room,))
         await db.commit()
+
+
+async def friend_status(me, other):
+    if not me or not other or me == other: return "self"
+    a,b=sorted([me,other], key=lambda x:x.lower())
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur=await db.execute("SELECT 1 FROM friends WHERE user1=? AND user2=?",(a,b))
+        if await cur.fetchone(): return "friends"
+        cur=await db.execute("SELECT sender,receiver,status FROM friend_requests WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY id DESC LIMIT 1",(me,other,other,me))
+        r=await cur.fetchone()
+        if not r: return "none"
+        sender,receiver,status=r
+        if status != 'pending': return status
+        return "outgoing" if sender==me else "incoming"
+
+async def send_friend_request(sender, receiver):
+    if not sender or not receiver or sender==receiver: return False, "invalid"
+    if not await get_user(receiver): return False, "user_not_found"
+    status=await friend_status(sender,receiver)
+    if status=="friends": return False,"already_friends"
+    if status=="incoming":
+        await respond_friend_request(sender=receiver, receiver=sender, accept=True)
+        return True,"accepted"
+    if status=="outgoing": return False,"already_sent"
+    now=int(time.time())
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM friend_requests WHERE ((sender=? AND receiver=?) OR (sender=? AND receiver=?)) AND status!='pending'",(sender,receiver,receiver,sender))
+        try:
+            await db.execute("INSERT INTO friend_requests(sender,receiver,status,created_at,updated_at) VALUES(?,?,?,?,?)",(sender,receiver,'pending',now,now))
+        except aiosqlite.IntegrityError: return False,"already_sent"
+        await db.commit()
+    return True,"sent"
+
+async def respond_friend_request(sender, receiver, accept):
+    # sender is original requester; receiver is current user
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur=await db.execute("SELECT id FROM friend_requests WHERE sender=? AND receiver=? AND status='pending' ORDER BY id DESC LIMIT 1",(sender,receiver))
+        row=await cur.fetchone()
+        if not row: return False
+        now=int(time.time())
+        status='accepted' if accept else 'rejected'
+        await db.execute("UPDATE friend_requests SET status=?,updated_at=? WHERE id=?",(status,now,row[0]))
+        if accept:
+            a,b=sorted([sender,receiver], key=lambda x:x.lower())
+            await db.execute("INSERT OR IGNORE INTO friends(user1,user2,created_at) VALUES(?,?,?)",(a,b,now))
+        await db.commit()
+        return True
+
+async def friend_requests_for(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT fr.id,fr.sender,fr.receiver,fr.created_at,COALESCE(u.display_name,fr.sender) display_name,COALESCE(u.avatar,'🎮') avatar FROM friend_requests fr LEFT JOIN users u ON u.username=fr.sender WHERE fr.receiver=? AND fr.status='pending' ORDER BY fr.id DESC",(username,))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def friends_for(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("""SELECT CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END username,
+                               COALESCE(u.display_name,CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END) display_name,
+                               COALESCE(u.avatar,'🎮') avatar FROM friends f JOIN users u ON u.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END)
+                               WHERE f.user1=? OR f.user2=? ORDER BY lower(display_name)""",(username,username,username,username,username))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def create_support_ticket(username, subject, content):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur=await db.execute("INSERT INTO support_tickets(user,subject,content,created_at) VALUES(?,?,?,?)",(username,subject[:120],content[:3000],int(time.time())))
+        await db.commit()
+        return cur.lastrowid
+
+async def get_support_tickets(limit=100):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT * FROM support_tickets ORDER BY id DESC LIMIT ?",(limit,))
+        return [dict(r) for r in await cur.fetchall()]
