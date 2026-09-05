@@ -376,12 +376,6 @@ def lobby_page(username: str, prof=None, wallet=None) -> str:
         <div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div>
         <a class="mode-start" href="/game/drawing4">شروع <span>←</span></a>
       </div>
-      <div class="game-mode-card mode-elim">
-        <div class="mode-badge">🔥 حالت حذفی ۶ نفره</div>
-        <div class="mode-icon">🎯</div>
-        <div class="mode-copy"><h2>نقاشی ۶ نفره</h2><p>۶ بازیکن • رقابت حذفی</p></div>
-        <a class="mode-start" href="/game/drawing6">شروع <span>←</span></a>
-      </div>
       <div class="lobby-quick-grid">
         <a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a>
         <a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>بهترین‌ها</small></a>
@@ -1232,10 +1226,17 @@ def lobby_page(username):
 
 def games_page(username):
     body=f"""<div class="lobby-bg page-enter">
-      <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>انتخاب کن</small></div>
-      <div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div><div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • سریع و زنده</p></div><a class="mode-start" href="/game/tictactoe">شروع ←</a></div>
-      <div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div><a class="mode-start" href="/game/drawing4">شروع ←</a></div>
-      <div class="game-mode-card mode-elim"><div class="mode-badge">🔥 حالت حذفی ۶ نفره</div><div class="mode-icon">🎯</div><div class="mode-copy"><h2>نقاشی ۶ نفره</h2><p>۶ بازیکن • رقابت حذفی</p></div><a class="mode-start" href="/game/drawing6">شروع ←</a></div>
+      <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>دو حالت، یک رقابت</small></div>
+      <div class="game-mode-card mode-speed">
+        <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div>
+        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • سریع و زنده</p></div>
+        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+      </div>
+      <div class="game-mode-card mode-draw">
+        <div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div>
+        <div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div>
+        <a class="mode-start" href="/game/drawing4">شروع <span>←</span></a>
+      </div>
       <a class="btn" href="/lobby">← بازگشت به لابی</a>
     </div>{_bottom_nav("home")}"""
     return page_shell('انتخاب بازی',body,username)
@@ -1255,7 +1256,7 @@ def profile_page(username, prof):
     is_support=prof['username']=='morad'
     badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else ''
     if prof['username']!=username:
-        actions='<div class="profile-actions"><form method="post" action="/friends/request/form"><input type="hidden" name="target" value="'+html.escape(prof['username'],quote=True)+'"><button class="glow-btn" type="submit">🤝 افزودن به دوستان</button></form><a class="btn" href="/chat/private/'+quote(prof['username'],safe='')+'">💬 پیام خصوصی</a><button class="btn" onclick="inviteGame()">🎮 دعوت به بازی</button></div><script>async function inviteGame(){const choice=prompt("حالت بازی: 4 یا 6","4");const mode=choice==="6"?"drawing6":"drawing4";const r=await fetch("/game/invite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({receiver:"'+html.escape(prof['username'],quote=True)+'",mode})});const d=await r.json();alert(d.ok?"🎮 دعوت ارسال شد!":"❌ ارسال دعوت ناموفق بود.")}</script>'
+        actions='<div class="profile-actions"><form method="post" action="/friends/request/form"><input type="hidden" name="target" value="'+html.escape(prof['username'],quote=True)+'"><button class="glow-btn" type="submit">🤝 افزودن به دوستان</button></form><a class="btn" href="/chat/private/'+quote(prof['username'],safe='')+'">💬 پیام خصوصی</a><button class="btn" onclick="inviteGame()">🎮 دعوت به بازی</button></div><script>async function inviteGame(){const mode="drawing4";const r=await fetch("/game/invite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({receiver:"'+html.escape(prof['username'],quote=True)+'",mode})});const d=await r.json();alert(d.ok?"🎮 دعوت ارسال شد!":"❌ ارسال دعوت ناموفق بود.")}</script>'
     else:
         actions='<div class="profile-actions"><a class="btn" href="/settings">⚙️ تنظیمات پروفایل</a></div>'
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
@@ -1272,51 +1273,54 @@ def settings_page(username, prof):
     prof = prof or {"username": username, "bio": "", "avatar": "🎮", "age": 18}
     avatar=prof.get('avatar') or '🎮'
     if str(avatar).startswith('data:image/'):
-        preview=f'<img id="avatarPreview" class="profile-avatar-img" src="{html.escape(str(avatar),quote=True)}" alt="پیش‌نمایش">'
+        preview=f'<img id="avatarPreview" src="{html.escape(str(avatar),quote=True)}" alt="پیش‌نمایش">'
     else:
         preview=f'<div id="avatarFallback" class="avatar-big">{html.escape(str(avatar))}</div>'
-    age=int(prof.get("age") or 18)
+    age=max(1,min(90,int(prof.get("age") or 18)))
     bio=html.escape(prof.get("bio") or '')
+    age_options=''.join(f'<option value="{i}"'+(' selected' if i==age else '')+f'>{i} سال</option>' for i in range(1,91))
     body=f"""<div class="settings-screen page-enter">
-      <div class="settings-header">
-        <a class="settings-close" href="/lobby">×</a>
-        <div><div class="settings-kicker">PLAYER SETTINGS</div><h1>تنظیمات</h1></div>
-        <div class="settings-gear">⚙️</div>
-      </div>
-      <div class="settings-card">
-        <div class="settings-avatar-row">
-          <div class="settings-avatar"><div class="avatar-crop-wrap" id="cropWrap">{preview}</div></div>
-          <div><b>تصویر آواتار</b><p>تصویرت در پروفایل و منوی اصلی نمایش داده می‌شود.</p></div>
+      <div class="settings-header"><a class="settings-close" href="/lobby">×</a><div><div class="settings-kicker">PLAYER SETTINGS</div><h1>تنظیمات پروفایل</h1></div><div class="settings-gear">⚙️</div></div>
+      <div class="settings-card profile-editor-card">
+        <div class="profile-editor-title"><div><b>✨ پروفایل من</b><p>آواتار، سن و بیوگرافی را تنظیم کن.</p></div></div>
+        <div class="avatar-editor">
+          <div class="avatar-crop-wrap" id="cropWrap">{preview}</div>
+          <div class="avatar-controls">
+            <label class="upload-btn" for="avatarFile">📷 انتخاب تصویر</label>
+            <input type="file" id="avatarFile" accept="image/*" class="file-input-hidden">
+            <div class="crop-label">تصویر را با انگشت جابه‌جا کن</div>
+            <div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3.5" step="0.01" value="1"><span>＋</span></div>
+            <button type="button" class="crop-reset" id="cropReset">↺ وسط‌چین</button>
+          </div>
         </div>
-        <input type="file" id="avatarFile" accept="image/*" class="file-input">
-        <div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div>
         <label for="ageInput">سن</label>
-        <div class="age-row"><input id="ageInput" type="number" min="1" max="90" value="{age}" inputmode="numeric"><span>سال</span></div>
-        <div class="field-hint">سن بین ۱ تا ۹۰ سال است و در پروفایل برای بقیه بازیکن‌ها نمایش داده می‌شود.</div>
+        <select id="ageInput" class="settings-select">{age_options}</select>
+        <div class="field-hint">سن فقط از ۱ تا ۹۰ سال انتخاب می‌شود و در پروفایل بقیه بازیکن‌ها هم دیده می‌شود.</div>
         <label for="bioInput">بیوگرافی</label>
-        <textarea id="bioInput" maxlength="70" placeholder="یک جمله کوتاه درباره خودت...">{bio}</textarea>
+        <textarea id="bioInput" maxlength="70" placeholder="حداکثر ۷۰ حرف...">{bio}</textarea>
         <div class="char-counter"><span id="bioCount">{len(prof.get('bio') or '')}</span>/70</div>
-        <button class="settings-save glow-btn" onclick="saveProfile()">💾 ذخیره تغییرات</button>
+        <button class="settings-save glow-btn" id="saveProfileBtn" type="button" onclick="saveProfile()">💾 ذخیره پروفایل</button>
         <div id="saveStatus" class="status-line" style="display:none;margin-top:10px"></div>
       </div>
-      <div class="settings-card password-card">
-        <h2>🔐 تغییر رمز عبور</h2>
-        <input type="password" id="oldPasswordInput" placeholder="رمز فعلی" autocomplete="current-password">
-        <input type="password" id="newPasswordInput" placeholder="رمز جدید (حداقل ۴ کاراکتر)" autocomplete="new-password">
-        <button class="glow-btn" onclick="changePass()">تغییر رمز</button>
-      </div>
+      <div class="settings-card password-card"><h2>🔐 تغییر رمز عبور</h2><input type="password" id="oldPasswordInput" placeholder="رمز فعلی" autocomplete="current-password"><input type="password" id="newPasswordInput" placeholder="رمز جدید (حداقل ۴ کاراکتر)" autocomplete="new-password"><button class="glow-btn" onclick="changePass()">تغییر رمز</button></div>
       <div class="settings-note">آیدی حساب: <b>{html.escape(username)}</b> • آیدی قابل تغییر نیست.</div>
       <div class="settings-links"><a href="/profile?u={quote(username,safe='')}">👤 پروفایل</a><a href="/lobby">🏠 لابی</a></div>
     </div>
     <script>
-    let avatarData={str(avatar)!r};let img=null;let zoom=1;
-    const wrap=document.getElementById('cropWrap'), z=document.getElementById('zoom'), file=document.getElementById('avatarFile');
-    function applyCrop(){{if(!img)return;const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(190/sw,190/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((190-sw*scale)/2)+'px';img.style.top=((190-sh*scale)/2)+'px'}}
-    function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(512/sw,512/sh)*zoom;const dw=sw*scale,dh=sh*scale;ctx.drawImage(img,(512-dw)/2,(512-dh)/2,dw,dh);avatarData=c.toDataURL('image/jpeg',0.78)}}
-    z.oninput=()=>{{zoom=Number(z.value);applyCrop();makeCrop()}};
-    file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f);const next=new Image();next.onload=()=>{{img=next;zoom=1;z.value='1';wrap.innerHTML='';wrap.appendChild(img);applyCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
-    const bioEl=document.getElementById('bioInput'), bioCount=document.getElementById('bioCount'); bioEl.oninput=()=>bioCount.textContent=bioEl.value.length;
-    async function saveProfile(){{const status=document.getElementById('saveStatus');try{{if(img)makeCrop();const payload={{bio:bioEl.value.trim(),age:Number(document.getElementById('ageInput').value),avatar:avatarData}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();status.style.display='block';status.textContent=d.ok?'✅ پروفایل با موفقیت ذخیره شد.':d.error==='bio_too_long'?'❌ بیوگرافی باید حداکثر ۷۰ حرف باشد.':d.error==='bad_age'?'❌ سن باید بین ۱ تا ۹۰ باشد.':(d.error==='image_too_large'?'❌ عکس خیلی بزرگ است.':'❌ ذخیره ناموفق بود.');status.style.color=d.ok?'var(--turquoise)':'var(--danger)'}}catch(e){{status.style.display='block';status.textContent='❌ خطا در ارتباط با سرور.';status.style.color='var(--danger)'}}}}
+    let avatarData={str(avatar)!r},img=null,zoom=1,posX=0,posY=0,dragging=false,lastX=0,lastY=0;
+    const wrap=document.getElementById('cropWrap'),z=document.getElementById('zoom'),file=document.getElementById('avatarFile'),reset=document.getElementById('cropReset');
+    const SIZE=190;
+    function renderCrop(){{if(!img)return;const sw=img.naturalWidth||1,sh=img.naturalHeight||1;const scale=Math.max(SIZE/sw,SIZE/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((SIZE-sw*scale)/2+posX)+'px';img.style.top=((SIZE-sh*scale)/2+posY)+'px'}}
+    function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth||1,sh=img.naturalHeight||1;const scale=Math.max(512/sw,512/sh)*zoom;const x=(512-sw*scale)/2+posX*(512/SIZE),y=(512-sh*scale)/2+posY*(512/SIZE);ctx.drawImage(img,x,y,sw*scale,sh*scale);avatarData=c.toDataURL('image/jpeg',0.82)}}
+    function clampPos(){{if(!img)return;const sw=img.naturalWidth||1,sh=img.naturalHeight||1,scale=Math.max(SIZE/sw,SIZE/sh)*zoom,dw=sw*scale,dh=sh*scale;const maxX=Math.max(0,(dw-SIZE)/2),maxY=Math.max(0,(dh-SIZE)/2);posX=Math.max(-maxX,Math.min(maxX,posX));posY=Math.max(-maxY,Math.min(maxY,posY))}}
+    z.oninput=()=>{{zoom=Number(z.value);clampPos();renderCrop();makeCrop()}};
+    reset.onclick=()=>{{posX=0;posY=0;zoom=1;z.value='1';clampPos();renderCrop();makeCrop()}};
+    wrap.addEventListener('pointerdown',e=>{{if(!img)return;dragging=true;lastX=e.clientX;lastY=e.clientY;wrap.setPointerCapture?.(e.pointerId)}});
+    wrap.addEventListener('pointermove',e=>{{if(!dragging||!img)return;posX+=e.clientX-lastX;posY+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;clampPos();renderCrop()}});
+    wrap.addEventListener('pointerup',()=>{{dragging=false;makeCrop()}});wrap.addEventListener('pointercancel',()=>{{dragging=false;makeCrop()}});
+    file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f),next=new Image();next.onload=()=>{{img=next;zoom=1;posX=0;posY=0;z.value='1';wrap.innerHTML='';wrap.appendChild(img);renderCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
+    const bioEl=document.getElementById('bioInput'),bioCount=document.getElementById('bioCount');bioEl.oninput=()=>{{if(bioEl.value.length>70)bioEl.value=bioEl.value.slice(0,70);bioCount.textContent=bioEl.value.length}};
+    async function saveProfile(){{const btn=document.getElementById('saveProfileBtn'),status=document.getElementById('saveStatus');btn.disabled=true;try{{if(img)makeCrop();const age=Number(document.getElementById('ageInput').value);const bio=bioEl.value.trim();if(!Number.isInteger(age)||age<1||age>90)throw new Error('سن نامعتبر است');if(bio.length>70)throw new Error('بیوگرافی بیشتر از ۷۰ حرف است');const payload={{bio,age,avatar:avatarData||'🎮'}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json','Accept':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();if(!d.ok)throw new Error(d.error==='bad_age'?'سن باید بین ۱ تا ۹۰ باشد.':d.error==='bio_too_long'?'بیوگرافی باید حداکثر ۷۰ حرف باشد.':d.error==='image_too_large'?'عکس خیلی بزرگ است.':'ذخیره ناموفق بود.');status.style.display='block';status.style.color='var(--turquoise)';status.textContent='✅ پروفایل ذخیره شد؛ در حال به‌روزرسانی...';setTimeout(()=>location.href='/profile?u='+encodeURIComponent({username!r}),350)}}catch(e){{status.style.display='block';status.style.color='var(--danger)';status.textContent='❌ '+(e.message||'خطا در ذخیره پروفایل')}}finally{{btn.disabled=false}}}}
     async function changePass(){{try{{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:document.getElementById('oldPasswordInput').value,new_password:document.getElementById('newPasswordInput').value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}catch(e){{alert('خطا در ارتباط با سرور.')}}}}
     </script>"""
     return page_shell('تنظیمات',body,username)
@@ -1385,7 +1389,7 @@ def shop_page(username):
 
 BASE_CSS += """
 .lobby-bg{background:repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 5px,transparent 5px 14px),radial-gradient(circle at 20% 10%,rgba(255,160,0,.22),transparent 24%),radial-gradient(circle at 80% 5%,rgba(255,0,100,.2),transparent 26%),linear-gradient(135deg,#24100c,#641a18 30%,#4d0d38 52%,#152b58 76%,#1c611e);border-radius:28px;padding:14px 8px 110px;box-shadow:inset 0 0 80px rgba(0,0,0,.35)}
-.lobby-top-title{text-align:center;color:#fff;font-size:30px;font-weight:1000;text-shadow:0 3px 0 rgba(0,0,0,.25),0 0 16px rgba(255,255,255,.2);margin:3px 0 14px}.lobby-user-card{background:linear-gradient(180deg,#fff,#f1f1f1);color:#2d3042;border:3px solid #ddd;border-radius:30px;padding:16px 13px 14px;box-shadow:0 12px 30px rgba(0,0,0,.35);position:relative;margin:48px 0 18px}.lobby-user-avatar{position:absolute;top:-76px;left:50%;transform:translateX(-50%);width:112px;height:112px;border-radius:50%;background:linear-gradient(145deg,#d4d4d4,#fff);border:4px solid #11c65b;box-shadow:0 0 0 4px rgba(255,255,255,.7),0 8px 25px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;font-size:55px;text-decoration:none}.lobby-user-name{margin:70px auto 12px;max-width:340px;text-align:center;background:linear-gradient(180deg,#00d92f,#00a922);color:#fff;border-radius:999px;padding:5px 12px;font-size:23px;font-weight:1000;box-shadow:inset 0 2px 4px rgba(255,255,255,.4),0 4px 10px rgba(0,0,0,.2)}.lobby-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.lobby-stat{background:#fff;border:3px solid #27c86a;border-radius:22px;padding:10px 4px;text-align:center;min-height:112px;display:flex;flex-direction:column;align-items:center;justify-content:center}.lobby-stat:nth-child(2){border-color:#b567ed}.lobby-stat:nth-child(3){border-color:#3d85e8}.lobby-stat .ico{font-size:38px;line-height:1}.lobby-stat b{font-size:26px;color:#303547}.lobby-stat span{color:#8b8e9b;font-size:13px}.lobby-bottom-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}.lobby-bottom-actions a{border-radius:19px;padding:9px 5px;text-align:center;color:#fff;text-decoration:none;font-size:16px;font-weight:900;box-shadow:0 7px 0 rgba(0,0,0,.12),0 8px 18px rgba(0,0,0,.16);transition:.2s}.lobby-bottom-actions a:hover{transform:translateY(-3px)}.lobby-bottom-actions .green{background:linear-gradient(180deg,#77d52b,#43b91c)}.lobby-bottom-actions .purple{background:linear-gradient(180deg,#bd61ff,#9445df)}.lobby-bottom-actions .gold{background:linear-gradient(180deg,#ffd43b,#efaa00)}.mode-pill{display:block;width:max-content;max-width:90%;margin:18px auto -1px;padding:7px 22px;border-radius:999px;background:#16aee8;color:#fff;border:5px solid #fff;box-shadow:0 5px 18px rgba(0,0,0,.25);font-size:20px;font-weight:1000;position:relative;z-index:2}.mode-card{background:#fff;border:3px solid #ddd;border-radius:30px;padding:22px 15px 18px;color:#2d3042;box-shadow:0 12px 30px rgba(0,0,0,.3);margin-bottom:16px}.mode-card h2{color:#2e3142;font-size:25px;text-align:center;margin:0 0 8px}.mode-card p{color:#666b7b;text-align:center;margin:0 0 15px}.mode-actions{display:grid;grid-template-columns:1fr 1.7fr;gap:10px}.mode-actions a{display:flex;align-items:center;justify-content:center;border-radius:22px;padding:15px 8px;text-decoration:none;color:#fff;font-size:19px;font-weight:1000;box-shadow:0 6px 0 rgba(0,0,0,.12);transition:.2s}.mode-actions a:hover{transform:translateY(-3px)}.mode-actions .friends{background:linear-gradient(180deg,#88aef7,#5f8fe9)}.mode-actions .start4{background:linear-gradient(180deg,#8bd735,#4fbd1d)}.mode-actions .start6{background:linear-gradient(180deg,#ff75bf,#db3d8e)}.neon-bottom-nav{position:fixed;z-index:50;bottom:10px;left:50%;transform:translateX(-50%);width:min(94vw,760px);display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:rgba(18,10,43,.94);border:2px solid #a044ff;border-radius:24px;padding:7px;box-shadow:0 0 25px rgba(155,51,255,.55),0 12px 35px rgba(0,0,0,.45);backdrop-filter:blur(12px)}.neon-bottom-nav a{color:#fff;text-decoration:none;text-align:center;padding:6px 3px;border-radius:17px;font-size:12px;font-weight:900;transition:.2s}.neon-bottom-nav a span{display:block;font-size:25px;line-height:1.1}.neon-bottom-nav a:hover,.neon-bottom-nav a.active{background:linear-gradient(180deg,rgba(226,71,255,.28),rgba(103,54,255,.18));box-shadow:0 0 13px rgba(228,71,255,.25)}.mp-game{background:linear-gradient(145deg,#171033,#09071b);border:2px solid #7f35df;border-radius:28px;box-shadow:0 0 35px rgba(138,54,255,.18);overflow:hidden}.mp-head{padding:15px;text-align:center;background:linear-gradient(90deg,#38126e,#171039);border-bottom:1px solid #5d2aa1}.mp-head h1{margin:0;color:#fff}.mp-meta{display:flex;justify-content:space-between;gap:7px;flex-wrap:wrap;color:#b7afd2;font-size:12px}.mp-canvas{display:block;width:100%;height:auto;aspect-ratio:600/420;background:#fff;touch-action:none}.mp-options{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:10px}.mp-options button{background:#27204a;color:#fff;border:1px solid #6045a1;border-radius:15px;padding:10px 14px;flex:0 1 auto}.mp-guess{display:flex;gap:8px;padding:10px}.mp-guess input{margin:0;flex:1}.mp-score{display:flex;gap:6px;overflow:auto;padding:8px}.mp-player{min-width:105px;background:#17132d;border:1px solid #3d3265;border-radius:13px;padding:6px;text-align:center;color:#d7d1ee}.mp-player.out{opacity:.35;text-decoration:line-through}.mp-result{padding:24px;text-align:center;animation:cardPop .3s ease}.coin-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}.coin-pill{padding:7px 12px;border-radius:999px;background:#18132f;border:1px solid #5733a2;color:#fff;font-weight:900}.store-item{padding:15px;border:1px solid #3e2a6f;border-radius:18px;background:linear-gradient(145deg,#211345,#100b27);margin-bottom:10px;display:flex;align-items:center;gap:10px}.store-item .grow{flex:1}.store-item .price{color:#ffd75b;font-weight:900}.invite-box{position:fixed;z-index:70;top:16px;right:16px;max-width:340px;background:#16102d;border:2px solid #d553ff;border-radius:20px;padding:14px;color:#fff;box-shadow:0 0 28px rgba(213,83,255,.45);display:none}
+.lobby-top-title{text-align:center;color:#fff;font-size:30px;font-weight:1000;text-shadow:0 3px 0 rgba(0,0,0,.25),0 0 16px rgba(255,255,255,.2);margin:3px 0 14px}.lobby-user-card{background:linear-gradient(180deg,#fff,#f1f1f1);color:#2d3042;border:3px solid #ddd;border-radius:30px;padding:16px 13px 14px;box-shadow:0 12px 30px rgba(0,0,0,.35);position:relative;margin:48px 0 18px}.lobby-user-avatar{position:absolute;top:-76px;left:50%;transform:translateX(-50%);width:112px;height:112px;border-radius:50%;background:linear-gradient(145deg,#d4d4d4,#fff);border:4px solid #11c65b;box-shadow:0 0 0 4px rgba(255,255,255,.7),0 8px 25px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;font-size:55px;text-decoration:none}.lobby-user-name{margin:70px auto 12px;max-width:340px;text-align:center;background:linear-gradient(180deg,#00d92f,#00a922);color:#fff;border-radius:999px;padding:5px 12px;font-size:23px;font-weight:1000;box-shadow:inset 0 2px 4px rgba(255,255,255,.4),0 4px 10px rgba(0,0,0,.2)}.lobby-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.lobby-stat{background:#fff;border:3px solid #27c86a;border-radius:22px;padding:10px 4px;text-align:center;min-height:112px;display:flex;flex-direction:column;align-items:center;justify-content:center}.lobby-stat:nth-child(2){border-color:#b567ed}.lobby-stat:nth-child(3){border-color:#3d85e8}.lobby-stat .ico{font-size:38px;line-height:1}.lobby-stat b{font-size:26px;color:#303547}.lobby-stat span{color:#8b8e9b;font-size:13px}.lobby-bottom-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}.lobby-bottom-actions a{border-radius:19px;padding:9px 5px;text-align:center;color:#fff;text-decoration:none;font-size:16px;font-weight:900;box-shadow:0 7px 0 rgba(0,0,0,.12),0 8px 18px rgba(0,0,0,.16);transition:.2s}.lobby-bottom-actions a:hover{transform:translateY(-3px)}.lobby-bottom-actions .green{background:linear-gradient(180deg,#77d52b,#43b91c)}.lobby-bottom-actions .purple{background:linear-gradient(180deg,#bd61ff,#9445df)}.lobby-bottom-actions .gold{background:linear-gradient(180deg,#ffd43b,#efaa00)}.mode-pill{display:block;width:max-content;max-width:90%;margin:18px auto -1px;padding:7px 22px;border-radius:999px;background:#16aee8;color:#fff;border:5px solid #fff;box-shadow:0 5px 18px rgba(0,0,0,.25);font-size:20px;font-weight:1000;position:relative;z-index:2}.mode-card{background:#fff;border:3px solid #ddd;border-radius:30px;padding:22px 15px 18px;color:#2d3042;box-shadow:0 12px 30px rgba(0,0,0,.3);margin-bottom:16px}.mode-card h2{color:#2e3142;font-size:25px;text-align:center;margin:0 0 8px}.mode-card p{color:#666b7b;text-align:center;margin:0 0 15px}.mode-actions{display:grid;grid-template-columns:1fr 1.7fr;gap:10px}.mode-actions a{display:flex;align-items:center;justify-content:center;border-radius:22px;padding:15px 8px;text-decoration:none;color:#fff;font-size:19px;font-weight:1000;box-shadow:0 6px 0 rgba(0,0,0,.12);transition:.2s}.mode-actions a:hover{transform:translateY(-3px)}.mode-actions .friends{background:linear-gradient(180deg,#88aef7,#5f8fe9)}.mode-actions .start4{background:linear-gradient(180deg,#8bd735,#4fbd1d)}.neon-bottom-nav{position:fixed;z-index:50;bottom:10px;left:50%;transform:translateX(-50%);width:min(94vw,760px);display:grid;grid-template-columns:repeat(4,1fr);gap:5px;background:rgba(18,10,43,.94);border:2px solid #a044ff;border-radius:24px;padding:7px;box-shadow:0 0 25px rgba(155,51,255,.55),0 12px 35px rgba(0,0,0,.45);backdrop-filter:blur(12px)}.neon-bottom-nav a{color:#fff;text-decoration:none;text-align:center;padding:6px 3px;border-radius:17px;font-size:12px;font-weight:900;transition:.2s}.neon-bottom-nav a span{display:block;font-size:25px;line-height:1.1}.neon-bottom-nav a:hover,.neon-bottom-nav a.active{background:linear-gradient(180deg,rgba(226,71,255,.28),rgba(103,54,255,.18));box-shadow:0 0 13px rgba(228,71,255,.25)}.mp-game{background:linear-gradient(145deg,#171033,#09071b);border:2px solid #7f35df;border-radius:28px;box-shadow:0 0 35px rgba(138,54,255,.18);overflow:hidden}.mp-head{padding:15px;text-align:center;background:linear-gradient(90deg,#38126e,#171039);border-bottom:1px solid #5d2aa1}.mp-head h1{margin:0;color:#fff}.mp-meta{display:flex;justify-content:space-between;gap:7px;flex-wrap:wrap;color:#b7afd2;font-size:12px}.mp-canvas{display:block;width:100%;height:auto;aspect-ratio:600/420;background:#fff;touch-action:none}.mp-options{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:10px}.mp-options button{background:#27204a;color:#fff;border:1px solid #6045a1;border-radius:15px;padding:10px 14px;flex:0 1 auto}.mp-guess{display:flex;gap:8px;padding:10px}.mp-guess input{margin:0;flex:1}.mp-score{display:flex;gap:6px;overflow:auto;padding:8px}.mp-player{min-width:105px;background:#17132d;border:1px solid #3d3265;border-radius:13px;padding:6px;text-align:center;color:#d7d1ee}.mp-player.out{opacity:.35;text-decoration:line-through}.mp-result{padding:24px;text-align:center;animation:cardPop .3s ease}.coin-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0}.coin-pill{padding:7px 12px;border-radius:999px;background:#18132f;border:1px solid #5733a2;color:#fff;font-weight:900}.store-item{padding:15px;border:1px solid #3e2a6f;border-radius:18px;background:linear-gradient(145deg,#211345,#100b27);margin-bottom:10px;display:flex;align-items:center;gap:10px}.store-item .grow{flex:1}.store-item .price{color:#ffd75b;font-weight:900}.invite-box{position:fixed;z-index:70;top:16px;right:16px;max-width:340px;background:#16102d;border:2px solid #d553ff;border-radius:20px;padding:14px;color:#fff;box-shadow:0 0 28px rgba(213,83,255,.45);display:none}
 .mode-actions .start2{background:linear-gradient(180deg,#5ec8ff,#1f8fe0)}
 .queue-widget{display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px 16px 10px;text-align:center;animation:pageIn .3s ease both}
 .queue-spinner{width:60px;height:60px;border-radius:50%;border:5px solid rgba(255,255,255,.12);border-top-color:#ff5ce0;border-right-color:#9c2cff;animation:queueSpin .9s linear infinite}
@@ -1427,8 +1431,8 @@ box-shadow:inset 0 0 70px rgba(0,0,0,.3),0 15px 45px rgba(0,0,0,.3)}
 .section-heading{display:flex;align-items:end;justify-content:space-between;margin:0 4px 9px;color:#fff;font-weight:1000}.section-heading small{font-size:10px;color:#8f96b7;font-weight:600}
 .game-mode-card{position:relative;min-height:108px;margin:9px 2px;padding:14px 12px 13px 76px;border-radius:19px;display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.14);overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.22)}
 .game-mode-card::after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;right:-90px;top:-80px;background:rgba(255,255,255,.1);pointer-events:none}
-.mode-speed{background:linear-gradient(135deg,#132c55,#14204c)}.mode-draw{background:linear-gradient(135deg,#3a154f,#241947)}.mode-elim{background:linear-gradient(135deg,#46172e,#291333)}
-.mode-badge{position:absolute;top:8px;right:10px;font-size:10px;font-weight:1000;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff}.mode-icon{font-size:37px;flex:none}.mode-copy{min-width:0;flex:1}.mode-copy h2{font-size:18px;margin:15px 0 1px;color:#fff}.mode-copy p{font-size:10px;margin:0;color:#adb3d0}.mode-start{display:flex;align-items:center;gap:5px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#6b5cff,#a348ff);border-radius:12px;padding:9px 10px;font-size:11px;font-weight:1000;box-shadow:0 5px 15px rgba(110,77,255,.24);z-index:1}.mode-speed .mode-start{background:linear-gradient(135deg,#12bfff,#476dff)}.mode-draw .mode-start{background:linear-gradient(135deg,#ff4fca,#a04bff)}.mode-elim .mode-start{background:linear-gradient(135deg,#ff8a38,#f04470)}
+.mode-speed{background:linear-gradient(135deg,#132c55,#14204c)}.mode-draw{background:linear-gradient(135deg,#3a154f,#241947)}
+.mode-badge{position:absolute;top:8px;right:10px;font-size:10px;font-weight:1000;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff}.mode-icon{font-size:37px;flex:none}.mode-copy{min-width:0;flex:1}.mode-copy h2{font-size:18px;margin:15px 0 1px;color:#fff}.mode-copy p{font-size:10px;margin:0;color:#adb3d0}.mode-start{display:flex;align-items:center;gap:5px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#6b5cff,#a348ff);border-radius:12px;padding:9px 10px;font-size:11px;font-weight:1000;box-shadow:0 5px 15px rgba(110,77,255,.24);z-index:1}.mode-speed .mode-start{background:linear-gradient(135deg,#12bfff,#476dff)}.mode-draw .mode-start{background:linear-gradient(135deg,#ff4fca,#a04bff)}
 .lobby-quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}.lobby-quick-grid a{min-width:0;text-decoration:none;color:#fff;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:15px;padding:10px 4px;text-align:center;font-size:19px}.lobby-quick-grid b,.lobby-quick-grid small{display:block}.lobby-quick-grid b{font-size:10px}.lobby-quick-grid small{font-size:8px;color:#8f96b7;margin-top:2px}
 
 .profile-card{background:linear-gradient(150deg,#171b3c,#0c1024);border:1px solid #413a79;border-radius:25px;padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.35),0 0 25px rgba(91,69,255,.12)}
@@ -1453,15 +1457,65 @@ def _bottom_nav(active="home"):
     return '<div class="neon-bottom-nav">'+''.join(f'<a class="{("active" if active==k else "")}" href="/{k}"><span>{ic}</span>{title}</a>' for k,ic,title in items)+'</div>'
 
 def lobby_page(username, prof=None, wallet=None):
-    body=f"""<div class="lobby-bg page-enter"><div class="lobby-top-title">🎨 تخته گچی</div><div class="lobby-user-card"><a class="lobby-user-avatar" href="/profile?u={quote(username,safe='')}">🎮</a><div class="lobby-user-name">{html.escape(username)}</div></div><span class="mode-pill" style="background:#1f8fe0">⚡ دو نفره سریع</span>""" + """<div class="mode-card"><h2>🎨 حدس نقاشی دو نفره</h2><p>۲ بازیکن • ۶ دور • به نوبت یک نفر نقاشی می‌کشد و دیگری حدس می‌زند.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start2" href="/game/drawing">▶ شروع بازی</a></div></div><span class="mode-pill">🎨 بازی حدس نقاشی</span><div class="mode-card"><h2>🎨 حدس نقاشی ۴ نفره</h2><p>۴ بازیکن • ۴ دور • هر دور یک نفر نقاش است و بقیه حدس می‌زنند.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start4" href="/game/drawing4">▶ شروع بازی</a></div></div><span class="mode-pill" style="background:#d83f96">🔥 حالت حذفی ۶ نفره</span><div class="mode-card"><h2>🎯 حدس نقاشی ۶ نفره</h2><p>۶ بازیکن • ۶ دور • در هر دور کندترین بازیکنِ درست‌حدس‌زن حذف می‌شود.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start6" href="/game/drawing6">▶ شروع بازی</a></div></div><div class="card" style="margin-top:12px;text-align:center;background:rgba(12,8,29,.75)"><a class="btn" href="/chat/public">🌐 چت عمومی</a> <a class="btn" href="/support/ticket">🛡️ پشتیبانی</a></div></div>""" + f"""{_bottom_nav("home")}<div id="inviteBox" class="invite-box"></div><script>async function pollNotify(){{try{{const d=await (await fetch('/notifications')).json();const inv=d.invites?.[0];if(inv){{const box=document.getElementById('inviteBox');box.innerHTML='🎮 <b>'+inv.sender+'</b> تو را به بازی '+(inv.mode==='drawing6'?'۶ نفره':'۴ نفره')+' دعوت کرده!<div style="display:flex;gap:6px;margin-top:9px"><button onclick="answerInvite('+inv.id+',true)">قبول</button><button onclick="answerInvite('+inv.id+',false)">رد</button></div>';box.style.display='block';}}}}catch(e){{}}}}async function answerInvite(id,accept){{const d=await (await fetch('/game/invite/respond',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{id,accept}})}})).json();if(d.ok&&accept)location.href='/game/'+d.mode;else document.getElementById('inviteBox').style.display='none'}}pollNotify();setInterval(pollNotify,5000);</script>"""
+    prof = prof or {"username": username, "bio": "", "avatar": "🎮", "age": 18, "wins": 0, "points": 0}
+    wallet = wallet or {"coins": 0}
+    avatar_html = _avatar_html(prof.get("avatar") or "🎮")
+    age = int(prof.get("age") or 18)
+    wins = int(prof.get("wins") or 0)
+    points = int(prof.get("points") or 0)
+    coins = int(wallet.get("coins") or 0)
+    body=f"""<div class="lobby-bg page-enter">
+      <div class="lobby-topbar">
+        <div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div>
+        <a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>
+      </div>
+      <a class="lobby-profile hero" href="/profile?u={quote(username,safe='')}">
+        <div class="lobby-profile-avatar">{avatar_html}</div>
+        <div class="lobby-profile-info">
+          <div class="lobby-profile-name">@{html.escape(username)}</div>
+          <div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} برد <span>•</span> 💎 {points} امتیاز</div>
+        </div><div class="lobby-profile-arrow">‹</div>
+      </a>
+      <div class="lobby-wallet">💰 <b>{coins:,}</b> سکه <span>•</span> آماده‌ی رقابتی؟</div>
+      <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div>
+      <div class="game-mode-card mode-speed">
+        <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div>
+        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • زنده و سریع</p></div>
+        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+      </div>
+      <div class="game-mode-card mode-draw">
+        <div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div>
+        <div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div>
+        <a class="mode-start" href="/game/drawing4">شروع <span>←</span></a>
+      </div>
+      <div class="lobby-quick-grid">
+        <a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a>
+        <a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>بهترین‌ها</small></a>
+        <a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>
+        <a href="/profile?u={quote(username,safe='')}">👤 <b>پروفایل من</b><small>مشاهده پروفایل</small></a>
+      </div>
+    </div>{_bottom_nav("home")}"""
     return page_shell('منوی اصلی',body,username)
 
 def games_page(username):
-    body=f"""<div class="card hero page-enter"><h1>🎨 انتخاب حالت بازی</h1><div class="game-choice-grid"><a class="game-choice-card" href="/game/tictactoe"><span>⭕</span><b>دوز</b><small>دو نفره، سریع و زنده</small></a><a class="game-choice-card" href="/game/drawing"><span>🎨</span><b>حدس نقاشی دو نفره</b><small>۶ دور، به نوبت</small></a><a class="game-choice-card" href="/game/drawing4"><span>👥</span><b>حدس نقاشی ۴ نفره</b><small>۴ دور، بدون حذف</small></a><a class="game-choice-card" href="/game/drawing6"><span>🔥</span><b>حدس نقاشی ۶ نفره</b><small>۶ دور، حذف کندترین حدس‌زن</small></a></div><a class="btn" href="/lobby">← بازگشت</a></div>"""
+    body=f"""<div class="lobby-bg page-enter">
+      <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>دو حالت، یک رقابت</small></div>
+      <div class="game-mode-card mode-speed">
+        <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div>
+        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • سریع و زنده</p></div>
+        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+      </div>
+      <div class="game-mode-card mode-draw">
+        <div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div>
+        <div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div>
+        <a class="mode-start" href="/game/drawing4">شروع <span>←</span></a>
+      </div>
+      <a class="btn" href="/lobby">← بازگشت به لابی</a>
+    </div>{_bottom_nav("home")}"""
     return page_shell('انتخاب بازی',body,username)
 
 def multiplayer_drawing_page(username, mode):
-    title='حدس نقاشی ۴ نفره' if mode==4 else 'حدس نقاشی ۶ نفره حذفی'
+    title='حدس نقاشی ۴ نفره'
     body=f"""<div class="mp-game page-enter"><div class="mp-head"><h1>🎨 {title}</h1><div class="mp-meta"><span id="round">در انتظار بازیکن‌ها...</span><span id="timer">⏱️ --</span></div></div><div id="queueBox" class="queue-widget"><div class="queue-spinner"></div><div class="queue-text">🔌 در حال اتصال...</div></div><div id="gameArea" style="display:none"><div id="score" class="mp-score"></div><canvas id="canvas" class="mp-canvas" width="600" height="420"></canvas><div id="options" class="mp-options"></div><div class="mp-guess"><input id="guess" placeholder="حدست رو بنویس..." autocomplete="off"><button onclick="sendGuess()">حدس</button></div></div><div id="status" class="status-line" style="display:none"></div><div id="result" class="mp-result"></div></div><div style="text-align:center;margin-top:12px"><a class="btn" href="/lobby" onclick="event.preventDefault();fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">🏠 خروج</a></div><script>
 const mode={mode}, me={username!r}, wsProto=location.protocol==='https:'?'wss:':'ws:';let ws,recon,timerInt;const c=document.getElementById('canvas'),ctx=c.getContext('2d'),status=document.getElementById('status'),round=document.getElementById('round'),timer=document.getElementById('timer'),opts=document.getElementById('options'),score=document.getElementById('score'),result=document.getElementById('result'),queueBox=document.getElementById('queueBox'),gameArea=document.getElementById('gameArea');let drawer=false,drawing=false,last=null;
 function renderQueue(n,needed){{queueBox.style.display='flex';gameArea.style.display='none';status.style.display='none';let dots='';for(let i=0;i<needed;i++)dots+='<div class="queue-dot'+(i<n?' filled':'')+'"></div>';queueBox.innerHTML='<div class="queue-spinner"></div><div class="queue-dots">'+dots+'</div><div class="queue-text">'+n+' از '+needed+' نفر در صف هستند</div><div class="queue-sub">صبور باش؛ به‌محض تکمیل ظرفیت، بازی شروع می‌شود ✨</div>'}}
@@ -1480,3 +1534,18 @@ def shop_page(username, wallet=None):
 def chat_private_page(username, other, messages):
     body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><a class="icon-btn" href="/messages">←</a><div class="chat-title">💬 {html.escape(other)} <span id="online" style="color:#35df7a;font-size:10px">● آنلاین</span></div><a class="icon-btn" href="/profile?u={quote(other,safe='')}">👤</a></div></div><div class="chat-box" id="chatBox">{_render_messages(messages, username)}</div><div id="typing" style="padding:5px 12px;color:#9a8ed1;font-size:11px;height:25px"></div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',me={username!r},other={other!r},box=document.getElementById('chatBox'),inp=document.getElementById('msgInput'),typing=document.getElementById('typing');let ws,recon,typingTimer;function addMsg(d){{if(d.sender===me&&[...box.querySelectorAll('.msg')].some(x=>x.dataset.id==d.id))return;const el=document.createElement('div');el.className='msg '+(d.sender===me?'me':'');el.dataset.id=d.id;const s=document.createElement('span');s.className='sender';s.textContent=d.display_name||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;el.append(s,c);box.appendChild(el);box.scrollTop=box.scrollHeight}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/'+encodeURIComponent(other));ws.onopen=()=>document.getElementById('online').textContent='● آنلاین';ws.onclose=()=>{{document.getElementById('online').textContent='● تلاش برای اتصال...';if(!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='typing'&&d.sender!==me){{typing.textContent=d.typing?'در حال نوشتن...':'';return}}if(d.content!==undefined)addMsg(d)}}}}function sendMsg(){{const v=inp.value.trim();if(!v||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));inp.value='';ws.send(JSON.stringify({{type:'typing',typing:false}}))}}inp.addEventListener('input',()=>{{if(ws?.readyState===1)ws.send(JSON.stringify({{type:'typing',typing:true}}));clearTimeout(typingTimer);typingTimer=setTimeout(()=>ws?.send(JSON.stringify({{type:'typing',typing:false}})),900)}});inp.addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;connect();</script>'''
     return page_shell(f'چت با {other}',body,username)
+
+
+BASE_CSS += """
+/* FINAL UI PATCH */
+body{background:radial-gradient(circle at 10% 0%,rgba(0,229,255,.20),transparent 26%),radial-gradient(circle at 90% 0%,rgba(255,45,190,.20),transparent 28%),linear-gradient(180deg,#070b1d,#0b0820 55%,#090615);}
+.lobby-bg{position:relative;overflow:hidden;background:radial-gradient(circle at 8% 0%,rgba(0,229,255,.32),transparent 24%),radial-gradient(circle at 92% 3%,rgba(255,55,198,.32),transparent 25%),radial-gradient(circle at 50% 52%,rgba(108,76,255,.23),transparent 38%),linear-gradient(145deg,#071b38 0%,#10072b 48%,#22072f 100%);box-shadow:inset 0 0 55px rgba(0,0,0,.35),0 18px 50px rgba(0,0,0,.28)}
+.game-mode-card{min-height:88px;margin:10px 2px;padding:12px 12px 11px 66px;border-radius:14px;border:1px solid rgba(255,255,255,.20);box-shadow:0 8px 18px rgba(0,0,0,.20),0 0 18px rgba(74,108,255,.10);backdrop-filter:none}
+.game-mode-card::after{width:110px;height:110px;right:-68px;top:-60px;background:rgba(255,255,255,.08)}
+.mode-speed{background:linear-gradient(135deg,#0c4b73,#182b62)}.mode-draw{background:linear-gradient(135deg,#65205d,#30215f)}
+.mode-badge{top:7px;right:8px;font-size:9px;padding:3px 7px;background:rgba(255,255,255,.13)}.mode-icon{font-size:30px}.mode-copy h2{font-size:16px;margin:13px 0 1px}.mode-copy p{font-size:9px}.mode-start{border-radius:10px;padding:8px 10px;font-size:10px;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.mode-speed .mode-start{background:linear-gradient(135deg,#00d9ff,#386bff);box-shadow:0 0 14px rgba(0,217,255,.22)}.mode-draw .mode-start{background:linear-gradient(135deg,#ff43c8,#8b50ff);box-shadow:0 0 14px rgba(255,67,200,.20)}
+.lobby-profile{background:linear-gradient(135deg,rgba(17,54,94,.94),rgba(38,14,66,.94));border-color:rgba(71,220,255,.35);box-shadow:0 10px 24px rgba(0,0,0,.20),0 0 20px rgba(0,220,255,.08)}.lobby-profile-avatar{border-color:#00dcff;box-shadow:0 0 16px rgba(0,220,255,.22)}
+.avatar-editor{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.avatar-crop-wrap{position:relative;width:190px;height:190px;flex:0 0 190px;overflow:hidden;border-radius:50%;background:#080b18;border:3px solid #19ddff;box-shadow:0 0 0 4px rgba(25,221,255,.08),0 0 28px rgba(25,221,255,.18);touch-action:none;cursor:grab}.avatar-crop-wrap:active{cursor:grabbing}.avatar-crop-wrap img{position:absolute;max-width:none;user-select:none;-webkit-user-drag:none;pointer-events:none}.avatar-crop-wrap .avatar-big{width:100%;height:100%;display:grid;place-items:center;font-size:72px}.avatar-controls{min-width:180px;flex:1}.upload-btn{display:block!important;text-align:center;padding:11px 14px;border-radius:12px;background:linear-gradient(135deg,#00c8ff,#7251ff);cursor:pointer;box-shadow:0 0 18px rgba(0,200,255,.16)}.file-input-hidden{display:none!important}.crop-label{font-size:10px;color:#929ab9;margin:9px 0}.crop-reset{width:100%;margin-top:8px!important;background:#161d3a!important;border:1px solid #36416d!important;color:#fff!important}.settings-select{width:100%;margin:0!important;background:#090c1c!important;color:#fff!important;border:1px solid #30375f!important;border-radius:13px!important;padding:13px!important;font-family:inherit}.profile-editor-card{border-color:rgba(0,214,255,.28);box-shadow:0 12px 34px rgba(0,0,0,.28),0 0 25px rgba(0,214,255,.06)}.profile-editor-title p{font-size:10px;color:#9299b8;margin:4px 0 12px}.settings-save:disabled{opacity:.65;transform:none!important}
+@media(max-width:600px){.game-mode-card{min-height:84px;padding-left:60px;border-radius:13px}.mode-icon{font-size:27px}.mode-copy h2{font-size:15px}.mode-start{padding:7px 8px}.mode-badge{font-size:8px}.avatar-editor{justify-content:center}.avatar-controls{width:100%}.avatar-crop-wrap{width:180px;height:180px;flex-basis:180px}.lobby-quick-grid{gap:6px}}
+"""

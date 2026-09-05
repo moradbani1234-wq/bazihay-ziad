@@ -203,7 +203,7 @@ async def game_invite(request: Request):
     username=_require_login(request)
     if not username: return {"ok":False,"error":"login_required"}
     data=await request.json(); receiver=str(data.get("receiver") or "").strip(); mode=str(data.get("mode") or "drawing4")
-    if receiver==username or not await db.get_user(receiver) or mode not in {"drawing4","drawing6"}: return {"ok":False,"error":"invalid"}
+    if receiver==username or not await db.get_user(receiver) or mode not in {"drawing4"}: return {"ok":False,"error":"invalid"}
     async with aiosqlite.connect(db.DB_PATH) as conn:
         await conn.execute("INSERT INTO game_invites(sender,receiver,mode,status,created_at) VALUES(?,?,?,?,?)",(username,receiver,mode,"pending",int(time.time())))
         await conn.commit()
@@ -216,7 +216,7 @@ async def notifications(request: Request):
     reqs=await db.friend_requests_for(username)
     async with aiosqlite.connect(db.DB_PATH) as conn:
         conn.row_factory=aiosqlite.Row
-        cur=await conn.execute("SELECT id,sender,mode,created_at FROM game_invites WHERE receiver=? AND status='pending' ORDER BY id DESC LIMIT 20",(username,))
+        cur=await conn.execute("SELECT id,sender,mode,created_at FROM game_invites WHERE receiver=? AND status='pending' AND mode='drawing4' ORDER BY id DESC LIMIT 20",(username,))
         inv=[dict(r) for r in await cur.fetchall()]
     return {"ok":True,"friend_requests":reqs,"invites":inv,"count":len(reqs)+len(inv)}
 
@@ -947,7 +947,7 @@ multiplayer_drawing_manager=MultiplayerDrawingManager()
 @app.websocket("/ws/drawing-multi/{mode}")
 async def ws_drawing_multi(websocket: WebSocket, mode: int):
     username=websocket.session.get("username")
-    if not username or mode not in (4,6): await websocket.close(code=4001); return
+    if not username or mode != 4: await websocket.close(code=4001); return
     if not _is_support(username) and (await _ban_for(username,"games") or await _ban_for(username,"drawing")): await websocket.close(code=4003); return
     await multiplayer_drawing_manager.connect(username,websocket,mode)
     try:
@@ -1243,11 +1243,6 @@ async def drawing4_page(request: Request):
     if blocked: return blocked
     return tpl.multiplayer_drawing_page(username, 4)
 
-@app.get("/game/drawing6", response_class=HTMLResponse)
-async def drawing6_page(request: Request):
-    username, blocked = await _require_game_scope(request, "drawing")
-    if blocked: return blocked
-    return tpl.multiplayer_drawing_page(username, 6)
 
 @app.get("/game/drawing", response_class=HTMLResponse)
 async def drawing_page(request: Request):
