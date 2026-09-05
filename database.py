@@ -26,7 +26,7 @@ async def init_db():
         await db.execute("""CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT, reporter TEXT NOT NULL, target TEXT NOT NULL,
             context TEXT NOT NULL, content TEXT NOT NULL, created_at INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT 'open', attachment TEXT)""")
+            status TEXT NOT NULL DEFAULT 'open', attachment TEXT, category TEXT NOT NULL DEFAULT 'other')""")
         await db.execute("""CREATE TABLE IF NOT EXISTS bans (
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, scope TEXT NOT NULL,
             until_ts INTEGER NOT NULL, reason TEXT NOT NULL, created_at INTEGER NOT NULL,
@@ -41,6 +41,10 @@ async def init_db():
             pass
         try:
             await db.execute("ALTER TABLE reports ADD COLUMN attachment TEXT")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE reports ADD COLUMN category TEXT NOT NULL DEFAULT 'other'")
         except Exception:
             pass
         try:
@@ -154,15 +158,17 @@ async def update_stats(username, *, wins=0, losses=0, draws=0, points=0, correct
 async def leaderboard(limit=50):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT username,wins,losses,draws,points,
-                                (wins*3+draws) AS rating FROM stats
-                                ORDER BY rating DESC, points DESC, wins DESC LIMIT ?""",(limit,))
+        cur=await db.execute("""SELECT s.username,s.wins,s.losses,s.draws,s.points,
+                                COALESCE(u.avatar,'🎮') AS avatar, COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio,
+                                (s.wins*3+s.draws) AS rating FROM stats s
+                                LEFT JOIN users u ON u.username=s.username
+                                ORDER BY rating DESC, s.points DESC, s.wins DESC LIMIT ?""",(limit,))
         return [dict(r) for r in await cur.fetchall()]
 
-async def create_report(reporter,target,context,content,attachment=None):
+async def create_report(reporter,target,context,content,attachment=None,category="other"):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""INSERT INTO reports(reporter,target,context,content,created_at,attachment)
-                            VALUES(?,?,?,?,?,?)""",(reporter,target,context,content,int(time.time()),attachment))
+        await db.execute("""INSERT INTO reports(reporter,target,context,content,created_at,attachment,category)
+                            VALUES(?,?,?,?,?,?,?)""",(reporter,target,context,content,int(time.time()),attachment,category))
         await db.commit()
 
 async def get_reports(limit=100):

@@ -297,7 +297,14 @@ def _nav(username: str | None) -> str:
 
 
 def page_shell(title: str, body: str, username: str | None = None) -> str:
-    return f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title><style>{BASE_CSS}</style></head><body><div class="container">{body}</div></body></html>"""
+    report_modal = """<div id="reportModal" class="report-modal" aria-hidden="true"><div class="report-modal-card"><button class="report-modal-close" onclick="closeReportModal()">×</button><div class="report-modal-title">🚩 گزارش کاربر</div><div class="report-modal-sub">دلیل گزارش را انتخاب کن:</div><div id="reportReasons" class="report-reasons"><button data-cat="collusion">🤝 تبانی/تقلب</button><button data-cat="profile">🖼️ پروفایل نامناسب</button><button data-cat="username">🆔 آیدی نامناسب</button><button data-cat="spam">📢 اسپم</button><button data-cat="chat">💬 پیام چت نامناسب</button><button data-cat="bio">📝 بیوگرافی نامناسب</button></div><textarea id="reportExtra" maxlength="300" placeholder="توضیح کوتاه (اختیاری)"></textarea><div class="report-modal-hint">با انتخاب یکی از گزینه‌ها گزارش ارسال می‌شود.</div></div></div>
+<script>
+let __reportPayload=null;
+function openReportModal(target,content,context,attachment){__reportPayload={target,content,context,attachment:attachment||""};const m=document.getElementById("reportModal");if(m){m.classList.add("show");m.setAttribute("aria-hidden","false");}}
+function closeReportModal(){const m=document.getElementById("reportModal");if(m){m.classList.remove("show");m.setAttribute("aria-hidden","true");}}
+document.querySelectorAll("#reportReasons button").forEach(b=>b.addEventListener("click",async()=>{if(!__reportPayload)return;const category=b.dataset.cat,extra=document.getElementById("reportExtra").value.trim();b.disabled=true;try{const payload={...__reportPayload,category,content:(__reportPayload.content||"")+(extra?"\nتوضیح: "+extra:"")};const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(d.ok){closeReportModal();alert("✅ گزارش ثبت شد.");}else alert("❌ ثبت گزارش ناموفق بود.");}finally{b.disabled=false;}}));
+</script>"""
+    return f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title><style>{BASE_CSS}</style></head><body><div class="container">{body}</div>{report_modal}</body></html>"""
 
 
 def login_page(error: str | None = None) -> str:
@@ -352,7 +359,7 @@ def lobby_page(username: str, prof=None, wallet=None) -> str:
     body=f"""<div class="lobby-bg page-enter">
       <div class="lobby-topbar">
         <div><div class="lobby-kicker">DRAW BATTLE</div><div class="lobby-title">تخته گچی ⚡</div></div>
-        <a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>
+        <div style="display:flex;gap:7px;align-items:center"><a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>{("<a class=\"lobby-settings\" href=\"/support\" aria-label=\"پنل پشتیبانی\">🛡️</a>" if username == "morad" else "")}</div>
       </div>
       <a class="lobby-profile hero" href="/profile?u={quote(username,safe='')}">
         <div class="lobby-profile-avatar">{avatar_html}</div>
@@ -366,9 +373,9 @@ def lobby_page(username: str, prof=None, wallet=None) -> str:
       <div class="section-heading"><span>حالت‌های بازی</span><small>یکی رو انتخاب کن و شروع کن</small></div>
       <div class="game-mode-card mode-speed">
         <div class="mode-badge">⚡ دو نفره سرعتی</div>
-        <div class="mode-icon">⭕</div>
-        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • زنده و سریع</p></div>
-        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+        <div class="mode-icon">🎨</div>
+        <div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • نقاشی و حدس سریع</p></div>
+        <a class="mode-start" href="/game/drawing">شروع <span>←</span></a>
       </div>
       <div class="game-mode-card mode-draw">
         <div class="mode-badge">🎨 رقابت نقاشان</div>
@@ -381,13 +388,14 @@ def lobby_page(username: str, prof=None, wallet=None) -> str:
         <a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>بهترین‌ها</small></a>
         <a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>
         <a href="/profile?u={quote(username,safe='')}">👤 <b>پروفایل من</b><small>مشاهده پروفایل</small></a>
+        {('<a href="/support">🛡️ <b>پنل پشتیبانی</b><small>مدیریت گزارش‌ها</small></a>' if username == 'morad' else '')}
       </div>
     </div>{_bottom_nav("home")}"""
     return page_shell("لابی", body, username)
 
 def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
     mins = max(1, (remaining + 59) // 60)
-    scope_text = {"games":"بازی‌ها", "chat":"چت‌ها", "drawing":"نقاشی", "tictactoe":"دوز", "all":"همه بخش‌ها"}.get(scope, scope)
+    scope_text = {"games":"بازی‌ها", "chat":"چت‌ها", "drawing":"نقاشی", "profile":"پروفایل", "bio":"بیوگرافی", "username":"آیدی", "all":"همه بخش‌ها"}.get(scope, scope)
     body=f"""
     <div class="card hero page-enter" style="text-align:center">
       <div style="font-size:52px">🚫</div>
@@ -400,163 +408,40 @@ def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
     return page_shell("محرومیت موقت", body, username)
 
 def leaderboard_page(username: str, rows: list[dict]) -> str:
-    items=[]; medals=["🥇","🥈","🥉"]
+    podium=[]; rest=[]
     for i,r in enumerate(rows,1):
-        medal=medals[i-1] if i<=3 else str(i)
-        cls=" me" if r["username"]==username else ""
-        items.append(f'''<div class="leader-row{cls}"><div class="rank-medal">{medal}</div><div><a class="profile-link" href="/profile?u={quote(r["username"],safe='')}"><b>{html.escape(r["username"])}</b></a><div class="report-meta">بازیکن Draw Battle</div></div><div><b>{r["rating"]}</b><small> امتیاز</small></div><div><b>{r["wins"]}</b><small> برد</small></div></div>''')
-    body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><p>برترین بازیکن‌های بازی اینجا می‌درخشند. رتبه‌ها بر اساس عملکرد بازی محاسبه می‌شوند.</p><div>{"".join(items) or "<p>هنوز آماری ثبت نشده.</p>"}</div></div>'''
-    return page_shell("رتبه‌بندی",body,username)
+        raw_avatar=r.get('avatar') or '🎮'
+        avatar=(f'<img class="leader-avatar" src="{html.escape(str(raw_avatar),quote=True)}" alt="">' if str(raw_avatar).startswith('data:image/') else f'<div class="leader-avatar leader-avatar-fallback">{html.escape(str(raw_avatar)[:2])}</div>')
+        name=html.escape(r['username']); age=int(r.get('age') or 18)
+        if i<=3:
+            podium.append(f'''<a class="leader-podium-card rank-{i}" href="/profile?u={quote(r['username'],safe='')}"><div class="leader-rank">{['🥇','🥈','🥉'][i-1]}</div>{avatar}<div class="leader-name">@{name}</div><div class="leader-age">🎂 {age} سال</div><div class="leader-score">{r['rating']} امتیاز</div></a>''')
+        else:
+            cls=' me' if r['username']==username else ''
+            rest.append(f'''<a class="leader-row{cls}" href="/profile?u={quote(r['username'],safe='')}"><div class="rank-medal">{i}</div><div class="leader-list-avatar">{avatar}</div><div><b>@{name}</b><div class="report-meta">🎂 {age} سال</div></div><div><b>{r['rating']}</b><small> امتیاز</small></div></a>''')
+    body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><p>سه نفر اول با پروفایل نئونی ویژه نمایش داده می‌شوند؛ روی پروفایل هر بازیکن بزن.</p><div class="leader-podium">{''.join(podium) or '<p>هنوز آماری ثبت نشده.</p>'}</div><div class="leader-list">{''.join(rest)}</div></div>'''
+    return page_shell('رتبه‌بندی',body,username)
 
 def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None) -> str:
-    active_bans = active_bans or []
-    tickets = tickets or []
-    scope_label = {"all":"همه بخش‌ها","chat":"چت","games":"بازی‌ها","drawing":"نقاشی","tictactoe":"دوز"}
-
+    active_bans=active_bans or []; tickets=tickets or []
+    labels={'all':'همه امکانات','games':'بازی‌ها','chat':'چت','drawing':'نقاشی','profile':'پروفایل','bio':'بیوگرافی','username':'آیدی (تعلیق حساب)'}
+    cat_labels={'collusion':'تبانی/تقلب','profile':'پروفایل نامناسب','username':'آیدی نامناسب','spam':'اسپم','chat':'پیام چت نامناسب','bio':'بیوگرافی نامناسب','other':'سایر'}
     items=[]
     for r in reports:
-        status="حل‌شده" if r["status"]!="open" else "باز"
-        items.append(f"""
-        <div class="report-item" data-id="{r['id']}">
-          <div><b>گزارش {r['id']}</b> — {html.escape(r['context'])} — <span>{status}</span></div>
-          <div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر گزارش‌شده: <b>{html.escape(r['target'])}</b></div>
-          <p style="margin:8px 0"><b>محتوا:</b> {html.escape(r['content'])}</p>
-          {('<img src="'+html.escape(r.get("attachment") or '')+'" style="max-width:100%;border-radius:12px;border:1px solid var(--border);margin:8px 0" alt="نقاشی گزارش‌شده">' if r.get("attachment") else '')}
-          <div class="draw-tools ban-controls">
-            <select class="draw-size ban-scope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
-            <input class="ban-hours" type="number" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
-            <span class="ban-unit">ساعت</span>
-            <input class="ban-minutes" type="number" min="0" max="59" step="1" value="3" style="width:70px;margin:0" title="دقیقه">
-            <span class="ban-unit">دقیقه</span>
-            <button class="glow-btn" onclick="banUser({r['id']}, this)">محروم کن</button>
-            <button class="btn" onclick="banReporter({r['id']}, {r['reporter']!r})">🚫 محرومیت گزارش‌دهنده</button>
-          </div>
-        </div>""")
-
-    ban_rows=[]
+        cat=r.get('category') or 'other'; status='حل‌شده' if r['status']!='open' else 'باز'
+        attachment = ('<img src=\"'+html.escape(r.get('attachment') or '')+'\" class=\"report-image\">') if r.get('attachment') else ''
+        items.append(f'''<div class="report-item"><div><b>گزارش #{r['id']}</b> <span class="report-category">{cat_labels.get(cat,cat)}</span> — {status}</div><div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر: <b>{html.escape(r['target'])}</b></div><p><b>محتوا:</b> {html.escape(r['content'])}</p>{attachment}<div class="support-action-grid"><select class="ban-scope"><option value="all">همه امکانات</option><option value="username">آیدی (تعلیق حساب)</option><option value="profile">پروفایل</option><option value="bio">بیوگرافی</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option></select><input class="ban-hours" type="number" min="0" max="168" value="0" placeholder="ساعت"><input class="ban-minutes" type="number" min="0" max="59" value="10" placeholder="دقیقه"><button class="glow-btn" onclick="banUser({r['id']},this)">🚫 محروم کن</button></div></div>''')
+    bans=[]
     for b in active_bans:
-        remaining = max(0, b["until_ts"] - int(time.time()))
-        h, rem = divmod(remaining, 3600)
-        m = rem // 60
-        left_txt = (f"{h} ساعت و " if h else "") + f"{m} دقیقه"
-        ban_rows.append(f"""
-        <div class="ban-row" data-target="{html.escape(b['username'])}" data-scope="{html.escape(b['scope'])}">
-          <div><b>{html.escape(b['username'])}</b> <span class="ban-scope-tag">{scope_label.get(b['scope'], b['scope'])}</span></div>
-          <div class="report-meta">دلیل: {html.escape(b.get('reason') or '—')} | باقی‌مانده: {left_txt}</div>
-          <button class="btn unban-btn" onclick="unbanUser(this)">رفع محرومیت</button>
-        </div>""")
-
-    body=f"""
-    <div class="card admin-card page-enter">
-      <h1>🛡️ پنل پشتیبانی</h1>
-      <p>گزارش‌ها را بررسی کن، محرومیت را برای مدت دلخواه (به ساعت و دقیقه) روی همان بخش یا همهٔ بخش‌ها اعمال کن، یا کاربری را مستقیماً محروم/رفعِ‌محرومیت کن.</p>
-    </div>
-
-    <div class="card">
-      <h2>🔨 محروم کردن مستقیم یک کاربر</h2>
-      <div class="draw-tools ban-controls" style="justify-content:flex-start">
-        <input type="text" id="directTarget" placeholder="نام کاربری" style="width:140px;margin:0">
-        <select class="draw-size" id="directScope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
-        <input type="number" id="directHours" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
-        <span class="ban-unit">ساعت</span>
-        <input type="number" id="directMinutes" min="0" max="59" step="1" value="10" style="width:70px;margin:0" title="دقیقه">
-        <span class="ban-unit">دقیقه</span>
-      </div>
-      <div style="margin-top:10px">
-        <input type="text" id="directReason" placeholder="دلیل محرومیت (اختیاری)" style="margin:0">
-      </div>
-      <button class="glow-btn" style="margin-top:12px" onclick="banDirect()">محروم کن</button>
-    </div>
-
-    <div class="card">
-      <h2>⏳ محرومیت‌های فعال</h2>
-      <div id="activeBans">{''.join(ban_rows) or '<p>در حال حاضر کسی محروم نیست.</p>'}</div>
-    </div>
-
-    <div class="card">
-      <h2>🎵 مدیریت آهنگ چت عمومی</h2>
-      <p>آهنگ روی سرور ذخیره می‌شود؛ برای جلوگیری از حالت رادیویی/جرجر، هیچ پخش خودکاری انجام نمی‌شود و هر کاربر خودش روی «پخش» می‌زند.</p>
-      <input type="text" id="musicTitle" placeholder="نام آهنگ / عنوان (اختیاری)">
-      <input type="text" id="musicTarget" placeholder="آیدی کاربر (اختیاری؛ فقط برای همان کاربر)">
-      
-      <input type="file" id="musicFile" accept="audio/*" style="width:100%;margin:8px 0 12px">
-      <button class="glow-btn" onclick="setMusic()">🎵 انتخاب و فعال کردن آهنگ</button>
-      <button class="btn" onclick="clearMusic()" style="margin-inline-start:6px">⏹ قطع برای همه</button>
-      <div class="support-music-preview">ℹ️ حداکثر حجم فایل ۱۵ مگابایت. به‌خاطر محدودیت مرورگر، هر کاربر با دکمه «پخش» شروع می‌کند.</div>
-    </div>
-
-    <div class="card admin-card">
-      <h2>🎫 تیکت‌های رسمی پشتیبانی</h2>
-      <div>{''.join(f"<div class=\"report-item\"><b>#{t['id']} — {html.escape(t['subject'])}</b><div class=\"report-meta\">از {html.escape(t['user'])} | {html.escape(t['status'])}</div><p>{html.escape(t['content'])}</p></div>" for t in tickets) or '<p>تیکتی ثبت نشده.</p>'}</div>
-    </div>
-
-    <div class="card">
-      <h2>📄 گزارش‌ها</h2>
-      <div>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div>
-    </div>
-    <a class="btn" href="/lobby">بازگشت</a>
-
-    <script>
-    async function doBan(payload, btn, okText) {{
-      const r=await fetch('/support/ban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
-        body:JSON.stringify(payload)}});
-      const d=await r.json();
-      if(d.ok) {{ if(btn) {{ btn.textContent=okText; btn.disabled=true; }} location.reload(); }}
-      else alert('خطا در اعمال محرومیت (مدت را بررسی کن؛ باید بیشتر از صفر باشد)');
-    }}
-
-    async function banUser(id, btn) {{
-      const item=btn.closest('.report-item');
-      const target=item.querySelector('.report-meta b').textContent.trim();
-      const scope=item.querySelector('.ban-scope').value;
-      const hours=Number(item.querySelector('.ban-hours').value);
-      const minutes=Number(item.querySelector('.ban-minutes').value);
-      const reason=item.querySelector('p').textContent.replace(/^محتوا:\\s*/,'').slice(0,300);
-      await doBan({{report_id:id,target,scope,hours,minutes,reason}}, btn, '✅ محروم شد');
-    }}
-
-    async function banDirect() {{
-      const target=document.getElementById('directTarget').value.trim();
-      const scope=document.getElementById('directScope').value;
-      const hours=Number(document.getElementById('directHours').value);
-      const minutes=Number(document.getElementById('directMinutes').value);
-      const reason=document.getElementById('directReason').value.trim() || 'نقض قوانین';
-      if(!target) {{ alert('نام کاربری را وارد کن'); return; }}
-      await doBan({{target,scope,hours,minutes,reason}}, null, '');
-    }}
-
-    async function banReporter(id, target) {{
-      if(!confirm('اگر گزارش بی‌مورد بوده، گزارش‌دهنده را محروم کنیم؟')) return;
-      await doBan({{report_id:id,target,scope:'chat',minutes:10,reason:'گزارش بی‌مورد'}}, null, '');
-    }}
-
-    async function setMusic() {{
-      const file=document.getElementById('musicFile').files[0];
-      const title=document.getElementById('musicTitle').value.trim();
-      const target_user=document.getElementById('musicTarget').value.trim();
-      if(!file){{alert('اول یک آهنگ از گوشی انتخاب کن.');return;}}
-      if(file.size>15*1024*1024){{alert('حجم آهنگ نباید بیشتر از ۱۵ مگابایت باشد.');return;}}
-      const fd=new FormData(); fd.append('music',file);
-      const r=await fetch('/support/music?title='+encodeURIComponent(title)+'&target_user='+encodeURIComponent(target_user),{{method:'POST',body:fd}});
-      const d=await r.json();
-      if(d.ok){{alert(target_user?'🎵 آهنگ فقط برای همان کاربر فعال شد.':'🎵 آهنگ آماده شد؛ پخش خودکار ندارد و هر کاربر خودش پخش می‌کند.');}}else alert(d.error==='user_not_found'?'کاربر پیدا نشد.':d.error==='bad_audio'?'این فایل صوتی پشتیبانی نمی‌شود.':'خطا در فعال‌سازی آهنگ.');
-    }}
-    async function clearMusic() {{
-      const r=await fetch('/support/music/clear',{{method:'POST'}}); const d=await r.json();
-      if(d.ok) alert('آهنگ قطع شد.');
-    }}
-
-    async function unbanUser(btn) {{
-      const row=btn.closest('.ban-row');
-      const target=row.dataset.target, scope=row.dataset.scope;
-      const r=await fetch('/support/unban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
-        body:JSON.stringify({{target,scope}})}});
-      const d=await r.json();
-      if(d.ok) {{ row.remove(); }}
-      else alert('خطا در رفع محرومیت');
-    }}
-    </script>"""
-    return page_shell("پنل پشتیبانی",body,username)
+        remaining=max(0,b['until_ts']-int(time.time())); h,rem=divmod(remaining,3600); m=rem//60; left=(f'{h} ساعت و ' if h else '')+f'{m} دقیقه'
+        bans.append(f'''<div class="ban-row" data-target="{html.escape(b['username'])}" data-scope="{html.escape(b['scope'])}"><b>@{html.escape(b['username'])}</b> <span class="ban-scope-tag">{labels.get(b['scope'],b['scope'])}</span><div class="report-meta">{html.escape(b.get('reason') or '—')} • {left}</div><button class="btn" onclick="unbanUser(this)">رفع محرومیت</button></div>''')
+    ticket_items=[]
+    for t in tickets:
+        ticket_items.append(f'<div class="report-item"><b>#{t["id"]} — {html.escape(t["subject"])}</b><div class="report-meta">از {html.escape(t["user"])} • {html.escape(t["status"])}</div><p>{html.escape(t["content"])}</p></div>')
+    ticket_html=''.join(ticket_items) or '<p>تیکتی ثبت نشده.</p>'
+    ban_html=''.join(bans) or '<p>محرومیت فعالی وجود ندارد.</p>'
+    report_html=''.join(items) or '<p>گزارشی وجود ندارد.</p>'
+    body=f'''<div class="card admin-card page-enter"><h1>🛡️ پنل پشتیبانی رسمی</h1><p>گزارش‌ها، تیکت‌ها و محرومیت‌های آیدی، پروفایل، بیوگرافی، چت و بازی را مدیریت کن.</p></div><div class="card"><h2>🔨 محرومیت مستقیم</h2><div class="support-direct-grid"><input id="directTarget" placeholder="آیدی کاربر"><select id="directScope"><option value="all">همه امکانات</option><option value="username">آیدی (تعلیق حساب)</option><option value="profile">پروفایل</option><option value="bio">بیوگرافی</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option></select><input id="directHours" type="number" min="0" max="168" value="0" placeholder="ساعت"><input id="directMinutes" type="number" min="0" max="59" value="10" placeholder="دقیقه"></div><input id="directReason" placeholder="دلیل محرومیت"><button class="glow-btn" onclick="banDirect()">محروم کن</button></div><div class="card"><h2>⏳ محرومیت‌های فعال</h2><div id="activeBans">{ban_html}</div></div><div class="card"><h2>🎫 تیکت‌های پشتیبانی</h2>{ticket_html}</div><div class="card"><h2>🚩 گزارش‌ها</h2>{report_html}</div><a class="btn" href="/lobby">بازگشت به لابی</a><script>async function doBan(payload){{const r=await fetch('/support/ban',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();if(d.ok)location.reload();else alert('خطا: مدت یا آیدی را بررسی کن.')}}async function banUser(id,btn){{const item=btn.closest('.report-item');const target=item.querySelector('.report-meta b').textContent.trim();await doBan({{report_id:id,target,scope:item.querySelector('.ban-scope').value,hours:Number(item.querySelector('.ban-hours').value)||0,minutes:Number(item.querySelector('.ban-minutes').value)||0,reason:'بر اساس گزارش #'+id}});}}async function banDirect(){{const target=document.getElementById('directTarget').value.trim();if(!target)return alert('آیدی را وارد کن.');await doBan({{target,scope:document.getElementById('directScope').value,hours:Number(document.getElementById('directHours').value)||0,minutes:Number(document.getElementById('directMinutes').value)||0,reason:document.getElementById('directReason').value.trim()||'نقض قوانین'}});}}async function unbanUser(btn){{const row=btn.closest('.ban-row');const r=await fetch('/support/unban',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{target:row.dataset.target,scope:row.dataset.scope}})}});const d=await r.json();if(d.ok)row.remove();else alert('خطا در رفع محرومیت');}}</script>'''
+    return page_shell('پنل پشتیبانی',body,username)
 
 def _render_messages(messages: list[dict], username: str) -> str:
     if not messages:
@@ -678,75 +563,6 @@ def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
     box.scrollTop = box.scrollHeight;
     </script>"""
     return page_shell(f"چت با {other}", body, username)
-
-
-def tictactoe_page(username: str) -> str:
-    body = f"""
-    <div class="card page-enter">
-      <h1>⭕ دوز دو نفره زنده</h1>
-      <div class="status-line" id="status">🔌 اتصال به سرور...</div>
-      <div class="ttt-board" id="board"></div>
-      <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="glow-btn" onclick="location.reload()">🔁 بازی جدید / جستجوی دوباره</button><a class="btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">🏠 بازگشت به لابی</a></div>
-    </div>
-    <script>
-    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const boardEl = document.getElementById("board");
-    const statusEl = document.getElementById("status");
-    let ws = null, reconnectTimer = null, intentionallyLeaving = false;
-    let mySymbol = null, currentBoard = Array(9).fill("");
-
-    function connect() {{
-      statusEl.textContent = "🔌 اتصال سریع به سرور بازی...";
-      ws = new WebSocket(wsProto + "//" + location.host + "/ws/tictactoe");
-      ws.onopen = () => statusEl.textContent = "⚡ وصل شد! در حال پیدا کردن حریف...";
-      ws.onerror = () => statusEl.textContent = "⚠️ مشکل اتصال؛ دوباره تلاش می‌کنیم...";
-      ws.onclose = () => {{
-        if (!intentionallyLeaving && !reconnectTimer) {{
-          statusEl.textContent = "🔄 اتصال قطع شد؛ تلاش مجدد...";
-          reconnectTimer = setTimeout(() => {{ reconnectTimer = null; connect(); }}, 1200);
-        }}
-      }};
-      ws.onmessage = onMessage;
-    }}
-
-    function render() {{
-      boardEl.innerHTML = "";
-      currentBoard.forEach((val, i) => {{
-        const cell = document.createElement("div");
-        cell.className = "ttt-cell" + (val ? " filled" : "");
-        cell.textContent = val;
-        cell.onclick = () => {{
-          if (!val && ws && ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({{type:"move", cell:i}}));
-        }};
-        boardEl.appendChild(cell);
-      }});
-    }}
-
-    function onMessage(ev) {{
-      const data = JSON.parse(ev.data);
-      if (data.type === "waiting") {{
-        let left=30; statusEl.textContent = "⏳ در صف حریف — "+left+" ثانیه";
-        clearInterval(window.queueTimer); window.queueTimer=setInterval(()=>{{left--; statusEl.textContent="⏳ در صف حریف — "+Math.max(0,left)+" ثانیه"; if(left<=0) clearInterval(window.queueTimer);}},1000);
-      }} else if (data.type === "queue_timeout") {{
-        statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره صفحه را تازه کن.";
-      }} else if (data.type === "state") {{
-        mySymbol = data.your_symbol; currentBoard = data.board; render();
-        if (data.winner === "draw") statusEl.textContent = "🤝 مساوی شد!";
-        else if (data.winner) statusEl.textContent = data.winner === mySymbol ? "🏆 بردی!" : "😢 باختی!";
-        else statusEl.textContent = "شما: " + mySymbol + " | حریف: " + data.opponent + " | نوبت: " + (data.turn === mySymbol ? "توئه! 🔥" : "حریف");
-      }} else if (data.type === "game_won") {{
-        intentionallyLeaving = true;
-        statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
-      }} else if (data.type === "opponent_left") {{
-        statusEl.textContent = data.winner === me ? "🏆 شما برنده شدید! حریف از بازی خارج شد." : "❌ حریف بازی را ترک کرد.";
-      }}
-    }}
-
-    render();
-    connect();
-    </script>"""
-    return page_shell("دوز", body, username)
 
 
 def drawing_page(username: str) -> str:
@@ -1129,11 +945,7 @@ def drawing_page(username: str) -> str:
             resultPanel.innerHTML = html;
             if (data.drawer !== me) {
                 const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش نقاشی";
-                rb.onclick=async()=>{
-                    const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},
-                      body:JSON.stringify({target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing",attachment:(canvas.toDataURL("image/jpeg",0.65)||"")})});
-                    if((await r.json()).ok) alert("گزارش ثبت شد.");
-                };
+                rb.onclick=()=>openReportModal(data.drawer,"نقاشی/محتوای دور گزارش شد","drawing",(canvas.toDataURL("image/jpeg",0.65)||""));
                 resultPanel.appendChild(rb);
             }
             const noteEl = document.createElement("div");
@@ -1207,6 +1019,7 @@ html{background:#09051d}body{background:radial-gradient(circle at 50% -10%,rgba(
 def _neon_nav(username, active="home"):
     if not username:return ""
     items=[("leaderboard","🏆","لیدر بورد","/leaderboard"),("messages","💬","گفتگوها","/messages"),("shop","🛍️","فروشگاه","/shop"),("settings","⚙️","تنظیمات","/settings")]
+    if username == "morad": items.append(("support","🛡️","پنل پشتیبانی","/support"))
     cells=[]
     for key,icon,title,url in items:
         cls=" active" if active==key else ""
@@ -1229,8 +1042,8 @@ def games_page(username):
       <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>دو حالت، یک رقابت</small></div>
       <div class="game-mode-card mode-speed">
         <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div>
-        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • سریع و زنده</p></div>
-        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+        <div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • نقاشی و حدس سریع</p></div>
+        <a class="mode-start" href="/game/drawing">شروع <span>←</span></a>
       </div>
       <div class="game-mode-card mode-draw">
         <div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div>
@@ -1252,21 +1065,18 @@ def profile_page(username, prof):
     total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0)
     correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0
     wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
-    avatar_html=_avatar_html(prof.get('avatar') or '🎮')
+    avatar_banned=bool(prof.get('profile_banned')); bio_banned=bool(prof.get('bio_banned'))
+    avatar_html='<div class="avatar-hidden">🚫</div>' if avatar_banned else _avatar_html(prof.get('avatar') or '🎮')
     is_support=prof['username']=='morad'
     badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else ''
     if prof['username']!=username:
-        actions='<div class="profile-actions"><form method="post" action="/friends/request/form"><input type="hidden" name="target" value="'+html.escape(prof['username'],quote=True)+'"><button class="glow-btn" type="submit">🤝 افزودن به دوستان</button></form><a class="btn" href="/chat/private/'+quote(prof['username'],safe='')+'">💬 پیام خصوصی</a><button class="btn" onclick="inviteGame()">🎮 دعوت به بازی</button></div><script>async function inviteGame(){const mode="drawing4";const r=await fetch("/game/invite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({receiver:"'+html.escape(prof['username'],quote=True)+'",mode})});const d=await r.json();alert(d.ok?"🎮 دعوت ارسال شد!":"❌ ارسال دعوت ناموفق بود.")}</script>'
+        target_js=html.escape(prof['username'],quote=True)
+        actions=f'''<div class="profile-actions"><form method="post" action="/friends/request/form"><input type="hidden" name="target" value="{target_js}"><button class="glow-btn" type="submit">🤝 افزودن به دوستان</button></form><a class="btn" href="/chat/private/{quote(prof['username'],safe='')}">💬 پیام خصوصی</a><button class="btn" onclick="inviteGame()">🎮 دعوت به بازی</button><button class="report-btn" onclick="openReportModal('{target_js}','پروفایل کاربر','profile','')">🚩 گزارش</button></div><script>async function inviteGame(){{const mode="drawing4";const r=await fetch("/game/invite",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{receiver:"{target_js}",mode}})}});const d=await r.json();alert(d.ok?"🎮 دعوت ارسال شد!":"❌ ارسال دعوت ناموفق بود.")}}</script>'''
     else:
         actions='<div class="profile-actions"><a class="btn" href="/settings">⚙️ تنظیمات پروفایل</a></div>'
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
-    bio=html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
-    body=f"""<div class="profile-card hero page-enter">
-      <div class="profile-head"><div>{avatar_html}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(prof['username'])}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{badge}</div></div>
-      <div class="profile-bio">{bio}</div>
-      <div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>
-      {actions}
-    </div>{support_box}<div style="text-align:center"><a class="btn" href="/lobby">🏠 لابی</a></div>"""
+    bio=('<div class="moderation-hidden">این بخش به‌طور موقت محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.'))
+    body=f'''<div class="profile-card hero page-enter"><div class="profile-head"><div>{avatar_html}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(prof['username'])}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{badge}</div></div><div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>{actions}</div>{support_box}<div style="text-align:center"><a class="btn" href="/lobby">🏠 لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 def settings_page(username, prof):
@@ -1307,20 +1117,20 @@ def settings_page(username, prof):
       <div class="settings-links"><a href="/profile?u={quote(username,safe='')}">👤 پروفایل</a><a href="/lobby">🏠 لابی</a></div>
     </div>
     <script>
-    let avatarData={str(avatar)!r},img=null,zoom=1,posX=0,posY=0,dragging=false,lastX=0,lastY=0;
+    let avatarData={str(avatar)!r},avatarDirty=false,img=null,zoom=1,posX=0,posY=0,dragging=false,lastX=0,lastY=0;
     const wrap=document.getElementById('cropWrap'),z=document.getElementById('zoom'),file=document.getElementById('avatarFile'),reset=document.getElementById('cropReset');
     const SIZE=190;
     function renderCrop(){{if(!img)return;const sw=img.naturalWidth||1,sh=img.naturalHeight||1;const scale=Math.max(SIZE/sw,SIZE/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((SIZE-sw*scale)/2+posX)+'px';img.style.top=((SIZE-sh*scale)/2+posY)+'px'}}
-    function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth||1,sh=img.naturalHeight||1;const scale=Math.max(512/sw,512/sh)*zoom;const x=(512-sw*scale)/2+posX*(512/SIZE),y=(512-sh*scale)/2+posY*(512/SIZE);ctx.drawImage(img,x,y,sw*scale,sh*scale);avatarData=c.toDataURL('image/jpeg',0.82)}}
+    function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=384;c.height=384;const ctx=c.getContext('2d');const sw=img.naturalWidth||1,sh=img.naturalHeight||1;const scale=Math.max(384/sw,384/sh)*zoom;const x=(384-sw*scale)/2+posX*(384/SIZE),y=(384-sh*scale)/2+posY*(384/SIZE);ctx.drawImage(img,x,y,sw*scale,sh*scale);avatarData=c.toDataURL('image/jpeg',0.72)}}
     function clampPos(){{if(!img)return;const sw=img.naturalWidth||1,sh=img.naturalHeight||1,scale=Math.max(SIZE/sw,SIZE/sh)*zoom,dw=sw*scale,dh=sh*scale;const maxX=Math.max(0,(dw-SIZE)/2),maxY=Math.max(0,(dh-SIZE)/2);posX=Math.max(-maxX,Math.min(maxX,posX));posY=Math.max(-maxY,Math.min(maxY,posY))}}
     z.oninput=()=>{{zoom=Number(z.value);clampPos();renderCrop();makeCrop()}};
     reset.onclick=()=>{{posX=0;posY=0;zoom=1;z.value='1';clampPos();renderCrop();makeCrop()}};
     wrap.addEventListener('pointerdown',e=>{{if(!img)return;dragging=true;lastX=e.clientX;lastY=e.clientY;wrap.setPointerCapture?.(e.pointerId)}});
     wrap.addEventListener('pointermove',e=>{{if(!dragging||!img)return;posX+=e.clientX-lastX;posY+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;clampPos();renderCrop()}});
     wrap.addEventListener('pointerup',()=>{{dragging=false;makeCrop()}});wrap.addEventListener('pointercancel',()=>{{dragging=false;makeCrop()}});
-    file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f),next=new Image();next.onload=()=>{{img=next;zoom=1;posX=0;posY=0;z.value='1';wrap.innerHTML='';wrap.appendChild(img);renderCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
+    file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f),next=new Image();next.onload=()=>{{img=next;avatarDirty=true;zoom=1;posX=0;posY=0;z.value='1';wrap.innerHTML='';wrap.appendChild(img);renderCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
     const bioEl=document.getElementById('bioInput'),bioCount=document.getElementById('bioCount');bioEl.oninput=()=>{{if(bioEl.value.length>70)bioEl.value=bioEl.value.slice(0,70);bioCount.textContent=bioEl.value.length}};
-    async function saveProfile(){{const btn=document.getElementById('saveProfileBtn'),status=document.getElementById('saveStatus');btn.disabled=true;try{{if(img)makeCrop();const age=Number(document.getElementById('ageInput').value);const bio=bioEl.value.trim();if(!Number.isInteger(age)||age<1||age>90)throw new Error('سن نامعتبر است');if(bio.length>70)throw new Error('بیوگرافی بیشتر از ۷۰ حرف است');const payload={{bio,age,avatar:avatarData||'🎮'}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json','Accept':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();if(!d.ok)throw new Error(d.error==='bad_age'?'سن باید بین ۱ تا ۹۰ باشد.':d.error==='bio_too_long'?'بیوگرافی باید حداکثر ۷۰ حرف باشد.':d.error==='image_too_large'?'عکس خیلی بزرگ است.':'ذخیره ناموفق بود.');status.style.display='block';status.style.color='var(--turquoise)';status.textContent='✅ پروفایل ذخیره شد؛ در حال به‌روزرسانی...';setTimeout(()=>location.href='/profile?u='+encodeURIComponent({username!r}),350)}}catch(e){{status.style.display='block';status.style.color='var(--danger)';status.textContent='❌ '+(e.message||'خطا در ذخیره پروفایل')}}finally{{btn.disabled=false}}}}
+    async function saveProfile(){{const btn=document.getElementById('saveProfileBtn'),status=document.getElementById('saveStatus');btn.disabled=true;try{{if(img)makeCrop();const age=Number(document.getElementById('ageInput').value);const bio=bioEl.value.trim();if(!Number.isInteger(age)||age<1||age>90)throw new Error('سن نامعتبر است');if(bio.length>70)throw new Error('بیوگرافی بیشتر از ۷۰ حرف است');const payload={{bio,age,avatar:avatarDirty?(avatarData||'🎮'):null}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json','Accept':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();if(!d.ok)throw new Error(d.error==='bad_age'?'سن باید بین ۱ تا ۹۰ باشد.':d.error==='bio_too_long'?'بیوگرافی باید حداکثر ۷۰ حرف باشد.':d.error==='image_too_large'?'عکس خیلی بزرگ است.':'ذخیره ناموفق بود.');status.style.display='block';status.style.color='var(--turquoise)';status.textContent='✅ پروفایل ذخیره شد؛ در حال به‌روزرسانی...';setTimeout(()=>location.href='/profile?u='+encodeURIComponent({username!r}),350)}}catch(e){{status.style.display='block';status.style.color='var(--danger)';status.textContent='❌ '+(e.message||'خطا در ذخیره پروفایل')}}finally{{btn.disabled=false}}}}
     async function changePass(){{try{{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:document.getElementById('oldPasswordInput').value,new_password:document.getElementById('newPasswordInput').value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}catch(e){{alert('خطا در ارتباط با سرور.')}}}}
     </script>"""
     return page_shell('تنظیمات',body,username)
@@ -1436,7 +1246,7 @@ box-shadow:inset 0 0 70px rgba(0,0,0,.3),0 15px 45px rgba(0,0,0,.3)}
 .lobby-quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}.lobby-quick-grid a{min-width:0;text-decoration:none;color:#fff;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:15px;padding:10px 4px;text-align:center;font-size:19px}.lobby-quick-grid b,.lobby-quick-grid small{display:block}.lobby-quick-grid b{font-size:10px}.lobby-quick-grid small{font-size:8px;color:#8f96b7;margin-top:2px}
 
 .profile-card{background:linear-gradient(150deg,#171b3c,#0c1024);border:1px solid #413a79;border-radius:25px;padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.35),0 0 25px rgba(91,69,255,.12)}
-.profile-head{display:flex;align-items:center;gap:14px}.profile-head>div:first-child{width:82px;height:82px;border-radius:22px;overflow:hidden;display:grid;place-items:center;background:#11152d;border:2px solid #ff5ccf}.profile-head>div:first-child img{max-width:100%;max-height:100%}.profile-head h1{font-size:24px;margin:3px 0}.profile-age{font-size:12px;color:#b8bdd5;margin-top:3px}.profile-bio{margin:18px 0;padding:13px;border-radius:15px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);color:#d9dcef;word-break:break-word}
+.profile-head{display:flex;align-items:center;gap:14px}.profile-head>div:first-child{width:92px;height:92px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:#11152d;border:2px solid #ff5ccf}.profile-head>div:first-child img{max-width:100%;max-height:100%}.profile-head h1{font-size:24px;margin:3px 0}.profile-age{font-size:12px;color:#b8bdd5;margin-top:3px}.profile-bio{margin:18px 0;padding:13px;border-radius:15px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);color:#d9dcef;word-break:break-word}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.stat-box{background:#11162e;border:1px solid #2d3561;border-radius:13px;padding:9px 3px;text-align:center;font-size:10px;color:#929ab9}.stat-box b{font-size:15px;color:#fff}.profile-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.profile-actions form{margin:0}.verified-support{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:999px;background:rgba(0,216,255,.1);color:#63e6ff;font-size:10px}.support-mini-card{display:flex;flex-direction:column;margin-top:10px;padding:13px;border-radius:15px;text-decoration:none;color:#fff;background:#151a35;border:1px solid #343d72}.support-mini-card span{font-size:11px;color:#9ba3c2;margin-top:2px}
 
 .settings-screen{min-height:calc(100vh - 28px);padding-bottom:25px}.settings-header{display:flex;align-items:center;gap:12px;padding:6px 3px 16px}.settings-header h1{margin:0;font-size:27px}.settings-gear{margin-right:auto;width:45px;height:45px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(135deg,#ff43c8,#704bff);box-shadow:0 0 20px rgba(255,67,200,.25)}.settings-close{width:45px;height:45px;border-radius:50%;display:grid;place-items:center;text-decoration:none;background:#e9ebf2;color:#252a3d;font-size:30px}
@@ -1452,8 +1262,9 @@ button,.btn{transition:transform .12s ease,filter .12s ease}.btn:hover,button:ho
 
 """
 
-def _bottom_nav(active="home"):
+def _bottom_nav(active="home", username=None):
     items=[("leaderboard","🏆","لیدر بورد"),("messages","💬","گفتگوها"),("shop","🛍️","فروشگاه"),("settings","⚙️","تنظیمات")]
+    if username == "morad": items.append(("support","🛡️","پشتیبانی"))
     return '<div class="neon-bottom-nav">'+''.join(f'<a class="{("active" if active==k else "")}" href="/{k}"><span>{ic}</span>{title}</a>' for k,ic,title in items)+'</div>'
 
 def lobby_page(username, prof=None, wallet=None):
@@ -1467,7 +1278,7 @@ def lobby_page(username, prof=None, wallet=None):
     body=f"""<div class="lobby-bg page-enter">
       <div class="lobby-topbar">
         <div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div>
-        <a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>
+        <div style="display:flex;gap:7px;align-items:center"><a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>{("<a class=\"lobby-settings\" href=\"/support\" aria-label=\"پنل پشتیبانی\">🛡️</a>" if username == "morad" else "")}</div>
       </div>
       <a class="lobby-profile hero" href="/profile?u={quote(username,safe='')}">
         <div class="lobby-profile-avatar">{avatar_html}</div>
@@ -1479,9 +1290,9 @@ def lobby_page(username, prof=None, wallet=None):
       <div class="lobby-wallet">💰 <b>{coins:,}</b> سکه <span>•</span> آماده‌ی رقابتی؟</div>
       <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div>
       <div class="game-mode-card mode-speed">
-        <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div>
-        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • زنده و سریع</p></div>
-        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+        <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div>
+        <div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • نقاشی و حدس سریع</p></div>
+        <a class="mode-start" href="/game/drawing">شروع <span>←</span></a>
       </div>
       <div class="game-mode-card mode-draw">
         <div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div>
@@ -1493,25 +1304,13 @@ def lobby_page(username, prof=None, wallet=None):
         <a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>بهترین‌ها</small></a>
         <a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>
         <a href="/profile?u={quote(username,safe='')}">👤 <b>پروفایل من</b><small>مشاهده پروفایل</small></a>
+        {('<a href="/support">🛡️ <b>پنل پشتیبانی</b><small>مدیریت گزارش‌ها</small></a>' if username == 'morad' else '')}
       </div>
-    </div>{_bottom_nav("home")}"""
+    </div>{_bottom_nav("home", username)}"""
     return page_shell('منوی اصلی',body,username)
 
 def games_page(username):
-    body=f"""<div class="lobby-bg page-enter">
-      <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>دو حالت، یک رقابت</small></div>
-      <div class="game-mode-card mode-speed">
-        <div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div>
-        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • سریع و زنده</p></div>
-        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
-      </div>
-      <div class="game-mode-card mode-draw">
-        <div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div>
-        <div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div>
-        <a class="mode-start" href="/game/drawing4">شروع <span>←</span></a>
-      </div>
-      <a class="btn" href="/lobby">← بازگشت به لابی</a>
-    </div>{_bottom_nav("home")}"""
+    body=f"""<div class=\"lobby-bg page-enter\"><div class=\"section-heading\"><span>🎮 حالت‌های بازی</span><small>دو حالت، یک رقابت</small></div><div class=\"game-mode-card mode-speed\"><div class=\"mode-badge\">⚡ دو نفره سرعتی</div><div class=\"mode-icon\">🎨</div><div class=\"mode-copy\"><h2>حدس نقاشی</h2><p>۲ بازیکن • نقاشی و حدس سریع</p></div><a class=\"mode-start\" href=\"/game/drawing\">شروع <span>←</span></a></div><div class=\"game-mode-card mode-draw\"><div class=\"mode-badge\">🎨 رقابت نقاشان</div><div class=\"mode-icon\">🖌️</div><div class=\"mode-copy\"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div><a class=\"mode-start\" href=\"/game/drawing4\">شروع <span>←</span></a></div><a class=\"btn\" href=\"/lobby\">← بازگشت به لابی</a></div>{_bottom_nav("home")}"""
     return page_shell('انتخاب بازی',body,username)
 
 def multiplayer_drawing_page(username, mode):
@@ -1548,4 +1347,13 @@ body{background:radial-gradient(circle at 10% 0%,rgba(0,229,255,.20),transparent
 .lobby-profile{background:linear-gradient(135deg,rgba(17,54,94,.94),rgba(38,14,66,.94));border-color:rgba(71,220,255,.35);box-shadow:0 10px 24px rgba(0,0,0,.20),0 0 20px rgba(0,220,255,.08)}.lobby-profile-avatar{border-color:#00dcff;box-shadow:0 0 16px rgba(0,220,255,.22)}
 .avatar-editor{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.avatar-crop-wrap{position:relative;width:190px;height:190px;flex:0 0 190px;overflow:hidden;border-radius:50%;background:#080b18;border:3px solid #19ddff;box-shadow:0 0 0 4px rgba(25,221,255,.08),0 0 28px rgba(25,221,255,.18);touch-action:none;cursor:grab}.avatar-crop-wrap:active{cursor:grabbing}.avatar-crop-wrap img{position:absolute;max-width:none;user-select:none;-webkit-user-drag:none;pointer-events:none}.avatar-crop-wrap .avatar-big{width:100%;height:100%;display:grid;place-items:center;font-size:72px}.avatar-controls{min-width:180px;flex:1}.upload-btn{display:block!important;text-align:center;padding:11px 14px;border-radius:12px;background:linear-gradient(135deg,#00c8ff,#7251ff);cursor:pointer;box-shadow:0 0 18px rgba(0,200,255,.16)}.file-input-hidden{display:none!important}.crop-label{font-size:10px;color:#929ab9;margin:9px 0}.crop-reset{width:100%;margin-top:8px!important;background:#161d3a!important;border:1px solid #36416d!important;color:#fff!important}.settings-select{width:100%;margin:0!important;background:#090c1c!important;color:#fff!important;border:1px solid #30375f!important;border-radius:13px!important;padding:13px!important;font-family:inherit}.profile-editor-card{border-color:rgba(0,214,255,.28);box-shadow:0 12px 34px rgba(0,0,0,.28),0 0 25px rgba(0,214,255,.06)}.profile-editor-title p{font-size:10px;color:#9299b8;margin:4px 0 12px}.settings-save:disabled{opacity:.65;transform:none!important}
 @media(max-width:600px){.game-mode-card{min-height:84px;padding-left:60px;border-radius:13px}.mode-icon{font-size:27px}.mode-copy h2{font-size:15px}.mode-start{padding:7px 8px}.mode-badge{font-size:8px}.avatar-editor{justify-content:center}.avatar-controls{width:100%}.avatar-crop-wrap{width:180px;height:180px;flex-basis:180px}.lobby-quick-grid{gap:6px}}
+"""
+
+BASE_CSS += """
+/* V3 */
+body *{backdrop-filter:none!important}
+.profile-head>div:first-child{width:92px;height:92px;border-radius:50%!important;overflow:hidden;display:grid;place-items:center;background:#080b18;border:3px solid #ff5ccf;box-shadow:0 0 0 3px rgba(255,92,207,.10),0 0 24px rgba(0,214,255,.18)}
+.profile-head>div:first-child img,.profile-avatar-img{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover;border-radius:50%!important;display:block}.profile-head>div:first-child .avatar-big{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;font-size:48px}.avatar-hidden{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;background:#17132d;color:#ff74c8;font-size:34px}.moderation-hidden{padding:10px 12px;border-radius:12px;background:rgba(255,70,160,.07);border:1px solid rgba(255,70,160,.18);color:#b8b0d0}
+.report-modal{position:fixed;inset:0;z-index:9999;background:rgba(3,4,14,.78);display:none;align-items:center;justify-content:center;padding:16px}.report-modal.show{display:flex}.report-modal-card{width:min(100%,430px);background:linear-gradient(145deg,#1c1041,#0d0a24);border:2px solid #ff4fd8;border-radius:24px;padding:18px;box-shadow:0 0 40px rgba(255,60,205,.28),0 18px 60px rgba(0,0,0,.45);position:relative}.report-modal-close{position:absolute;left:12px;top:12px;width:38px;height:38px;padding:0;border-radius:50%;background:#252043;color:#fff}.report-modal-title{font-size:21px;font-weight:950;color:#fff}.report-modal-sub{font-size:12px;color:#aaa4c2;margin:5px 0 12px}.report-reasons{display:grid;grid-template-columns:1fr 1fr;gap:8px}.report-reasons button{padding:11px 8px;border-radius:13px;background:#17112f;border:1px solid #463273;color:#fff;font-size:12px}.report-reasons button:hover{border-color:#ff4fd8;box-shadow:0 0 12px rgba(255,79,216,.18)}#reportExtra{width:100%;min-height:72px;margin:10px 0;padding:10px;border-radius:12px;background:#0a0a1a;color:#fff;border:1px solid #38305a;font-family:inherit}.report-modal-hint{font-size:10px;color:#8883a5;text-align:center}.report-category{display:inline-block;padding:2px 7px;border-radius:999px;background:rgba(255,79,216,.12);color:#ff8de5;font-size:10px}.report-image{max-width:100%;border-radius:14px;display:block;margin:8px 0;border:1px solid #403368}.support-action-grid,.support-direct-grid{display:grid;grid-template-columns:1.3fr .7fr .7fr 1fr;gap:7px;align-items:center}.support-direct-grid{grid-template-columns:1.5fr 1.2fr .7fr .7fr;margin-bottom:9px}.support-action-grid input,.support-action-grid select,.support-direct-grid input,.support-direct-grid select{margin:0!important;width:100%;background:#0d0b22;color:#fff;border:1px solid #3b315b;border-radius:11px;padding:10px;font-family:inherit}.leader-podium{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end;margin:14px 0 20px}.leader-podium-card{position:relative;text-decoration:none;color:#fff;text-align:center;border-radius:26px;padding:18px 8px 14px;background:linear-gradient(145deg,#21104c,#0d0a23);border:2px solid #6c36cf;box-shadow:0 0 22px rgba(130,50,255,.22);transition:.2s}.leader-podium-card.rank-1{transform:scale(1.08);border-color:#ff4fd8;box-shadow:0 0 32px rgba(255,79,216,.42),0 0 60px rgba(100,55,255,.22);z-index:2}.leader-podium-card.rank-2{transform:scale(1.02);border-color:#65d9ff;box-shadow:0 0 26px rgba(101,217,255,.30)}.leader-podium-card.rank-3{border-color:#a986ff}.leader-rank{font-size:25px;margin-bottom:6px}.leader-podium-card .leader-avatar{width:82px;height:82px;margin:auto;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 0 18px rgba(255,255,255,.22);display:block}.leader-podium-card.rank-1 .leader-avatar{width:104px;height:104px;border-color:#ff8be5;box-shadow:0 0 25px rgba(255,79,216,.55)}.leader-name{font-weight:950;font-size:14px;margin-top:7px;overflow:hidden;text-overflow:ellipsis}.leader-age{font-size:10px;color:#aaa5c4}.leader-score{font-size:11px;color:#67e8ff;margin-top:4px}.leader-list{display:grid;gap:6px}.leader-row{display:grid!important;grid-template-columns:38px 34px 1fr auto;align-items:center;gap:7px;padding:9px!important;text-decoration:none;color:#fff}.leader-list-avatar .leader-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid #6c55b0}.ban-row{padding:11px;border:1px solid #3a2d60;border-radius:14px;margin:7px 0;background:#100c25}.ban-scope-tag{font-size:10px;padding:3px 7px;border-radius:999px;background:#241640;color:#ff8de5}.lobby-profile-avatar,.lobby-avatar{border-radius:50%!important;overflow:hidden}.lobby-profile-avatar .profile-avatar-img,.lobby-profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}.game-mode-card{width:min(100%,650px);margin:9px auto;min-height:76px;padding:10px 12px 10px 62px;border-radius:18px!important}.mode-copy h2{font-size:15px}.mode-copy p{font-size:9px}.mode-start{font-size:10px;padding:7px 10px}.lobby-bg{box-shadow:inset 0 0 80px rgba(0,220,255,.10),inset 0 0 120px rgba(255,50,210,.08)}
+@media(max-width:600px){.leader-podium{gap:6px}.leader-podium-card{padding:13px 5px}.leader-podium-card.rank-1 .leader-avatar{width:82px;height:82px}.leader-podium-card .leader-avatar{width:64px;height:64px}.support-action-grid,.support-direct-grid{grid-template-columns:1fr 1fr}.support-action-grid button{grid-column:1/-1}.report-reasons{grid-template-columns:1fr}.profile-head>div:first-child{width:84px;height:84px}}
 """

@@ -82,6 +82,11 @@ async def login_post(request: Request, username: str = Form(...), password: str 
     user = await db.get_user(username)
     if not user or not auth.verify_password(password, user["salt"], user["password_hash"]):
         return tpl.login_page("نام کاربری یا رمز عبور اشتباه است.")
+    if username != "morad":
+        ban = await db.get_active_ban(username, "username")
+        if ban:
+            remaining = max(0, ban["until_ts"] - int(time.time()))
+            return tpl.banned_page(username, "username", remaining, ban.get("reason", ""))
 
     request.session["username"] = username
     return RedirectResponse("/lobby", status_code=303)
@@ -101,7 +106,6 @@ def _require_login(request: Request) -> str | None:
 GAME_SCOPE = "games"
 CHAT_SCOPE = "chat"
 DRAW_SCOPE = "drawing"
-TTT_SCOPE = "tictactoe"
 
 async def _ban_for(username: str, scope: str):
     return await db.get_active_ban(username, scope)
@@ -146,6 +150,10 @@ async def report_content(request: Request):
     target = str(data.get("target") or "").strip()[:64]
     content = str(data.get("content") or "").strip()[:500]
     context = str(data.get("context") or "chat")[:32]
+    category = str(data.get("category") or "other").strip()[:32]
+    allowed_categories = {"collusion","profile","username","spam","chat","bio","other"}
+    if category not in allowed_categories:
+        return {"ok": False, "error": "bad_category"}
     attachment = str(data.get("attachment") or "")
     if attachment and len(attachment) > 350000:
         attachment = ""
@@ -153,7 +161,7 @@ async def report_content(request: Request):
         return {"ok": False, "error": "invalid"}
     if not await db.get_user(target):
         return {"ok": False, "error": "user_not_found"}
-    await db.create_report(username, target, context, content, attachment or None)
+    await db.create_report(username, target, context, content, attachment or None, category)
     return {"ok": True}
 
 @app.get("/leaderboard", response_class=HTMLResponse)
@@ -171,7 +179,6 @@ async def game_leave(request: Request):
         return {"ok": False}
     # بازگشت به لابی محرومیت ندارد؛ اگر حریف هنوز داخل بازی باشد، همان حریف
     # برنده اعلام می‌شود و امتیاز برد می‌گیرد.
-    await ttt_manager.leave(username)
     await drawing_manager.leave(username)
     return {"ok": True, "redirect": "/lobby"}
 
@@ -251,7 +258,7 @@ async def support_ban(request: Request):
     # این دو با هم جمع می‌شوند تا هم محرومیت چند دقیقه‌ای هم چند ساعته ممکن باشد.
     hours = float(data.get("hours") or 0) + float(data.get("minutes") or 0) / 60.0
     reason = str(data.get("reason") or "نقض قوانین")[:300]
-    allowed = {"games","chat","drawing","tictactoe","all"}
+    allowed = {"games","chat","drawing","profile","bio","username","all"}
     if not target or target == "morad" or scope not in allowed or hours <= 0 or hours > 168:
         return {"ok": False, "error": "invalid"}
     until = await db.ban_user(target, scope, hours, reason)
@@ -267,7 +274,7 @@ async def support_unban(request: Request):
     data = await request.json()
     target = str(data.get("target") or "").strip()[:64]
     scope = str(data.get("scope") or "all")
-    allowed = {"games","chat","drawing","tictactoe","all"}
+    allowed = {"games","chat","drawing","profile","bio","username","all"}
     if not target or scope not in allowed:
         return {"ok": False, "error": "invalid"}
     await db.unban_user(target, scope)
@@ -286,6 +293,8 @@ async def profile_query_page(request: Request, u: str = ""):
     prof = await db.profile(target)
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
+    prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
+    prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     return tpl.profile_page(username, prof)
 
 
@@ -297,6 +306,8 @@ async def profile_page(request: Request, target: str):
     prof = await db.profile(target)
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
+    prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
+    prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     return tpl.profile_page(username, prof)
 
 @app.post("/friends/request")
@@ -364,7 +375,10 @@ async def settings_profile(request: Request):
     if not username:
         return {"ok": False, "error": "login_required"}
     data = await request.json()
-    avatar = str(data.get("avatar") or "🎮")
+    current = await db.profile(username) or {}
+    avatar_value = data.get("avatar")
+    avatar_changed = avatar_value not in (None, "")
+    avatar = str(avatar_value) if avatar_changed else (current.get("avatar") or "🎮")
     bio = str(data.get("bio") or "").strip()
     try:
         age = int(data.get("age") or 18)
@@ -374,10 +388,17 @@ async def settings_profile(request: Request):
         return {"ok": False, "error": "bad_age"}
     if len(bio) > 70:
         return {"ok": False, "error": "bio_too_long"}
-    if avatar.startswith("data:image/") and len(avatar) > 180000:
+    if avatar_changed and avatar.startswith("data:image/") and len(avatar) > 350000:
         return {"ok": False, "error": "image_too_large"}
     if avatar.startswith("data:") and not avatar.startswith("data:image/"):
         return {"ok": False, "error": "bad_image"}
+    if not _is_support(username):
+        if await db.get_active_ban(username, "profile"):
+            current = await db.profile(username) or {}
+            avatar = current.get("avatar") or "🎮"
+        if await db.get_active_ban(username, "bio"):
+            current = await db.profile(username) or {}
+            bio = current.get("bio") or ""
     await db.update_profile(username, bio, avatar, age)
     return {"ok": True}
 
@@ -653,183 +674,6 @@ async def ws_chat_private(websocket: WebSocket, other: str):
 
 
 # ============================================================
-#                    TIC-TAC-TOE (دوز)
-# ============================================================
-
-WIN_LINES = [
-    (0, 1, 2), (3, 4, 5), (6, 7, 8),
-    (0, 3, 6), (1, 4, 7), (2, 5, 8),
-    (0, 4, 8), (2, 4, 6),
-]
-
-
-def check_winner(board: list[str]) -> str | None:
-    for a, b, c in WIN_LINES:
-        if board[a] and board[a] == board[b] == board[c]:
-            return board[a]
-    return None
-
-
-class TicTacToeManager:
-    def __init__(self):
-        self.waiting: tuple[str, WebSocket] | None = None
-        self.games: dict[str, dict] = {}
-        self.player_game: dict[str, str] = {}
-
-    async def connect(self, username: str, ws: WebSocket):
-        await ws.accept()
-
-        # اگر بازیکن از قبل توی یه بازی فعال بود (مثلاً رفرش کرده)، دوباره وصلش کن.
-        game_id = self.player_game.get(username)
-        if game_id and game_id in self.games:
-            self.games[game_id]["sockets"][username] = ws
-            await self.send_state(game_id)
-            return
-
-        if self.waiting is None:
-            self.waiting = (username, ws)
-            await ws.send_json({"type": "waiting"})
-            asyncio.create_task(self._queue_timeout(username, ws))
-            return
-
-        other_username, other_ws = self.waiting
-        if other_username == username:
-            # همون کاربر دو تب باز کرده؛ فقط جایگزین کن.
-            self.waiting = (username, ws)
-            await ws.send_json({"type": "waiting"})
-            return
-
-        self.waiting = None
-        game_id = secrets.token_hex(6)
-        self.games[game_id] = {
-            "board": [""] * 9,
-            "players": {"X": other_username, "O": username},
-            "turn": "X",
-            "sockets": {other_username: other_ws, username: ws},
-            "winner": None,
-        }
-        self.player_game[other_username] = game_id
-        self.player_game[username] = game_id
-        await self.send_state(game_id)
-
-    async def _queue_timeout(self, username, ws):
-        await asyncio.sleep(30)
-        if self.waiting and self.waiting[0] == username and self.waiting[1] is ws:
-            self.waiting = None
-            try: await ws.send_json({"type":"queue_timeout"})
-            except Exception: pass
-
-    async def send_state(self, game_id: str):
-        game = self.games.get(game_id)
-        if not game:
-            return
-        for symbol, uname in game["players"].items():
-            ws = game["sockets"].get(uname)
-            if not ws:
-                continue
-            opponent_symbol = "O" if symbol == "X" else "X"
-            try:
-                await ws.send_json({
-                    "type": "state",
-                    "board": game["board"],
-                    "your_symbol": symbol,
-                    "turn": game["turn"],
-                    "winner": game["winner"],
-                    "opponent": game["players"][opponent_symbol],
-                })
-            except Exception:
-                pass
-
-    async def move(self, username: str, cell):
-        game_id = self.player_game.get(username)
-        if not game_id or game_id not in self.games:
-            return
-        game = self.games[game_id]
-        if game["winner"] is not None:
-            return
-        symbol = "X" if game["players"]["X"] == username else "O"
-        if game["turn"] != symbol:
-            return
-        if not isinstance(cell, int) or not (0 <= cell < 9) or game["board"][cell]:
-            return
-
-        game["board"][cell] = symbol
-        winner = check_winner(game["board"])
-        if winner:
-            game["winner"] = winner
-            winner_user = game["players"][winner]
-            loser_user = game["players"]["O" if winner == "X" else "X"]
-            await db.update_stats(winner_user, wins=1, points=3)
-            await db.update_stats(loser_user, losses=1)
-        elif "" not in game["board"]:
-            game["winner"] = "draw"
-            for u in game["players"].values():
-                await db.update_stats(u, draws=1, points=1)
-        else:
-            game["turn"] = "O" if symbol == "X" else "X"
-
-        await self.send_state(game_id)
-
-    async def _forfeit(self, game_id: str, leaving: str):
-        game = self.games.get(game_id)
-        if not game or game.get("winner") is not None:
-            return
-        winner = next((u for u in game["players"].values() if u != leaving), None)
-        game["winner"] = "forfeit"
-        if winner:
-            await db.update_stats(winner, wins=1, points=3)
-            await self._send(game, winner, {"type":"game_won", "reason":"حریف از بازی خارج شد.", "winner":winner})
-            await self._send(game, winner, {"type":"opponent_left", "winner":winner})
-        self.games.pop(game_id, None)
-        for u in game["players"].values():
-            self.player_game.pop(u, None)
-
-    async def leave(self, username: str):
-        if self.waiting and self.waiting[0] == username:
-            self.waiting = None
-        game_id = self.player_game.get(username)
-        if game_id and game_id in self.games:
-            await self._forfeit(game_id, username)
-
-    async def disconnect(self, username: str):
-        if self.waiting and self.waiting[0] == username:
-            self.waiting = None
-        game_id = self.player_game.get(username)
-        if game_id and game_id in self.games:
-            await self._forfeit(game_id, username)
-
-
-ttt_manager = TicTacToeManager()
-
-
-
-@app.get("/game/tictactoe", response_class=HTMLResponse)
-async def tictactoe_page(request: Request):
-    username, blocked = await _require_game_scope(request, "tictactoe")
-    if blocked: return blocked
-    return tpl.tictactoe_page(username)
-
-
-@app.websocket("/ws/tictactoe")
-async def ws_tictactoe(websocket: WebSocket):
-    username = websocket.session.get("username")
-    if not username:
-        await websocket.close(code=4001)
-        return
-    if not _is_support(username) and (await _ban_for(username, "games") or await _ban_for(username, "tictactoe")):
-        await websocket.close(code=4003)
-        return
-    await ttt_manager.connect(username, websocket)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            if data.get("type") == "move":
-                await ttt_manager.move(username, data.get("cell"))
-    except WebSocketDisconnect:
-        await ttt_manager.disconnect(username)
-
-
-# ============================================================
 #                 DRAWING GAME (نقاشی حدسی دو نفره)
 # ============================================================
 
@@ -842,7 +686,7 @@ DRAW_OPTIONS_COUNT = 12
 
 class MultiplayerDrawingManager:
     def __init__(self):
-        self.waiting={4:[],6:[]}; self.games={}; self.player_game={}; self.lock=asyncio.Lock()
+        self.waiting={4:[]}; self.games={}; self.player_game={}; self.lock=asyncio.Lock()
     async def connect(self, username, ws, mode):
         await ws.accept()
         async with self.lock:
