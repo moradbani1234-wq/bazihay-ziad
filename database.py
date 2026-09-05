@@ -51,6 +51,10 @@ async def init_db():
             await db.execute("ALTER TABLE stats ADD COLUMN wrong_guesses INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
+        await db.execute("""CREATE TABLE IF NOT EXISTS room_music (
+            room TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL,
+            added_by TEXT NOT NULL, target_user TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
@@ -197,3 +201,27 @@ async def profile(username):
                                FROM users u LEFT JOIN stats s ON s.username=u.username WHERE u.username=?""", (username,))
         r=await cur.fetchone()
         return dict(r) if r else None
+
+
+async def get_messages_after(room, after_id=0, limit=100):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur = await db.execute("SELECT id,sender,content,reply_to_id,created_at FROM messages WHERE room=? AND id>? ORDER BY id ASC LIMIT ?", (room, int(after_id), limit))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def set_room_music(room, title, url, added_by, target_user=''):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT INTO room_music(room,title,url,added_by,target_user,created_at,active) VALUES(?,?,?,?,?,?,1) ON CONFLICT(room) DO UPDATE SET title=excluded.title,url=excluded.url,added_by=excluded.added_by,target_user=excluded.target_user,created_at=excluded.created_at,active=1", (room, title[:120], url[:1000], added_by, target_user[:64], int(time.time())))
+        await db.commit()
+
+async def get_room_music(room):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT * FROM room_music WHERE room=? AND active=1", (room,))
+        r=await cur.fetchone()
+        return dict(r) if r else None
+
+async def clear_room_music(room):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE room_music SET active=0 WHERE room=?", (room,))
+        await db.commit()

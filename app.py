@@ -346,6 +346,10 @@ async def ws_chat_public(websocket: WebSocket):
         await websocket.close(code=4003)
         return
     await chat_manager.connect_public(websocket)
+    music_manager.add(websocket)
+    current_music = await db.get_room_music("public")
+    if current_music:
+        await websocket.send_json({"type":"music", "music":current_music})
     try:
         while True:
             data = await websocket.receive_json()
@@ -358,6 +362,60 @@ async def ws_chat_public(websocket: WebSocket):
     except WebSocketDisconnect:
         chat_manager.disconnect_public(websocket)
 
+
+@app.get("/chat/public/messages")
+async def chat_public_messages(request: Request, after: int = 0):
+    username, blocked = await _require_scope(request, "chat")
+    if blocked: return {"ok": False, "error": "blocked"}
+    rows = await db.get_messages_after("public", max(0, after))
+    return {"ok": True, "messages": rows}
+
+@app.get("/chat/public/music")
+async def chat_public_music(request: Request):
+    username, blocked = await _require_scope(request, "chat")
+    if blocked: return {"ok": False, "error": "blocked"}
+    return {"ok": True, "music": await db.get_room_music("public")}
+
+class MusicManager:
+    def __init__(self):
+        self.conns: set[WebSocket] = set()
+    def add(self, ws): self.conns.add(ws)
+    def remove(self, ws): self.conns.discard(ws)
+    async def broadcast(self, payload):
+        dead=[]
+        for ws in list(self.conns):
+            try: await ws.send_json(payload)
+            except Exception: dead.append(ws)
+        for ws in dead: self.conns.discard(ws)
+
+music_manager = MusicManager()
+
+@app.post("/support/music")
+async def support_music(request: Request):
+    username = _require_login(request)
+    if not username or not _is_support(username):
+        return {"ok": False, "error": "forbidden"}
+    data = await request.json()
+    title = str(data.get("title") or "آهنگ چت روم").strip()[:120]
+    url = str(data.get("url") or "").strip()[:1000]
+    target = str(data.get("target_user") or "").strip()[:64]
+    if not url or not (url.startswith("https://") or url.startswith("http://")):
+        return {"ok": False, "error": "bad_url"}
+    if target and not await db.get_user(target):
+        return {"ok": False, "error": "user_not_found"}
+    await db.set_room_music("public", title, url, username, target)
+    music = await db.get_room_music("public")
+    await music_manager.broadcast({"type":"music","music":music})
+    return {"ok": True, "music": music}
+
+@app.post("/support/music/clear")
+async def support_music_clear(request: Request):
+    username = _require_login(request)
+    if not username or not _is_support(username):
+        return {"ok": False, "error": "forbidden"}
+    await db.clear_room_music("public")
+    await music_manager.broadcast({"type":"music_clear"})
+    return {"ok": True}
 
 # ============================================================
 #                       PRIVATE CHAT
