@@ -13,6 +13,7 @@ import auth
 import database as db
 import templates as tpl
 import words_draw
+import aiosqlite
 
 app = FastAPI()
 app.add_middleware(
@@ -170,6 +171,63 @@ async def game_leave(request: Request):
     await ttt_manager.leave(username)
     await drawing_manager.leave(username)
     return {"ok": True, "redirect": "/lobby"}
+
+@app.get("/wallet")
+async def wallet_data(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    return {"ok":True,"wallet":await db.wallet_for(username)}
+
+@app.post("/daily/claim")
+async def daily_claim(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    ok,w=await db.claim_daily(username)
+    return {"ok":ok,"wallet":w,"message":"جایزه امروز قبلاً گرفته شده." if not ok else f"🎁 +{w.get('reward',0)} سکه"}
+
+@app.post("/shop/buy")
+async def shop_buy(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); key=str(data.get("item_key") or "").strip(); cost=int(data.get("cost") or 0)
+    catalog={"neon_pen":250,"profile_frame":400,"victory_fx":650,"crown_badge":900}
+    if key not in catalog or cost!=catalog[key]: return {"ok":False,"error":"invalid_item"}
+    ok,status,w=await db.buy_item(username,key,cost)
+    return {"ok":ok,"status":status,"wallet":w}
+
+@app.post("/game/invite")
+async def game_invite(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); receiver=str(data.get("receiver") or "").strip(); mode=str(data.get("mode") or "drawing4")
+    if receiver==username or not await db.get_user(receiver) or mode not in {"drawing4","drawing6"}: return {"ok":False,"error":"invalid"}
+    async with aiosqlite.connect(db.DB_PATH) as conn:
+        await conn.execute("INSERT INTO game_invites(sender,receiver,mode,status,created_at) VALUES(?,?,?,?,?)",(username,receiver,mode,"pending",int(time.time())))
+        await conn.commit()
+    return {"ok":True}
+
+@app.get("/notifications")
+async def notifications(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    reqs=await db.friend_requests_for(username)
+    async with aiosqlite.connect(db.DB_PATH) as conn:
+        conn.row_factory=aiosqlite.Row
+        cur=await conn.execute("SELECT id,sender,mode,created_at FROM game_invites WHERE receiver=? AND status='pending' ORDER BY id DESC LIMIT 20",(username,))
+        inv=[dict(r) for r in await cur.fetchall()]
+    return {"ok":True,"friend_requests":reqs,"invites":inv,"count":len(reqs)+len(inv)}
+
+@app.post("/game/invite/respond")
+async def game_invite_respond(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); iid=int(data.get("id") or 0); accept=bool(data.get("accept"))
+    async with aiosqlite.connect(db.DB_PATH) as conn:
+        conn.row_factory=aiosqlite.Row
+        cur=await conn.execute("SELECT * FROM game_invites WHERE id=? AND receiver=? AND status='pending'",(iid,username)); row=await cur.fetchone()
+        if not row: return {"ok":False,"error":"not_found"}
+        await conn.execute("UPDATE game_invites SET status=? WHERE id=?",("accepted" if accept else "rejected",iid)); await conn.commit()
+    return {"ok":True,"mode":row["mode"] if accept else None}
 
 @app.get("/support", response_class=HTMLResponse)
 async def support_page(request: Request):
@@ -337,13 +395,13 @@ async def lobby(request: Request):
     username = _require_login(request)
     if not username:
         return RedirectResponse("/login")
-    return tpl.lobby_page(username)
+    return tpl.lobby_page(username, await db.profile(username), await db.wallet_for(username))
 
 @app.get("/shop", response_class=HTMLResponse)
 async def shop_page(request: Request):
     username=_require_login(request)
     if not username: return RedirectResponse("/login")
-    return tpl.shop_page(username)
+    return tpl.shop_page(username, await db.wallet_for(username))
 
 @app.get("/games", response_class=HTMLResponse)
 async def games_page(request: Request):
@@ -420,6 +478,13 @@ class ChatManager:
             except Exception:
                 pass
 
+    async def broadcast_typing(self, room, sender, typing):
+        for ws in list(self.public_conns if room=="public" else self.private_conns.get(room, set())):
+            try:
+                await ws.send_json({"type":"typing","sender":sender,"typing":bool(typing)})
+            except Exception:
+                pass
+
 
 chat_manager = ChatManager()
 
@@ -442,6 +507,8 @@ async def ws_chat_public(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
+            if data.get("type")=="typing":
+                await chat_manager.broadcast_typing("public", username, data.get("typing")); continue
             content = (data.get("content") or "").strip()
             if content:
                 if not _is_support(username) and await _ban_for(username, "chat"):
@@ -561,6 +628,8 @@ async def ws_chat_private(websocket: WebSocket, other: str):
     try:
         while True:
             data = await websocket.receive_json()
+            if data.get("type")=="typing":
+                await chat_manager.broadcast_typing(room, username, data.get("typing")); continue
             content = (data.get("content") or "").strip()
             if content:
                 if not _is_support(username) and await _ban_for(username, "chat"):
@@ -757,6 +826,117 @@ DRAW_SCOREBOARD_SECONDS = 5
 DRAW_FINAL_RESULT_SECONDS = 7
 DRAW_TOTAL_ROUNDS = 4
 DRAW_OPTIONS_COUNT = 12
+
+
+class MultiplayerDrawingManager:
+    def __init__(self):
+        self.waiting={4:[],6:[]}; self.games={}; self.player_game={}; self.lock=asyncio.Lock()
+    async def connect(self, username, ws, mode):
+        await ws.accept()
+        async with self.lock:
+            gid=self.player_game.get(username)
+            if gid in self.games and self.games[gid]["mode"]==mode:
+                self.games[gid]["sockets"][username]=ws; await self._send_state(self.games[gid],username); return
+            queue=self.waiting[mode]
+            queue[:]=[(u,s) for u,s in queue if u!=username]
+            queue.append((username,ws))
+            if len(queue)<mode:
+                await ws.send_json({"type":"waiting","needed":mode,"count":len(queue)}); return
+            picked=queue[:mode]; del queue[:mode]
+            gid=secrets.token_hex(7); players=[u for u,_ in picked]
+            g={"id":gid,"mode":mode,"players":players,"active":players[:],"sockets":{u:s for u,s in picked},"scores":{u:0 for u in players},"round":0,"drawer":None,"word":None,"options":[],"guesses":{},"wrong":{u:set() for u in players},"round_active":False,"deadline":0.0,"strokes":[]}
+            self.games[gid]=g
+            for u in players:self.player_game[u]=gid
+        await self._next_round(gid)
+    async def _send(self,g,u,p):
+        ws=g["sockets"].get(u)
+        if ws:
+            try: await ws.send_json(p)
+            except Exception: pass
+    async def _broadcast(self,g,p):
+        for u in g["active"]: await self._send(g,u,p)
+    async def _send_state(self,g,u):
+        await self._send(g,u,{"type":"rejoin","round":g["round"],"total_rounds":g["mode"],"drawer":g["drawer"],"role":"drawer" if u==g["drawer"] else "guesser","word":g["word"] if u==g["drawer"] else None,"options":g["options"] if u!=g["drawer"] else [],"active":g["active"],"scores":g["scores"],"strokes":g["strokes"],"remaining":max(1,round(g["deadline"]-time.monotonic()))})
+    async def _next_round(self,gid):
+        g=self.games.get(gid)
+        if not g:return
+        g["round"]+=1
+        if g["round"]>g["mode"]: return await self._finish(gid)
+        if not g["active"]: return await self._finish(gid)
+        drawer=g["active"][(g["round"]-1)%len(g["active"])]
+        word,options=words_draw.pick_round_words(min(12,max(8,len(g["active"])*2)))
+        g.update({"drawer":drawer,"word":word,"options":options,"guesses":{},"wrong":{u:set() for u in g["active"]},"round_active":True,"deadline":time.monotonic()+DRAW_ROUND_SECONDS,"strokes":[]})
+        for u in g["active"]:
+            await self._send(g,u,{"type":"round_start","round":g["round"],"total_rounds":g["mode"],"duration":DRAW_ROUND_SECONDS,"role":"drawer" if u==drawer else "guesser","word":word if u==drawer else None,"options":options if u!=drawer else [],"drawer":drawer,"active":g["active"],"scores":g["scores"]})
+        asyncio.create_task(self._timeout(gid,g["round"]))
+    async def _timeout(self,gid,r):
+        await asyncio.sleep(DRAW_ROUND_SECONDS)
+        g=self.games.get(gid)
+        if g and g["round_active"] and g["round"]==r: await self._end_round(gid,False)
+    async def draw(self,username,data):
+        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
+        if not g or not g["round_active"] or username!=g["drawer"]:return
+        if data.get("type")=="clear":g["strokes"]=[]; await self._broadcast(g,{"type":"clear"}); return
+        if data.get("type")!="draw":return
+        stroke={"type":"draw","x0":data.get("x0"),"y0":data.get("y0"),"x1":data.get("x1"),"y1":data.get("y1"),"color":data.get("color","#111"),"size":max(1,min(30,float(data.get("size") or 4)))}
+        g["strokes"].append(stroke); await self._broadcast(g,stroke)
+    async def guess(self,username,word):
+        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
+        if not g or not g["round_active"] or username==g["drawer"] or username not in g["active"]:return
+        word=(word or '').strip()
+        if not word or username in g["guesses"] or word in g["wrong"].setdefault(username,set()):return
+        if word==g["word"]:
+            now=time.monotonic(); g["guesses"][username]=now; pts=max(10,round(max(0,g["deadline"]-now)/DRAW_ROUND_SECONDS*100)); g["scores"][username]+=pts; await db.update_stats(username,correct_guesses=1,points=pts); await self._send(g,username,{"type":"correct","points":pts})
+            if len(g["guesses"])>=max(1,len(g["active"])-1): await self._end_round(gid,True)
+        else:
+            g["wrong"].setdefault(username,set()).add(word); await db.update_stats(username,wrong_guesses=1); await self._send(g,username,{"type":"guess_wrong","word":word})
+    async def _end_round(self,gid,correct):
+        g=self.games.get(gid)
+        if not g or not g["round_active"]:return
+        g["round_active"]=False; eliminated=None
+        if g["mode"]==6 and g["round"] < 6 and len(g["active"])>1:
+            candidates=[u for u in g["active"] if u!=g["drawer"]]
+            if candidates:
+                eliminated=max(candidates,key=lambda u:g["guesses"].get(u,float('inf'))); g["active"].remove(eliminated); await db.update_stats(eliminated,losses=1)
+        await self._broadcast(g,{"type":"round_result","round":g["round"],"total_rounds":g["mode"],"word":g["word"],"scores":g["scores"],"eliminated":eliminated,"active":g["active"],"is_last":g["round"]>=g["mode"],"break_seconds":5})
+        asyncio.create_task(self._advance(gid))
+    async def _advance(self,gid):
+        await asyncio.sleep(5); g=self.games.get(gid)
+        if not g:return
+        if g["round"]>=g["mode"] or len(g["active"])<=1:return await self._finish(gid)
+        await self._next_round(gid)
+    async def _finish(self,gid):
+        g=self.games.pop(gid,None)
+        if not g:return
+        winner=max(g["active"],key=lambda u:g["scores"].get(u,0)) if g["active"] else None
+        if winner: await db.update_stats(winner,wins=1,points=g["scores"].get(winner,0))
+        await self._broadcast(g,{"type":"game_over","winner":winner,"scores":g["scores"],"active":g["active"]})
+        for u in g["players"]:self.player_game.pop(u,None)
+    async def leave(self,username):
+        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
+        if not g:return
+        if username in g["active"]:g["active"].remove(username)
+        self.player_game.pop(username,None)
+        if len(g["active"])<=1: await self._finish(gid)
+        else: await self._broadcast(g,{"type":"player_left","username":username,"active":g["active"]})
+    async def disconnect(self,username):
+        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
+        if g:g["sockets"].pop(username,None)
+
+multiplayer_drawing_manager=MultiplayerDrawingManager()
+
+@app.websocket("/ws/drawing-multi/{mode}")
+async def ws_drawing_multi(websocket: WebSocket, mode: int):
+    username=websocket.session.get("username")
+    if not username or mode not in (4,6): await websocket.close(code=4001); return
+    if not _is_support(username) and (await _ban_for(username,"games") or await _ban_for(username,"drawing")): await websocket.close(code=4003); return
+    await multiplayer_drawing_manager.connect(username,websocket,mode)
+    try:
+        while True:
+            data=await websocket.receive_json(); typ=data.get("type")
+            if typ in ("draw","clear"): await multiplayer_drawing_manager.draw(username,data)
+            elif typ=="guess": await multiplayer_drawing_manager.guess(username,data.get("word"))
+    except WebSocketDisconnect: await multiplayer_drawing_manager.disconnect(username)
 
 
 class DrawingGameManager:
@@ -1027,6 +1207,18 @@ class DrawingGameManager:
 
 drawing_manager = DrawingGameManager()
 
+
+@app.get("/game/drawing4", response_class=HTMLResponse)
+async def drawing4_page(request: Request):
+    username, blocked = await _require_game_scope(request, "drawing")
+    if blocked: return blocked
+    return tpl.multiplayer_drawing_page(username, 4)
+
+@app.get("/game/drawing6", response_class=HTMLResponse)
+async def drawing6_page(request: Request):
+    username, blocked = await _require_game_scope(request, "drawing")
+    if blocked: return blocked
+    return tpl.multiplayer_drawing_page(username, 6)
 
 @app.get("/game/drawing", response_class=HTMLResponse)
 async def drawing_page(request: Request):

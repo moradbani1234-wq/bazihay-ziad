@@ -77,6 +77,19 @@ async def init_db():
             status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL
         )""")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS wallet (
+            username TEXT PRIMARY KEY, coins INTEGER NOT NULL DEFAULT 500, diamonds INTEGER NOT NULL DEFAULT 5,
+            last_daily INTEGER NOT NULL DEFAULT 0, streak INTEGER NOT NULL DEFAULT 0
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS owned_items (
+            username TEXT NOT NULL, item_key TEXT NOT NULL, purchased_at INTEGER NOT NULL,
+            PRIMARY KEY(username,item_key)
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS game_invites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT NOT NULL, receiver TEXT NOT NULL,
+            mode TEXT NOT NULL DEFAULT 'drawing4', status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_invites_receiver ON game_invites(receiver,status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
@@ -88,6 +101,7 @@ async def create_user(username, password_hash, salt, is_support=False):
             await db.execute("INSERT INTO users (username,password_hash,salt,created_at,is_support) VALUES (?,?,?,?,?)",
                              (username,password_hash,salt,int(time.time()),1 if is_support else 0))
             await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)", (username,))
+            await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)", (username,))
             await db.commit()
         return True
     except aiosqlite.IntegrityError:
@@ -101,6 +115,7 @@ async def ensure_support_account(username, password_hash, salt):
                            password_hash=excluded.password_hash, salt=excluded.salt, is_support=1""",
                        (username,password_hash,salt,int(time.time())))
         await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)", (username,))
+        await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)", (username,))
         await db.commit()
 
 async def get_user(username):
@@ -344,3 +359,44 @@ async def get_support_tickets(limit=100):
         db.row_factory=aiosqlite.Row
         cur=await db.execute("SELECT * FROM support_tickets ORDER BY id DESC LIMIT ?",(limit,))
         return [dict(r) for r in await cur.fetchall()]
+
+
+async def wallet_for(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)", (username,))
+        await db.commit()
+        cur=await db.execute("SELECT * FROM wallet WHERE username=?", (username,))
+        r=await cur.fetchone()
+        return dict(r) if r else {"username":username,"coins":500,"diamonds":5,"last_daily":0,"streak":0}
+
+async def claim_daily(username):
+    now=int(time.time()); today=now//86400
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)", (username,))
+        cur=await db.execute("SELECT * FROM wallet WHERE username=?", (username,))
+        w=dict(await cur.fetchone())
+        last_day=(w.get("last_daily",0)//86400)
+        if last_day==today:
+            return False,w
+        streak=w.get("streak",0)+1 if last_day==today-1 else 1
+        reward=min(1000,200+100*min(streak-1,8))
+        await db.execute("UPDATE wallet SET coins=coins+?,last_daily=?,streak=? WHERE username=?",(reward,now,streak,username))
+        await db.commit()
+        w["coins"]+=reward; w["last_daily"]=now; w["streak"]=streak
+        return True,{**w,"reward":reward}
+
+async def buy_item(username,item_key,cost):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)",(username,))
+        cur=await db.execute("SELECT coins FROM wallet WHERE username=?",(username,)); r=await cur.fetchone()
+        if not r or r[0] < cost: return False,"not_enough",None
+        cur=await db.execute("SELECT 1 FROM owned_items WHERE username=? AND item_key=?",(username,item_key));
+        if await cur.fetchone(): return False,"owned",None
+        await db.execute("UPDATE wallet SET coins=coins-? WHERE username=?",(cost,username))
+        await db.execute("INSERT INTO owned_items(username,item_key,purchased_at) VALUES(?,?,?)",(username,item_key,int(time.time())))
+        await db.commit()
+        cur=await db.execute("SELECT * FROM wallet WHERE username=?",(username,)); w=dict(await cur.fetchone())
+        return True,"ok",w
