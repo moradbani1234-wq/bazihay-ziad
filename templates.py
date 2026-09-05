@@ -297,13 +297,7 @@ def _nav(username: str | None) -> str:
 
 
 def page_shell(title: str, body: str, username: str | None = None) -> str:
-    active="home"
-    if "رتبه" in title: active="leaderboard"
-    elif "پیام" in title or "چت" in title or "گفتگو" in title: active="messages"
-    elif "فروشگاه" in title: active="shop"
-    elif "تنظیمات" in title: active="settings"
-    nav=_neon_nav(username,active) if username else _nav(username)
-    return f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title><style>{BASE_CSS}</style></head><body>{nav}<div class="container">{body}</div></body></html>"""
+    return f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title><style>{BASE_CSS}</style></head><body><div class="container">{body}</div></body></html>"""
 
 
 def login_page(error: str | None = None) -> str:
@@ -897,25 +891,48 @@ def drawing_page(username: str) -> str:
         ctx.stroke();
     }
 
+    let pendingSegments = [];
+    let flushScheduled = false;
+
+    function queueSegment(x0, y0, x1, y1, color, size) {
+        pendingSegments.push({x0, y0, x1, y1, color, size});
+        if (!flushScheduled) {
+            flushScheduled = true;
+            requestAnimationFrame(flushSegments);
+        }
+    }
+
+    function flushSegments() {
+        flushScheduled = false;
+        if (!pendingSegments.length) return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({type: "draw_batch", segments: pendingSegments}));
+        }
+        pendingSegments = [];
+    }
+
     canvas.addEventListener("pointerdown", (ev) => {
         if (role !== "drawer") return;
         drawing = true;
+        canvas.setPointerCapture(ev.pointerId);
         const p = canvasPos(ev);
         lastX = p.x; lastY = p.y;
     });
     canvas.addEventListener("pointermove", (ev) => {
         if (role !== "drawer" || !drawing) return;
-        const p = canvasPos(ev);
         const paintColor = tool === "eraser" ? "#ffffff" : currentColor;
-        drawLine(lastX, lastY, p.x, p.y, paintColor, currentSize);
-        const n0 = normPoint(lastX, lastY);
-        const n1 = normPoint(p.x, p.y);
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y,
-            color: tool === "eraser" ? "#ffffff" : currentColor, size: currentSize}));
-        lastX = p.x; lastY = p.y;
+        const events = ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
+        for (const ce of (events.length ? events : [ev])) {
+            const p = canvasPos(ce);
+            drawLine(lastX, lastY, p.x, p.y, paintColor, currentSize);
+            const n0 = normPoint(lastX, lastY);
+            const n1 = normPoint(p.x, p.y);
+            queueSegment(n0.x, n0.y, n1.x, n1.y, paintColor, currentSize);
+            lastX = p.x; lastY = p.y;
+        }
     });
     ["pointerup", "pointerleave", "pointercancel"].forEach(evName => {
-        canvas.addEventListener(evName, () => { drawing = false; });
+        canvas.addEventListener(evName, () => { drawing = false; flushSegments(); });
     });
 
     clearBtn.addEventListener("click", () => {
@@ -1038,6 +1055,15 @@ def drawing_page(username: str) -> str:
             const x1 = data.x1 * canvas.width, y1 = data.y1 * canvas.height;
             const remoteSize = Math.max(1, Math.min(30, Number(data.size) || 4));
             drawLine(x0, y0, x1, y1, data.color || "#111111", remoteSize);
+        }
+
+        else if (data.type === "draw_batch") {
+            (data.segments || []).forEach(seg => {
+                const x0 = seg.x0 * canvas.width, y0 = seg.y0 * canvas.height;
+                const x1 = seg.x1 * canvas.width, y1 = seg.y1 * canvas.height;
+                const remoteSize = Math.max(1, Math.min(30, Number(seg.size) || 4));
+                drawLine(x0, y0, x1, y1, seg.color || "#111111", remoteSize);
+            });
         }
 
         else if (data.type === "clear") {
@@ -1292,7 +1318,7 @@ def _bottom_nav(active="home"):
     return '<div class="neon-bottom-nav">'+''.join(f'<a class="{("active" if active==k else "")}" href="/{k}"><span>{ic}</span>{title}</a>' for k,ic,title in items)+'</div>'
 
 def lobby_page(username, prof=None, wallet=None):
-    body=f"""<div class="lobby-bg page-enter"><div class="lobby-top-title">🎨 تخته گچی</div><div class="lobby-user-card"><a class="lobby-user-avatar" href="/profile?u={quote(username,safe='')}">🎮</a><div class="lobby-user-name">{html.escape(username)}</div><div class="lobby-stat-grid"><div class="lobby-stat"><div class="ico">🎮</div><b>{(prof or {}).get("wins",0)+(prof or {}).get("losses",0)+(prof or {}).get("draws",0)}</b><span>بازی ها</span></div><div class="lobby-stat"><div class="ico">🏆</div><b>{(prof or {}).get("wins",0)}</b><span>جام ها</span></div><div class="lobby-stat"><div class="ico">💎</div><b>{(wallet or {}).get("diamonds",5)}</b><span>الماس</span></div></div></div><span class="mode-pill" style="background:#1f8fe0">⚡ دو نفره سریع</span><div class="mode-card"><h2>🎨 حدس نقاشی دو نفره</h2><p>۲ بازیکن • ۶ دور • به نوبت یک نفر نقاشی می‌کشد و دیگری حدس می‌زند.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start2" href="/game/drawing">▶ شروع بازی</a></div></div><span class="mode-pill">🎨 بازی حدس نقاشی</span><div class="mode-card"><h2>🎨 حدس نقاشی ۴ نفره</h2><p>۴ بازیکن • ۴ دور • هر دور یک نفر نقاش است و بقیه حدس می‌زنند.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start4" href="/game/drawing4">▶ شروع بازی</a></div></div><span class="mode-pill" style="background:#d83f96">🔥 حالت حذفی ۶ نفره</span><div class="mode-card"><h2>🎯 حدس نقاشی ۶ نفره</h2><p>۶ بازیکن • ۶ دور • در هر دور کندترین بازیکنِ درست‌حدس‌زن حذف می‌شود.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start6" href="/game/drawing6">▶ شروع بازی</a></div></div><div class="card" style="margin-top:12px;text-align:center;background:rgba(12,8,29,.75)"><a class="btn" href="/chat/public">🌐 چت عمومی</a> <a class="btn" href="/support/ticket">🛡️ پشتیبانی</a></div></div>{_bottom_nav("home")}<div id="inviteBox" class="invite-box"></div><script>async function pollNotify(){{try{{const d=await (await fetch('/notifications')).json();const inv=d.invites?.[0];if(inv){{const box=document.getElementById('inviteBox');box.innerHTML='🎮 <b>'+inv.sender+'</b> تو را به بازی '+(inv.mode==='drawing6'?'۶ نفره':'۴ نفره')+' دعوت کرده!<div style="display:flex;gap:6px;margin-top:9px"><button onclick="answerInvite('+inv.id+',true)">قبول</button><button onclick="answerInvite('+inv.id+',false)">رد</button></div>';box.style.display='block';}}}}catch(e){{}}}}async function answerInvite(id,accept){{const d=await (await fetch('/game/invite/respond',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{id,accept}})}})).json();if(d.ok&&accept)location.href='/game/'+d.mode;else document.getElementById('inviteBox').style.display='none'}}pollNotify();setInterval(pollNotify,5000);</script>"""
+    body=f"""<div class="lobby-bg page-enter"><div class="lobby-top-title">🎨 تخته گچی</div><div class="lobby-user-card"><a class="lobby-user-avatar" href="/profile?u={quote(username,safe='')}">🎮</a><div class="lobby-user-name">{html.escape(username)}</div></div><span class="mode-pill" style="background:#1f8fe0">⚡ دو نفره سریع</span>""" + """<div class="mode-card"><h2>🎨 حدس نقاشی دو نفره</h2><p>۲ بازیکن • ۶ دور • به نوبت یک نفر نقاشی می‌کشد و دیگری حدس می‌زند.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start2" href="/game/drawing">▶ شروع بازی</a></div></div><span class="mode-pill">🎨 بازی حدس نقاشی</span><div class="mode-card"><h2>🎨 حدس نقاشی ۴ نفره</h2><p>۴ بازیکن • ۴ دور • هر دور یک نفر نقاش است و بقیه حدس می‌زنند.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start4" href="/game/drawing4">▶ شروع بازی</a></div></div><span class="mode-pill" style="background:#d83f96">🔥 حالت حذفی ۶ نفره</span><div class="mode-card"><h2>🎯 حدس نقاشی ۶ نفره</h2><p>۶ بازیکن • ۶ دور • در هر دور کندترین بازیکنِ درست‌حدس‌زن حذف می‌شود.</p><div class="mode-actions"><a class="friends" href="/messages">👥 دوستان</a><a class="start6" href="/game/drawing6">▶ شروع بازی</a></div></div><div class="card" style="margin-top:12px;text-align:center;background:rgba(12,8,29,.75)"><a class="btn" href="/chat/public">🌐 چت عمومی</a> <a class="btn" href="/support/ticket">🛡️ پشتیبانی</a></div></div>""" + f"""{_bottom_nav("home")}<div id="inviteBox" class="invite-box"></div><script>async function pollNotify(){{try{{const d=await (await fetch('/notifications')).json();const inv=d.invites?.[0];if(inv){{const box=document.getElementById('inviteBox');box.innerHTML='🎮 <b>'+inv.sender+'</b> تو را به بازی '+(inv.mode==='drawing6'?'۶ نفره':'۴ نفره')+' دعوت کرده!<div style="display:flex;gap:6px;margin-top:9px"><button onclick="answerInvite('+inv.id+',true)">قبول</button><button onclick="answerInvite('+inv.id+',false)">رد</button></div>';box.style.display='block';}}}}catch(e){{}}}}async function answerInvite(id,accept){{const d=await (await fetch('/game/invite/respond',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{id,accept}})}})).json();if(d.ok&&accept)location.href='/game/'+d.mode;else document.getElementById('inviteBox').style.display='none'}}pollNotify();setInterval(pollNotify,5000);</script>"""
     return page_shell('منوی اصلی',body,username)
 
 def games_page(username):
@@ -1305,8 +1331,8 @@ def multiplayer_drawing_page(username, mode):
 const mode={mode}, me={username!r}, wsProto=location.protocol==='https:'?'wss:':'ws:';let ws,recon,timerInt;const c=document.getElementById('canvas'),ctx=c.getContext('2d'),status=document.getElementById('status'),round=document.getElementById('round'),timer=document.getElementById('timer'),opts=document.getElementById('options'),score=document.getElementById('score'),result=document.getElementById('result'),queueBox=document.getElementById('queueBox'),gameArea=document.getElementById('gameArea');let drawer=false,drawing=false,last=null;
 function renderQueue(n,needed){{queueBox.style.display='flex';gameArea.style.display='none';status.style.display='none';let dots='';for(let i=0;i<needed;i++)dots+='<div class="queue-dot'+(i<n?' filled':'')+'"></div>';queueBox.innerHTML='<div class="queue-spinner"></div><div class="queue-dots">'+dots+'</div><div class="queue-text">'+n+' از '+needed+' نفر در صف هستند</div><div class="queue-sub">صبور باش؛ به‌محض تکمیل ظرفیت، بازی شروع می‌شود ✨</div>'}}
 function enterGame(){{queueBox.style.display='none';gameArea.style.display='block';status.style.display='block'}}
-function paint(x0,y0,x1,y1,color,size){{ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke()}}function clearBoard(){{ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}}clearBoard();function pos(e){{const r=c.getBoundingClientRect();return {{x:(e.clientX-r.left)*c.width/r.width,y:(e.clientY-r.top)*c.height/r.height}}}}c.addEventListener('pointerdown',e=>{{if(!drawer)return;drawing=true;last=pos(e)}});c.addEventListener('pointermove',e=>{{if(!drawer||!drawing)return;const p=pos(e),st={{type:'draw',x0:last.x,y0:last.y,x1:p.x,y1:p.y,color:'#20163a',size:5}};paint(st.x0,st.y0,st.x1,st.y1,st.color,st.size);ws?.send(JSON.stringify(st));last=p}});window.addEventListener('pointerup',()=>drawing=false);
-function renderScores(scores,active){{score.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,s])=>{{const d=document.createElement('div');d.className='mp-player'+((active||[]).includes(u)?'':' out');const a2=document.createElement('a');a2.className='profile-link';a2.target='_blank';a2.rel='noopener';a2.href='/profile?u='+encodeURIComponent(u);a2.textContent=u+' • '+s+' ⭐';d.appendChild(a2);score.appendChild(d)}})}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/drawing-multi/'+mode);ws.onopen=()=>status.textContent='🟢 وصل شد؛ در حال پیدا کردن بازیکن‌ها...';ws.onclose=()=>{{if(!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onmessage=e=>onMsg(JSON.parse(e.data))}}function onMsg(d){{if(d.type==='rejoin'){{enterGame();drawer=d.role==='drawer';round.textContent='دور '+d.round+' / '+d.total_rounds+(drawer?' • تو نقاشی 🎨':' • حدس بزن 🔎');opts.innerHTML='';clearBoard();renderScores(d.scores,d.active);(d.strokes||[]).forEach(st=>paint(st.x0,st.y0,st.x1,st.y1,st.color,st.size));status.textContent=drawer?'کلمه: '+d.word:'نقاش: '+d.drawer;return}}if(d.type==='waiting'){{renderQueue(d.count,d.needed);return}}if(d.type==='round_start'){{enterGame();drawer=d.role==='drawer';round.textContent='دور '+d.round+' / '+d.total_rounds+(drawer?' • تو نقاشی 🎨':' • حدس بزن 🔎');result.textContent='';opts.innerHTML='';clearBoard();renderScores(d.scores,d.active);status.textContent=drawer?'کلمه: '+d.word:'نقاش: '+d.drawer;(d.options||[]).forEach(w=>{{const b=document.createElement('button');b.textContent=w;b.onclick=()=>{{document.getElementById('guess').value=w;sendGuess()}};opts.appendChild(b)}});let left=d.duration;clearInterval(timerInt);timer.textContent='⏱️ '+left;timerInt=setInterval(()=>{{left--;timer.textContent='⏱️ '+Math.max(0,left);if(left<=0)clearInterval(timerInt)}},1000);return}}if(d.type==='draw'){{paint(d.x0,d.y0,d.x1,d.y1,d.color,d.size);return}}if(d.type==='clear'){{clearBoard();return}}if(d.type==='guess_wrong'){{status.textContent='❌ '+d.word+' درست نبود';return}}if(d.type==='correct'){{status.textContent='✅ درست! +'+d.points+' امتیاز';return}}if(d.type==='round_result'){{result.innerHTML='🎯 <b>کلمه: '+d.word+'</b>'+(d.eliminated?' <br>💥 حذف شد: <b>'+d.eliminated+'</b>':'')+'<br>دور بعدی تا ۵ ثانیه دیگر...';renderScores(d.scores,d.active);return}}if(d.type==='game_over'){{round.textContent='🏆 بازی تمام شد';result.innerHTML='🏆 برنده: <b>'+((d.winner)||'مساوی')+'</b>';renderScores(d.scores,d.active);clearInterval(timerInt)}}if(d.type==='player_left')status.textContent='⚠️ '+d.username+' خارج شد'}}connect();</script>"""
+function paint(x0,y0,x1,y1,color,size){{ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke()}}function clearBoard(){{ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}}clearBoard();function pos(e){{const r=c.getBoundingClientRect();return {{x:(e.clientX-r.left)*c.width/r.width,y:(e.clientY-r.top)*c.height/r.height}}}}let pendingSeg=[],flushSched=false;function queueSeg(s){{pendingSeg.push(s);if(!flushSched){{flushSched=true;requestAnimationFrame(flushSeg)}}}}function flushSeg(){{flushSched=false;if(!pendingSeg.length)return;ws?.send(JSON.stringify({{type:'draw_batch',segments:pendingSeg}}));pendingSeg=[]}}c.addEventListener('pointerdown',e=>{{if(!drawer)return;drawing=true;c.setPointerCapture(e.pointerId);last=pos(e)}});c.addEventListener('pointermove',e=>{{if(!drawer||!drawing)return;const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];(evs.length?evs:[e]).forEach(ce=>{{const p=pos(ce);paint(last.x,last.y,p.x,p.y,'#20163a',5);queueSeg({{x0:last.x,y0:last.y,x1:p.x,y1:p.y,color:'#20163a',size:5}});last=p}})}});window.addEventListener('pointerup',()=>{{drawing=false;flushSeg()}});
+function renderScores(scores,active){{score.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,s])=>{{const d=document.createElement('div');d.className='mp-player'+((active||[]).includes(u)?'':' out');const a2=document.createElement('a');a2.className='profile-link';a2.target='_blank';a2.rel='noopener';a2.href='/profile?u='+encodeURIComponent(u);a2.textContent=u+' • '+s+' ⭐';d.appendChild(a2);score.appendChild(d)}})}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/drawing-multi/'+mode);ws.onopen=()=>status.textContent='🟢 وصل شد؛ در حال پیدا کردن بازیکن‌ها...';ws.onclose=()=>{{if(!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onmessage=e=>onMsg(JSON.parse(e.data))}}function onMsg(d){{if(d.type==='rejoin'){{enterGame();drawer=d.role==='drawer';round.textContent='دور '+d.round+' / '+d.total_rounds+(drawer?' • تو نقاشی 🎨':' • حدس بزن 🔎');opts.innerHTML='';clearBoard();renderScores(d.scores,d.active);(d.strokes||[]).forEach(st=>paint(st.x0,st.y0,st.x1,st.y1,st.color,st.size));status.textContent=drawer?'کلمه: '+d.word:'نقاش: '+d.drawer;return}}if(d.type==='waiting'){{renderQueue(d.count,d.needed);return}}if(d.type==='round_start'){{enterGame();drawer=d.role==='drawer';round.textContent='دور '+d.round+' / '+d.total_rounds+(drawer?' • تو نقاشی 🎨':' • حدس بزن 🔎');result.textContent='';opts.innerHTML='';clearBoard();renderScores(d.scores,d.active);status.textContent=drawer?'کلمه: '+d.word:'نقاش: '+d.drawer;(d.options||[]).forEach(w=>{{const b=document.createElement('button');b.textContent=w;b.onclick=()=>{{document.getElementById('guess').value=w;sendGuess()}};opts.appendChild(b)}});let left=d.duration;clearInterval(timerInt);timer.textContent='⏱️ '+left;timerInt=setInterval(()=>{{left--;timer.textContent='⏱️ '+Math.max(0,left);if(left<=0)clearInterval(timerInt)}},1000);return}}if(d.type==='draw'){{paint(d.x0,d.y0,d.x1,d.y1,d.color,d.size);return}}if(d.type==='draw_batch'){{(d.segments||[]).forEach(s=>paint(s.x0,s.y0,s.x1,s.y1,s.color,s.size));return}}if(d.type==='clear'){{clearBoard();return}}if(d.type==='guess_wrong'){{status.textContent='❌ '+d.word+' درست نبود';return}}if(d.type==='correct'){{status.textContent='✅ درست! +'+d.points+' امتیاز';return}}if(d.type==='round_result'){{result.innerHTML='🎯 <b>کلمه: '+d.word+'</b>'+(d.eliminated?' <br>💥 حذف شد: <b>'+d.eliminated+'</b>':'')+'<br>دور بعدی تا ۵ ثانیه دیگر...';renderScores(d.scores,d.active);return}}if(d.type==='game_over'){{round.textContent='🏆 بازی تمام شد';result.innerHTML='🏆 برنده: <b>'+((d.winner)||'مساوی')+'</b>';renderScores(d.scores,d.active);clearInterval(timerInt)}}if(d.type==='player_left')status.textContent='⚠️ '+d.username+' خارج شد'}}connect();</script>"""
     return page_shell(title,body,username)
 
 def shop_page(username, wallet=None):

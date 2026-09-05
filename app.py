@@ -877,6 +877,13 @@ class MultiplayerDrawingManager:
         gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
         if not g or not g["round_active"] or username!=g["drawer"]:return
         if data.get("type")=="clear":g["strokes"]=[]; await self._broadcast(g,{"type":"clear"}); return
+        if data.get("type")=="draw_batch":
+            segs=(data.get("segments") or [])[:200]
+            clean=[{"x0":s.get("x0"),"y0":s.get("y0"),"x1":s.get("x1"),"y1":s.get("y1"),"color":s.get("color","#111"),"size":max(1,min(30,float(s.get("size") or 4)))} for s in segs]
+            if clean:
+                g["strokes"].extend({"type":"draw",**s} for s in clean)
+                await self._broadcast(g,{"type":"draw_batch","segments":clean})
+            return
         if data.get("type")!="draw":return
         stroke={"type":"draw","x0":data.get("x0"),"y0":data.get("y0"),"x1":data.get("x1"),"y1":data.get("y1"),"color":data.get("color","#111"),"size":max(1,min(30,float(data.get("size") or 4)))}
         g["strokes"].append(stroke); await self._broadcast(g,stroke)
@@ -934,7 +941,7 @@ async def ws_drawing_multi(websocket: WebSocket, mode: int):
     try:
         while True:
             data=await websocket.receive_json(); typ=data.get("type")
-            if typ in ("draw","clear"): await multiplayer_drawing_manager.draw(username,data)
+            if typ in ("draw","draw_batch","clear"): await multiplayer_drawing_manager.draw(username,data)
             elif typ=="guess": await multiplayer_drawing_manager.guess(username,data.get("word"))
     except WebSocketDisconnect: await multiplayer_drawing_manager.disconnect(username)
 
@@ -1086,6 +1093,16 @@ class DrawingGameManager:
                 "color": data.get("color"),
                 "size": max(1, min(30, float(data.get("size") or 4))),
             })
+        elif msg_type == "draw_batch":
+            segments = data.get("segments") or []
+            clean = [{
+                "x0": s.get("x0"), "y0": s.get("y0"),
+                "x1": s.get("x1"), "y1": s.get("y1"),
+                "color": s.get("color"),
+                "size": max(1, min(30, float(s.get("size") or 4))),
+            } for s in segments[:200]]
+            if clean:
+                await self._send(game, other, {"type": "draw_batch", "segments": clean})
         elif msg_type == "clear":
             await self._send(game, other, {"type": "clear"})
 
@@ -1241,7 +1258,7 @@ async def ws_drawing(websocket: WebSocket):
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
-            if msg_type in ("draw", "clear"):
+            if msg_type in ("draw", "draw_batch", "clear"):
                 await drawing_manager.handle_draw(username, data)
             elif msg_type == "guess":
                 await drawing_manager.handle_guess(username, data.get("word"))
