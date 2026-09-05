@@ -824,7 +824,7 @@ async def ws_tictactoe(websocket: WebSocket):
 DRAW_ROUND_SECONDS = 30
 DRAW_SCOREBOARD_SECONDS = 5
 DRAW_FINAL_RESULT_SECONDS = 7
-DRAW_TOTAL_ROUNDS = 4
+DRAW_TOTAL_ROUNDS = 6
 DRAW_OPTIONS_COUNT = 12
 
 
@@ -966,13 +966,13 @@ class DrawingGameManager:
                     await old_ws.close(code=4000)
                 except Exception:
                     pass
-                await ws.send_json({"type": "waiting", "timeout": 30})
+                await ws.send_json({"type": "waiting", "timeout": 30, "count": 1, "needed": 2})
                 asyncio.create_task(self._queue_timeout(username, ws))
                 return
 
             if self.waiting is None:
                 self.waiting = (username, ws)
-                await ws.send_json({"type": "waiting", "timeout": 30})
+                await ws.send_json({"type": "waiting", "timeout": 30, "count": 1, "needed": 2})
                 asyncio.create_task(self._queue_timeout(username, ws))
                 return
 
