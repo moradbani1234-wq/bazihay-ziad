@@ -199,12 +199,18 @@ async def update_password(username, password_hash, salt):
         await db.commit()
 
 async def profile(username):
+    # Profile lookup is case-insensitive so links from chat never fail just
+    # because the browser/user typed a different letter case.
+    username = str(username or '').strip()
+    if not username:
+        return None
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
         cur=await db.execute("""SELECT u.username,u.display_name,u.bio,u.avatar,
                                       COALESCE(s.wins,0) wins,COALESCE(s.losses,0) losses,COALESCE(s.draws,0) draws,COALESCE(s.points,0) points,
                                       COALESCE(s.correct_guesses,0) correct_guesses,COALESCE(s.wrong_guesses,0) wrong_guesses
-                               FROM users u LEFT JOIN stats s ON s.username=u.username WHERE u.username=?""", (username,))
+                               FROM users u LEFT JOIN stats s ON s.username=u.username
+                               WHERE u.username=? OR lower(u.username)=lower(?) LIMIT 1""", (username, username))
         r=await cur.fetchone()
         return dict(r) if r else None
 

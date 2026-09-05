@@ -6,7 +6,7 @@ import time
 from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
 from starlette.middleware.sessions import SessionMiddleware
 
 import auth
@@ -165,10 +165,8 @@ async def game_leave(request: Request):
     username = _require_login(request)
     if not username:
         return {"ok": False}
-    # ترک عمدی بازی = محرومیت ۳ دقیقه‌ای از بازی و چت؛ پشتیبانی مستثناست.
-    if not _is_support(username):
-        await db.ban_user(username, "games", 0.05, "ترک بازی از دکمه بازگشت به لابی")
-        await db.ban_user(username, "chat", 0.05, "ترک بازی از دکمه بازگشت به لابی")
+    # بازگشت به لابی محرومیت ندارد؛ اگر حریف هنوز داخل بازی باشد، همان حریف
+    # برنده اعلام می‌شود و امتیاز برد می‌گیرد.
     await ttt_manager.leave(username)
     await drawing_manager.leave(username)
     return {"ok": True, "redirect": "/lobby"}
@@ -220,6 +218,8 @@ async def profile_query_page(request: Request, u: str = ""):
     if not username:
         return RedirectResponse("/login")
     target = str(u or "").strip()
+    if target.startswith("@"):
+        target = target[1:]
     if not target:
         target = username
     prof = await db.profile(target)
@@ -286,6 +286,14 @@ async def lobby(request: Request):
     if not username:
         return RedirectResponse("/login")
     return tpl.lobby_page(username)
+
+@app.get("/games", response_class=HTMLResponse)
+async def games_page(request: Request):
+    username = _require_login(request)
+    if not username:
+        return RedirectResponse("/login")
+    # صفحه انتخاب حالت؛ محرومیت بازی همچنان در خود اتصال بازی بررسی می‌شود.
+    return tpl.games_page(username)
 
 
 @app.post("/chat/private/start")
@@ -444,7 +452,14 @@ async def public_music_audio(request: Request):
     item = await db.get_room_music_audio("public")
     if not item or not item.get("audio_blob"):
         return HTMLResponse("آهنگی فعال نیست.", status_code=404)
-    return StreamingResponse(io.BytesIO(item["audio_blob"]), media_type=item.get("mime_type") or "audio/mpeg")
+    blob = item["audio_blob"]
+    mime = item.get("mime_type") or "audio/mpeg"
+    # ارسال مستقیم بایت‌ها برای سازگاری بهتر با پلیر موبایل و Railway.
+    return Response(content=blob, media_type=mime, headers={
+        "Content-Length": str(len(blob)),
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-store",
+    })
 
 @app.post("/support/music/clear")
 async def support_music_clear(request: Request):
@@ -610,41 +625,33 @@ class TicTacToeManager:
 
         await self.send_state(game_id)
 
+    async def _forfeit(self, game_id: str, leaving: str):
+        game = self.games.get(game_id)
+        if not game or game.get("winner") is not None:
+            return
+        winner = next((u for u in game["players"].values() if u != leaving), None)
+        game["winner"] = "forfeit"
+        if winner:
+            await db.update_stats(winner, wins=1, points=3)
+            await self._send(game, winner, {"type":"game_won", "reason":"حریف از بازی خارج شد.", "winner":winner})
+            await self._send(game, winner, {"type":"opponent_left", "winner":winner})
+        self.games.pop(game_id, None)
+        for u in game["players"].values():
+            self.player_game.pop(u, None)
+
     async def leave(self, username: str):
         if self.waiting and self.waiting[0] == username:
             self.waiting = None
         game_id = self.player_game.get(username)
         if game_id and game_id in self.games:
-            game = self.games[game_id]
-            game["winner"] = "left"
-            other = next((u for u in game["players"].values() if u != username), None)
-            if other:
-                await self._safe_notify_other(game, other)
-            self.games.pop(game_id, None)
-            for u in game["players"].values():
-                self.player_game.pop(u, None)
-
-    async def _safe_notify_other(self, game, other):
-        ws = game["sockets"].get(other)
-        if ws:
-            try: await ws.send_json({"type":"opponent_left"})
-            except Exception: pass
+            await self._forfeit(game_id, username)
 
     async def disconnect(self, username: str):
         if self.waiting and self.waiting[0] == username:
             self.waiting = None
-
-        game_id = self.player_game.pop(username, None)
+        game_id = self.player_game.get(username)
         if game_id and game_id in self.games:
-            game = self.games[game_id]
-            game["sockets"].pop(username, None)
-            for uname, ws in list(game["sockets"].items()):
-                try:
-                    await ws.send_json({"type": "opponent_left"})
-                except Exception:
-                    pass
-            if not game["sockets"]:
-                self.games.pop(game_id, None)
+            await self._forfeit(game_id, username)
 
 
 ttt_manager = TicTacToeManager()
@@ -925,39 +932,33 @@ class DrawingGameManager:
             self.player_game.pop(username, None)
         self.games.pop(game_id, None)
 
+    async def _forfeit(self, game_id: str, leaving: str):
+        game = self.games.get(game_id)
+        if not game:
+            return
+        game["round_active"] = False
+        winner = next((u for u in game["players"] if u != leaving), None)
+        if winner:
+            await db.update_stats(winner, wins=1, points=max(1, game["scores"].get(winner, 0)))
+            await self._send(game, winner, {"type":"game_won", "winner":winner, "reason":"حریف از بازی خارج شد."})
+        for u in game["players"]:
+            self.player_game.pop(u, None)
+        self.games.pop(game_id, None)
+
     async def leave(self, username: str):
         if self.waiting and self.waiting[0] == username:
             self.waiting = None
         game_id = self.player_game.get(username)
-        if not game_id or game_id not in self.games:
-            return
-        game = self.games[game_id]
-        game["round_active"] = False
-        for u in game["players"]:
-            if u != username:
-                await self._send(game, u, {"type":"opponent_left"})
-            self.player_game.pop(u, None)
-        self.games.pop(game_id, None)
+        if game_id and game_id in self.games:
+            await self._forfeit(game_id, username)
 
     # ------------------------------------------------------------- lifecycle
     async def disconnect(self, username: str):
         if self.waiting and self.waiting[0] == username:
             self.waiting = None
-
-        game_id = self.player_game.pop(username, None)
-        if not game_id or game_id not in self.games:
-            return
-        game = self.games[game_id]
-        game["sockets"].pop(username, None)
-        game["round_active"] = False
-        for uname, ws in list(game["sockets"].items()):
-            try:
-                await ws.send_json({"type": "opponent_left"})
-            except Exception:
-                pass
-        self.player_game.pop(game["players"][0], None)
-        self.player_game.pop(game["players"][1], None)
-        self.games.pop(game_id, None)
+        game_id = self.player_game.get(username)
+        if game_id and game_id in self.games:
+            await self._forfeit(game_id, username)
 
 
 drawing_manager = DrawingGameManager()

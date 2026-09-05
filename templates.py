@@ -436,7 +436,7 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
       <h2>🎵 مدیریت آهنگ چت عمومی</h2>
       <p>از خود گوشی یک فایل آهنگ انتخاب کن؛ فایل روی سرور ذخیره می‌شود و آهنگ فعال برای همهٔ کاربران چت روم قابل پخش است.</p>
       <input type="text" id="musicTitle" placeholder="نام آهنگ / عنوان (اختیاری)">
-      <input type="text" id="musicTarget" placeholder="آیدی کاربر (اختیاری؛ برای نمایش اختصاصی)">
+      
       <input type="file" id="musicFile" accept="audio/*" style="width:100%;margin:8px 0 12px">
       <button class="glow-btn" onclick="setMusic()">🎵 انتخاب و فعال کردن آهنگ</button>
       <button class="btn" onclick="clearMusic()" style="margin-inline-start:6px">⏹ قطع برای همه</button>
@@ -486,7 +486,7 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
     async function setMusic() {{
       const file=document.getElementById('musicFile').files[0];
       const title=document.getElementById('musicTitle').value.trim();
-      const target_user=document.getElementById('musicTarget').value.trim();
+      const target_user='';
       if(!file){{alert('اول یک آهنگ از گوشی انتخاب کن.');return;}}
       if(file.size>15*1024*1024){{alert('حجم آهنگ نباید بیشتر از ۱۵ مگابایت باشد.');return;}}
       const fd=new FormData(); fd.append('music',file);
@@ -639,7 +639,7 @@ def tictactoe_page(username: str) -> str:
       <h1>⭕ دوز دو نفره زنده</h1>
       <div class="status-line" id="status">🔌 اتصال به سرور...</div>
       <div class="ttt-board" id="board"></div>
-      <div style="text-align:center"><button class="glow-btn" onclick="location.reload()">🔁 بازی جدید / جستجوی دوباره</button></div>
+      <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="glow-btn" onclick="location.reload()">🔁 بازی جدید / جستجوی دوباره</button><a class="btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">🏠 بازگشت به لابی</a></div>
     </div>
     <script>
     const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -688,8 +688,11 @@ def tictactoe_page(username: str) -> str:
         if (data.winner === "draw") statusEl.textContent = "🤝 مساوی شد!";
         else if (data.winner) statusEl.textContent = data.winner === mySymbol ? "🏆 بردی!" : "😢 باختی!";
         else statusEl.textContent = "شما: " + mySymbol + " | حریف: " + data.opponent + " | نوبت: " + (data.turn === mySymbol ? "توئه! 🔥" : "حریف");
+      }} else if (data.type === "game_won") {{
+        intentionallyLeaving = true;
+        statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
       }} else if (data.type === "opponent_left") {{
-        statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
+        statusEl.textContent = data.winner === me ? "🏆 شما برنده شدید! حریف از بازی خارج شد." : "❌ حریف بازی را ترک کرد.";
       }}
     }}
 
@@ -734,7 +737,7 @@ def drawing_page(username: str) -> str:
       <div id="resultPanel" class="draw-result" style="display:none"></div>
 
       <div style="text-align:center;margin-top:14px">
-        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{method:'POST'}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
+        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
       </div>
     </div>
 
@@ -1033,15 +1036,23 @@ def drawing_page(username: str) -> str:
             resultPanel.innerHTML = html;
         }
 
-        else if (data.type === "opponent_left") {
+        else if (data.type === "game_won") {
             if (countdownTimer) clearInterval(countdownTimer);
             statusEl.style.display = "block";
-            statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
+            statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
             roundInfo.style.display = "none";
             canvasWrap.style.display = "none";
             palette.style.display = "none";
             clearBtnWrap.style.display = "none";
             optionsGrid.style.display = "none";
+            resultPanel.style.display = "block";
+            resultPanel.innerHTML = "<div class='draw-result-title'>🏆 شما برنده شدید!</div><div>حریف از بازی خارج شد و برد به شما رسید.</div>";
+        }
+
+        else if (data.type === "opponent_left") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            statusEl.style.display = "block";
+            statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
         }
     }
     connectDrawing();
@@ -1065,8 +1076,12 @@ def _nav(username):
     return '<div class="nav"><div class="nav-brand">🎲 بازی‌خونه</div><div><a href="/login">ورود</a></div></div>'
 
 def lobby_page(username):
-    body=f'''<div class="card hero"><h1>🎮 خوش اومدی، {html.escape(username)}!</h1><p>بازی، چت، رتبه‌بندی و پروفایل از اینجا در دسترسه.</p><div class="grid-links"><a class="glow-btn" href="/game/tictactoe">⭕ دوز دو نفره زنده <small>رقابت سریع</small></a><a class="glow-btn" href="/game/drawing">🎨 نقاشی حدسی دو نفره <small>۴ دور، هر دور ۳۰ ثانیه</small></a><a class="glow-btn" href="/chat/public">💬 چت روم <small>چت زنده، ریپلای با دوبار لمس و پیام خصوصی</small></a><a class="glow-btn" href="/leaderboard">🏆 رتبه‌بندی <small>بخش مستقل</small></a><a class="glow-btn" href="/profile?u={quote(username,safe='')}">👤 پروفایل من <small>آمار حدس‌ها</small></a><a class="glow-btn" href="/settings">⚙️ تنظیمات <small>حساب و پروفایل</small></a></div></div><div class="card"><h2>💌 چت خصوصی</h2><p>گفت‌وگوها در سرور ذخیره می‌شوند و با بستن سایت از بین نمی‌روند.</p><form method="post" action="/chat/private/start"><input type="text" name="other" placeholder="آیدی کاربر" required><button type="submit">💬 شروع چت</button></form></div>'''
+    body=f'''<div class="card hero page-enter"><h1>🎮 خوش اومدی، {html.escape(username)}!</h1><p>همه‌چیز از اینجا شروع می‌شه؛ بازی، چت، رتبه‌بندی و پروفایل.</p><div class="grid-links"><a class="glow-btn game-card" href="/games">🎮 <strong>شروع بازی</strong><small>دوز یا نقاشی — خودت انتخاب کن</small></a><a class="glow-btn" href="/chat/public">💬 چت روم <small>چت زنده، ریپلای با دوبار لمس و پروفایل کاربران</small></a><a class="glow-btn" href="/leaderboard">🏆 رتبه‌بندی <small>رقابت با بقیه بازیکن‌ها</small></a><a class="glow-btn" href="/profile?u={quote(username,safe='')}">👤 پروفایل من <small>آمار، عکس و اطلاعات حساب</small></a><a class="glow-btn" href="/settings">⚙️ تنظیمات <small>نام، بیو و عکس پروفایل</small></a></div></div><div class="card page-enter"><h2>💌 چت خصوصی</h2><p>نام کاربر را وارد کن و مستقیم وارد گفت‌وگوی خصوصی شو.</p><form method="post" action="/chat/private/start"><input type="text" name="other" placeholder="آیدی کاربر" required><button type="submit" class="glow-btn">💬 شروع چت</button></form></div>'''
     return page_shell('لابی',body,username)
+
+def games_page(username):
+    body=f'''<div class="card hero page-enter game-choice"><div class="game-choice-icon">🎮</div><h1>انتخاب حالت بازی</h1><p>یکی را انتخاب کن و وارد مسابقه زنده شو. اگر وسط بازی به لابی برگردی، محروم نمی‌شی؛ حریفت برنده اعلام می‌شه.</p><div class="game-choice-grid"><a class="game-choice-card" href="/game/tictactoe"><span>⭕</span><b>دوز</b><small>دو نفره، سریع و زنده</small></a><a class="game-choice-card" href="/game/drawing"><span>🎨</span><b>نقاشی</b><small>۴ دور نقاشی و حدس</small></a></div><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    return page_shell('انتخاب بازی',body,username)
 
 def _avatar_html(avatar, cls="profile-avatar-img", alt="تصویر کاربر"):
     avatar = avatar or "🎮"
@@ -1075,6 +1090,7 @@ def _avatar_html(avatar, cls="profile-avatar-img", alt="تصویر کاربر"):
     return f'<div class="avatar-big">{html.escape(str(avatar))}</div>' if cls == "profile-avatar-img" else f'<span class="chat-avatar-fallback">{html.escape(str(avatar)[:2])}</span>'
 
 def profile_page(username, prof):
+    prof = prof or {'username': username, 'display_name': username, 'bio': '', 'avatar': '🎮', 'wins':0, 'losses':0, 'draws':0, 'points':0, 'correct_guesses':0, 'wrong_guesses':0}
     total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0); correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0; wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
     avatar_html=_avatar_html(prof.get('avatar') or '🎮')
     body=f'''<div class="card hero"><div class="profile-head"><div>{avatar_html}</div><div><h1>{html.escape(prof.get('display_name') or prof['username'])}</h1><p style="margin:0">@{html.escape(prof['username'])}</p></div></div><p>{html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')}</p><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div><p>درصد حدس درست</p><div class="progress"><div style="width:{correct}%"></div></div><p>درصد حدس غلط</p><div class="progress"><div style="width:{wrong}%"></div></div></div>'''
@@ -1085,20 +1101,21 @@ def profile_page(username, prof):
     return page_shell('پروفایل',body,username)
 
 def settings_page(username, prof):
+    prof = prof or {"username": username, "display_name": username, "bio": "", "avatar": "🎮"}
     avatar=prof.get('avatar') or '🎮'
     if str(avatar).startswith('data:image/'):
         preview=f'<img id="avatarPreview" class="profile-avatar-img" src="{html.escape(str(avatar),quote=True)}" alt="پیش‌نمایش">'
     else:
         preview=f'<div id="avatarFallback" class="avatar-big">{html.escape(str(avatar))}</div>'
-    body=f'''<div class="card hero"><h1>⚙️ تنظیمات پروفایل</h1><p>نام، بیو و عکس پروفایل را تنظیم کن. عکس قبل از ذخیره روی خود گوشی برش می‌خورد و می‌توانی با نوار زوم کادر را دقیق تنظیم کنی.</p><label>آیدی حساب</label><input type="text" value="{html.escape(username)}" disabled><label>نام نمایشی</label><input type="text" id="display" value="{html.escape(prof.get('display_name') or username)}"><label>عکس پروفایل</label><div class="avatar-picker"><div class="avatar-crop-wrap" id="cropWrap">{preview}</div><div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div><input type="file" id="avatarFile" accept="image/*" style="width:100%;margin:0"><div class="avatar-preview-hint">عکس را انتخاب کن، بعد با نوار زوم اندازه‌اش را تنظیم کن. نتیجه‌ای که اینجا می‌بینی همان چیزی است که بقیه در پروفایلت می‌بینند.</div></div><label style="display:block;margin-top:14px">بیوگرافی</label><textarea id="bio" style="width:100%;min-height:110px;padding:12px;border-radius:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit">{html.escape(prof.get('bio') or '')}</textarea><button style="margin-top:12px" onclick="saveProfile()">💾 ذخیره پروفایل</button></div><div class="card"><h2>🔐 تغییر رمز عبور</h2><input type="password" id="oldp" placeholder="رمز فعلی"><input type="password" id="newp" placeholder="رمز جدید"><button onclick="changePass()">تغییر رمز</button></div><div style="text-align:center"><a class="btn" href="/profile?u={quote(username,safe='')}">پروفایل</a> <a class="btn" href="/lobby">لابی</a></div><script>
+    body=f'''<div class="card hero page-enter"><h1>⚙️ تنظیمات پروفایل</h1><p>اطلاعاتت را ویرایش کن. عکس پروفایل روی خود دستگاه برش می‌خورد و با نوار زوم می‌توانی کادر را تنظیم کنی.</p><label>آیدی حساب</label><input type="text" value="{html.escape(username)}" disabled><label>نام نمایشی</label><input type="text" id="displayNameInput" value="{html.escape(prof.get('display_name') or username)}" maxlength="40"><label>عکس پروفایل</label><div class="avatar-picker"><div class="avatar-crop-wrap" id="cropWrap">{preview}</div><div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div><input type="file" id="avatarFile" accept="image/*" style="width:100%;margin:0"><div class="avatar-preview-hint">عکس را انتخاب کن و با نوار زوم کادر را تنظیم کن؛ بعد ذخیره کن تا بقیه هم آن را ببینند.</div></div><label style="display:block;margin-top:14px">بیوگرافی</label><textarea id="bioInput" maxlength="300" style="width:100%;min-height:110px;padding:12px;border-radius:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit">{html.escape(prof.get('bio') or '')}</textarea><button class="glow-btn" style="margin-top:12px" onclick="saveProfile()">💾 ذخیره پروفایل</button><div id="saveStatus" class="status-line" style="display:none;margin-top:10px"></div></div><div class="card page-enter"><h2>🔐 تغییر رمز عبور</h2><input type="password" id="oldPasswordInput" placeholder="رمز فعلی"><input type="password" id="newPasswordInput" placeholder="رمز جدید"><button class="glow-btn" onclick="changePass()">تغییر رمز</button></div><div style="text-align:center"><a class="btn" href="/profile?u={quote(username,safe='')}">پروفایل</a> <a class="btn" href="/lobby">لابی</a></div><script>
 let avatarData={str(avatar)!r};let img=null;let zoom=1;
 const wrap=document.getElementById('cropWrap'), z=document.getElementById('zoom'), file=document.getElementById('avatarFile');
 function applyCrop(){{if(!img)return;const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(190/sw,190/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((190-sw*scale)/2)+'px';img.style.top=((190-sh*scale)/2)+'px'}}
-function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(512/sw,512/sh)*zoom;const dw=sw*scale,dh=sh*scale;ctx.drawImage(img,(512-dw)/2,(512-dh)/2,dw,dh);avatarData=c.toDataURL('image/jpeg',0.86)}}
+function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(512/sw,512/sh)*zoom;const dw=sw*scale,dh=sh*scale;ctx.drawImage(img,(512-dw)/2,(512-dh)/2,dw,dh);avatarData=c.toDataURL('image/jpeg',0.78)}}
 z.oninput=()=>{{zoom=Number(z.value);applyCrop();makeCrop()}};
-file.onchange=()=>{{const f=file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');return}}const u=URL.createObjectURL(f);img=new Image();img.onload=()=>{{zoom=1;z.value='1';wrap.innerHTML='';wrap.appendChild(img);applyCrop();makeCrop();URL.revokeObjectURL(u)}};img.src=u}};
-async function saveProfile(){{if(img)makeCrop();const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{display_name:display.value,bio:bio.value,avatar:avatarData}})}});const d=await r.json();alert(d.ok?'پروفایل ذخیره شد؛ بقیه هم عکس را می‌بینند.':d.error==='image_too_large'?'عکس بزرگ است؛ دوباره انتخاب و ذخیره کن.':'خطا در ذخیره پروفایل.')}}
-async function changePass(){{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:oldp.value,new_password:newp.value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}
+file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f);const next=new Image();next.onload=()=>{{img=next;zoom=1;z.value='1';wrap.innerHTML='';wrap.appendChild(img);applyCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
+async function saveProfile(){{const status=document.getElementById('saveStatus');try{{if(img)makeCrop();const payload={{display_name:document.getElementById('displayNameInput').value.trim(),bio:document.getElementById('bioInput').value.trim(),avatar:avatarData}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();status.style.display='block';status.textContent=d.ok?'✅ پروفایل با موفقیت ذخیره شد.':(d.error==='image_too_large'?'❌ عکس خیلی بزرگ است.':'❌ ذخیره پروفایل ناموفق بود.');status.style.color=d.ok?'var(--turquoise)':'var(--danger)'}}catch(e){{status.style.display='block';status.textContent='❌ خطا در ارتباط با سرور.';status.style.color='var(--danger)'}}}}
+async function changePass(){{try{{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:document.getElementById('oldPasswordInput').value,new_password:document.getElementById('newPasswordInput').value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}catch(e){{alert('خطا در ارتباط با سرور.')}}}}
 </script>'''
     return page_shell('تنظیمات',body,username)
 
@@ -1131,7 +1148,7 @@ def chat_public_page(username,messages):
     function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/public');ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='music')handleMusic(d.music);else if(d.type==='music_clear'){{audio.pause();audio.removeAttribute('src');document.getElementById('musicBar').style.display='none'}}else if(d.sender)addMsg(d)}};ws.onclose=()=>{{if(!reconnect)reconnect=setTimeout(()=>{{reconnect=null;connect()}},1200)}}}}
     async function poll(){{try{{const r=await fetch('/chat/public/messages?after='+lastId,{{cache:'no-store'}});const d=await r.json();if(d.ok)d.messages.forEach(addMsg)}}catch(e){{}}}}
     function sendMsg(){{const t=input.value.trim();if(!t)return;const payload={{content:t,reply_to_id:replyId}};if(ws&&ws.readyState===1)ws.send(JSON.stringify(payload));else{{poll();return}}input.value='';replyId=null;replyBar.style.display='none'}}input.addEventListener('keydown',e=>{{if(e.key==='Enter'){{e.preventDefault();sendMsg()}}}});
-    document.getElementById('playMusic').onclick=async()=>{{try{{audio.volume=soundOn?1:0;await audio.play()}}catch(e){{alert('برای پخش، یک بار روی دکمه پخش بزن')}}}};document.getElementById('stopMusic').onclick=()=>{{audio.pause();audio.currentTime=0}};document.getElementById('soundBtn').onclick=()=>{{soundOn=!soundOn;audio.muted=!soundOn;document.getElementById('soundBtn').textContent=soundOn?'🔊':'🔇'}};document.getElementById('musicBtn').onclick=()=>{{const b=document.getElementById('musicBar');b.style.display=b.style.display==='none'?'flex':'none'}};document.getElementById('shareBtn').onclick=async()=>{{try{{await navigator.share({{title:'چت عمومی',url:location.href}})}}catch(e){{try{{await navigator.clipboard.writeText(location.href);alert('لینک چت کپی شد')}}catch(_){{}}}}}};loadMusic();connect();setInterval(poll,1400);box.scrollTop=box.scrollHeight;
+    document.getElementById('playMusic').onclick=async()=>{{try{{audio.volume=soundOn?1:0;await audio.play()}}catch(e){{alert('برای پخش، یک بار روی دکمه پخش بزن')}}}};document.getElementById('stopMusic').onclick=()=>{{audio.pause();audio.currentTime=0}};document.getElementById('soundBtn').onclick=()=>{{soundOn=!soundOn;audio.muted=!soundOn;document.getElementById('soundBtn').textContent=soundOn?'🔊':'🔇'}};document.getElementById('musicBtn').onclick=()=>{{const b=document.getElementById('musicBar');b.style.display=b.style.display==='none'?'flex':'none'}};document.getElementById('shareBtn').onclick=async()=>{{try{{await navigator.share({{title:'چت عمومی',url:location.href}})}}catch(e){{try{{await navigator.clipboard.writeText(location.href);alert('لینک چت کپی شد')}}catch(_){{}}}}}};loadMusic();connect();setInterval(poll,1400);setInterval(loadMusic,3000);box.scrollTop=box.scrollHeight;
     </script>'''
     return page_shell('چت عمومی',body,username)
 
@@ -1139,3 +1156,7 @@ def chat_private_page(username,other,messages):
     body=f'''<div class="chat-screen"><div class="chat-top"><div class="chat-toolbar"><a class="icon-btn" href="/lobby">‹</a><div class="chat-title">💌 {html.escape(other)}</div><a class="icon-btn" href="/profile?u={quote(other,safe='')}">👤</a></div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username)}</div><div class="reply-bar" id="replyBar" style="display:none"><span class="reply-preview" id="replyPreview"></span><button class="icon-btn" id="cancelReply">✕</button></div><div class="chat-input-wrap"><div class="chat-input-row"><button class="send-btn" onclick="sendMsg()">➤</button><input type="text" id="msgInput" placeholder="پیام خصوصی..." autocomplete="off" maxlength="500"></div><div class="msg-hint">برای ریپلای، روی پیام دوبار لمس/کلیک کن</div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',me={username!r},box=document.getElementById('chatBox'),input=document.getElementById('msgInput'),replyBar=document.getElementById('replyBar'),replyPreview=document.getElementById('replyPreview');let replyId=null,lastId=0,ws=null,reconnect=null;document.querySelectorAll('.msg[data-id]').forEach(e=>lastId=Math.max(lastId,Number(e.dataset.id)||0));function esc(v){{const d=document.createElement('div');d.textContent=v;return d.innerHTML}}function fmt(ts){{const d=new Date(Number(ts)*1000);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}}function replyTo(el){{replyId=Number(el.dataset.id);replyBar.style.display='flex';replyPreview.textContent='↩️ پاسخ به '+el.dataset.sender+': '+el.dataset.content;input.focus()}}function bind(el){{let t=0;el.addEventListener('dblclick',()=>replyTo(el));el.addEventListener('touchend',e=>{{let n=Date.now();if(n-t<330){{e.preventDefault();replyTo(el)}}t=n}})}}document.querySelectorAll('.msg[data-id]').forEach(bind);document.getElementById('cancelReply').onclick=()=>{{replyId=null;replyBar.style.display='none'}};function addMsg(m){{if(!m.id||Number(m.id)<=lastId)return;lastId=Number(m.id);const d=document.createElement('div');d.className=m.sender===me?'msg me':'msg';d.dataset.id=m.id;d.dataset.sender=m.sender;d.dataset.content=m.content;d.innerHTML='<span class="sender">'+esc(m.sender)+'</span>'+(m.reply_to_id?'<div class="msg-reply">↩️ پاسخ به پیام قبلی</div>':'')+'<span class="content"></span><span class="msg-time">'+fmt(m.created_at)+'</span>';d.querySelector('.content').textContent=m.content;box.appendChild(d);bind(d);box.scrollTop=box.scrollHeight}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{html.escape(other)}');ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.sender)addMsg(d)}};ws.onclose=()=>{{if(!reconnect)reconnect=setTimeout(()=>{{reconnect=null;connect()}},1200)}}}}function sendMsg(){{const t=input.value.trim();if(!t||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({{content:t,reply_to_id:replyId}}));input.value='';replyId=null;replyBar.style.display='none'}}input.addEventListener('keydown',e=>{{if(e.key==='Enter'){{e.preventDefault();sendMsg()}}}});connect();box.scrollTop=box.scrollHeight;</script>'''
     return page_shell('چت خصوصی',body,username)
 
+
+BASE_CSS += """
+.game-choice{text-align:center;overflow:hidden}.game-choice-icon{font-size:58px;filter:drop-shadow(0 8px 18px rgba(47,169,160,.22));animation:floatGame 2.8s ease-in-out infinite}.game-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0}.game-choice-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:24px 12px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(145deg,var(--surface-raised),var(--surface));color:var(--text);text-decoration:none;transform:translateZ(0);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.game-choice-card span{font-size:46px}.game-choice-card b{font-size:19px}.game-choice-card small{color:var(--text-muted)}.game-choice-card:hover{transform:translateY(-5px);border-color:var(--turquoise);box-shadow:0 12px 30px rgba(47,169,160,.16)}.ttt-cell{transform:translateZ(0);transition:transform .16s ease,background .16s ease,box-shadow .16s ease}.ttt-cell:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(47,169,160,.12)}.draw-result{animation:pageIn .25s ease both}.card{transform:translateZ(0)}@keyframes floatGame{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}@media(max-width:520px){.game-choice-grid{grid-template-columns:1fr}.ttt-board{grid-template-columns:repeat(3,minmax(70px,88px));grid-template-rows:repeat(3,minmax(70px,88px))}}@media(prefers-reduced-motion:reduce){.game-choice-icon{animation:none}}
+"""
