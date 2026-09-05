@@ -319,40 +319,77 @@ def login_page(error: str | None = None) -> str:
 def signup_page(error: str | None = None) -> str:
     err_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
     body = f"""
-    <div class="card">
-      <h1>ساخت حساب جدید</h1>
-      {err_html}
-      <form method="post" action="/signup">
-        <input type="text" name="username" placeholder="نام کاربری (حداقل ۳ حرف)" required>
-        <input type="password" name="password" placeholder="رمز عبور (حداقل ۴ حرف)" required>
-        <button type="submit">ساخت حساب</button>
-      </form>
-      <p>حساب داری؟ <a href="/login" style="color:var(--turquoise)">وارد شو</a></p>
+    <div class="auth-screen page-enter">
+      <div class="auth-orb">🎨</div>
+      <div class="auth-card">
+        <div class="auth-kicker">DRAW BATTLE • NEW PLAYER</div>
+        <h1>حساب جدید بساز 🚀</h1>
+        <p>اول یک آیدی مخصوص خودت انتخاب کن.</p>
+        {err_html}
+        <form method="post" action="/signup" autocomplete="off">
+          <label for="signupUsername">آیدی بازی</label>
+          <input id="signupUsername" class="auth-input" type="text" name="username" placeholder="مثلاً gamer123"
+                 minlength="3" maxlength="32" pattern="[a-z0-9]+" inputmode="latin" autocomplete="username"
+                 autocapitalize="none" spellcheck="false" required>
+          <div class="field-hint">فقط حروف کوچک انگلیسی <b>a-z</b> و عدد <b>0-9</b>؛ بدون فاصله و علامت.</div>
+          <label for="signupPassword">رمز عبور</label>
+          <input id="signupPassword" class="auth-input" type="password" name="password"
+                 placeholder="حداقل ۴ کاراکتر" minlength="4" maxlength="128" autocomplete="new-password" required>
+          <button class="auth-submit" type="submit">ساخت حساب ✨</button>
+        </form>
+        <p class="auth-bottom">حساب داری؟ <a href="/login">وارد شو</a></p>
+      </div>
     </div>"""
     return page_shell("ثبت‌نام", body)
 
-
-def lobby_page(username: str) -> str:
-    body = f"""
-    <div class="card hero">
-      <h1>خوش اومدی، {html.escape(username)}!</h1>
-      <p style="margin-bottom:18px">یه بازی رو انتخاب کن، یا برو تو چت با بقیه گپ بزن.</p>
-      <div class="grid-links">
-        <a class="glow-btn" href="/game/tictactoe">⭕ دوز دو نفره زنده <small>رقابت سریع</small></a>
-        <a class="glow-btn" href="/game/drawing">🎨 نقاشی حدسی دو نفره <small>همزمان و زنده</small></a>
-        <a class="glow-btn" href="/chat/public">💬 چت عمومی <small>گفت‌وگو و گزارش</small></a>
+def lobby_page(username: str, prof=None, wallet=None) -> str:
+    prof = prof or {"username": username, "bio": "", "avatar": "🎮", "age": 18, "wins": 0, "points": 0}
+    avatar_html = _avatar_html(prof.get("avatar") or "🎮")
+    age = int(prof.get("age") or 18)
+    wins = int(prof.get("wins") or 0)
+    points = int(prof.get("points") or 0)
+    coins = int((wallet or {}).get("coins", 0) or 0)
+    body=f"""<div class="lobby-bg page-enter">
+      <div class="lobby-topbar">
+        <div><div class="lobby-kicker">DRAW BATTLE</div><div class="lobby-title">تخته گچی ⚡</div></div>
+        <a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>
       </div>
-    </div>
-    <div class="card">
-      <h2>چت خصوصی</h2>
-      <form method="post" action="/chat/private/start">
-        <input type="text" name="other" placeholder="نام کاربری طرف مقابل" required>
-        <button type="submit">شروع چت خصوصی</button>
-      </form>
-    </div>"""
+      <a class="lobby-profile hero" href="/profile?u={quote(username,safe='')}">
+        <div class="lobby-profile-avatar">{avatar_html}</div>
+        <div class="lobby-profile-info">
+          <div class="lobby-profile-name">@{html.escape(username)}</div>
+          <div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} برد <span>•</span> 💎 {points} امتیاز</div>
+        </div>
+        <div class="lobby-profile-arrow">‹</div>
+      </a>
+      <div class="lobby-wallet">💰 <b>{coins:,}</b> سکه <span>•</span> آماده‌ای؟</div>
+      <div class="section-heading"><span>حالت‌های بازی</span><small>یکی رو انتخاب کن و شروع کن</small></div>
+      <div class="game-mode-card mode-speed">
+        <div class="mode-badge">⚡ دو نفره سرعتی</div>
+        <div class="mode-icon">⭕</div>
+        <div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • زنده و سریع</p></div>
+        <a class="mode-start" href="/game/tictactoe">شروع <span>←</span></a>
+      </div>
+      <div class="game-mode-card mode-draw">
+        <div class="mode-badge">🎨 رقابت نقاشان</div>
+        <div class="mode-icon">🖌️</div>
+        <div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div>
+        <a class="mode-start" href="/game/drawing4">شروع <span>←</span></a>
+      </div>
+      <div class="game-mode-card mode-elim">
+        <div class="mode-badge">🔥 حالت حذفی ۶ نفره</div>
+        <div class="mode-icon">🎯</div>
+        <div class="mode-copy"><h2>نقاشی ۶ نفره</h2><p>۶ بازیکن • رقابت حذفی</p></div>
+        <a class="mode-start" href="/game/drawing6">شروع <span>←</span></a>
+      </div>
+      <div class="lobby-quick-grid">
+        <a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a>
+        <a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>بهترین‌ها</small></a>
+        <a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>
+        <a href="/profile?u={quote(username,safe='')}">👤 <b>پروفایل من</b><small>مشاهده پروفایل</small></a>
+      </div>
+    </div>{_bottom_nav("home")}"""
     return page_shell("لابی", body, username)
-
-
 
 def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
     mins = max(1, (remaining + 59) // 60)
@@ -1194,7 +1231,13 @@ def lobby_page(username):
     return page_shell('لابی',body,username)
 
 def games_page(username):
-    body=f'''<div class="card hero page-enter game-choice"><div class="game-choice-icon">🎮</div><h1>انتخاب حالت بازی</h1><p>یکی را انتخاب کن و وارد مسابقه زنده شو. اگر وسط بازی به لابی برگردی، محروم نمی‌شی؛ حریفت برنده اعلام می‌شه.</p><div class="game-choice-grid"><a class="game-choice-card" href="/game/tictactoe"><span>⭕</span><b>دوز</b><small>دو نفره، سریع و زنده</small></a><a class="game-choice-card" href="/game/drawing"><span>🎨</span><b>نقاشی</b><small>۴ دور نقاشی و حدس</small></a></div><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f"""<div class="lobby-bg page-enter">
+      <div class="section-heading"><span>🎮 حالت‌های بازی</span><small>انتخاب کن</small></div>
+      <div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">⭕</div><div class="mode-copy"><h2>دوز</h2><p>۲ بازیکن • سریع و زنده</p></div><a class="mode-start" href="/game/tictactoe">شروع ←</a></div>
+      <div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • نقاشی و حدس</p></div><a class="mode-start" href="/game/drawing4">شروع ←</a></div>
+      <div class="game-mode-card mode-elim"><div class="mode-badge">🔥 حالت حذفی ۶ نفره</div><div class="mode-icon">🎯</div><div class="mode-copy"><h2>نقاشی ۶ نفره</h2><p>۶ بازیکن • رقابت حذفی</p></div><a class="mode-start" href="/game/drawing6">شروع ←</a></div>
+      <a class="btn" href="/lobby">← بازگشت به لابی</a>
+    </div>{_bottom_nav("home")}"""
     return page_shell('انتخاب بازی',body,username)
 
 def _avatar_html(avatar, cls="profile-avatar-img", alt="تصویر کاربر"):
@@ -1204,35 +1247,78 @@ def _avatar_html(avatar, cls="profile-avatar-img", alt="تصویر کاربر"):
     return f'<div class="avatar-big">{html.escape(str(avatar))}</div>' if cls == "profile-avatar-img" else f'<span class="chat-avatar-fallback">{html.escape(str(avatar)[:2])}</span>'
 
 def profile_page(username, prof):
-    prof = prof or {'username': username, 'display_name': username, 'bio': '', 'avatar': '🎮', 'wins':0, 'losses':0, 'draws':0, 'points':0, 'correct_guesses':0, 'wrong_guesses':0}
+    prof = prof or {'username': username, 'bio': '', 'avatar': '🎮', 'age':18, 'wins':0, 'losses':0, 'draws':0, 'points':0, 'correct_guesses':0, 'wrong_guesses':0}
     total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0)
-    correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0; wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
-    avatar_html=_avatar_html(prof.get('avatar') or '🎮'); is_support=prof['username']=='morad'
+    correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0
+    wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
+    avatar_html=_avatar_html(prof.get('avatar') or '🎮')
+    is_support=prof['username']=='morad'
     badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else ''
     if prof['username']!=username:
         actions='<div class="profile-actions"><form method="post" action="/friends/request/form"><input type="hidden" name="target" value="'+html.escape(prof['username'],quote=True)+'"><button class="glow-btn" type="submit">🤝 افزودن به دوستان</button></form><a class="btn" href="/chat/private/'+quote(prof['username'],safe='')+'">💬 پیام خصوصی</a><button class="btn" onclick="inviteGame()">🎮 دعوت به بازی</button></div><script>async function inviteGame(){const choice=prompt("حالت بازی: 4 یا 6","4");const mode=choice==="6"?"drawing6":"drawing4";const r=await fetch("/game/invite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({receiver:"'+html.escape(prof['username'],quote=True)+'",mode})});const d=await r.json();alert(d.ok?"🎮 دعوت ارسال شد!":"❌ ارسال دعوت ناموفق بود.")}</script>'
-    else: actions='<div class="profile-actions"><a class="btn" href="/settings">⚙️ ویرایش پروفایل</a></div>'
+    else:
+        actions='<div class="profile-actions"><a class="btn" href="/settings">⚙️ تنظیمات پروفایل</a></div>'
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
-    body=f'<div class="profile-card hero page-enter"><div class="profile-head"><div>{avatar_html}</div><div><h1>{html.escape(prof.get('display_name') or prof['username'])}</h1><p style="margin:0">@{html.escape(prof['username'])}</p>{badge}</div></div><p>{html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')}</p><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>{actions}</div>{support_box}<div style="text-align:center"><a class="btn" href="/lobby">🏠 لابی</a></div>'
+    bio=html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
+    body=f"""<div class="profile-card hero page-enter">
+      <div class="profile-head"><div>{avatar_html}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(prof['username'])}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{badge}</div></div>
+      <div class="profile-bio">{bio}</div>
+      <div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>
+      {actions}
+    </div>{support_box}<div style="text-align:center"><a class="btn" href="/lobby">🏠 لابی</a></div>"""
     return page_shell('پروفایل',body,username)
 
 def settings_page(username, prof):
-    prof = prof or {"username": username, "display_name": username, "bio": "", "avatar": "🎮"}
+    prof = prof or {"username": username, "bio": "", "avatar": "🎮", "age": 18}
     avatar=prof.get('avatar') or '🎮'
     if str(avatar).startswith('data:image/'):
         preview=f'<img id="avatarPreview" class="profile-avatar-img" src="{html.escape(str(avatar),quote=True)}" alt="پیش‌نمایش">'
     else:
         preview=f'<div id="avatarFallback" class="avatar-big">{html.escape(str(avatar))}</div>'
-    body=f'''<div class="card hero page-enter"><h1>⚙️ تنظیمات پروفایل</h1><p>اطلاعاتت را ویرایش کن. عکس پروفایل روی خود دستگاه برش می‌خورد و با نوار زوم می‌توانی کادر را تنظیم کنی.</p><label>آیدی حساب</label><input type="text" value="{html.escape(username)}" disabled><label>نام نمایشی</label><input type="text" id="displayNameInput" value="{html.escape(prof.get('display_name') or username)}" maxlength="40"><label>عکس پروفایل</label><div class="avatar-picker"><div class="avatar-crop-wrap" id="cropWrap">{preview}</div><div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div><input type="file" id="avatarFile" accept="image/*" style="width:100%;margin:0"><div class="avatar-preview-hint">عکس را انتخاب کن و با نوار زوم کادر را تنظیم کن؛ بعد ذخیره کن تا بقیه هم آن را ببینند.</div></div><label style="display:block;margin-top:14px">بیوگرافی</label><textarea id="bioInput" maxlength="300" style="width:100%;min-height:110px;padding:12px;border-radius:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit">{html.escape(prof.get('bio') or '')}</textarea><button class="glow-btn" style="margin-top:12px" onclick="saveProfile()">💾 ذخیره پروفایل</button><div id="saveStatus" class="status-line" style="display:none;margin-top:10px"></div></div><div class="card page-enter"><h2>🔐 تغییر رمز عبور</h2><input type="password" id="oldPasswordInput" placeholder="رمز فعلی"><input type="password" id="newPasswordInput" placeholder="رمز جدید"><button class="glow-btn" onclick="changePass()">تغییر رمز</button></div><div style="text-align:center"><a class="btn" href="/profile?u={quote(username,safe='')}">پروفایل</a> <a class="btn" href="/lobby">لابی</a></div><script>
-let avatarData={str(avatar)!r};let img=null;let zoom=1;
-const wrap=document.getElementById('cropWrap'), z=document.getElementById('zoom'), file=document.getElementById('avatarFile');
-function applyCrop(){{if(!img)return;const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(190/sw,190/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((190-sw*scale)/2)+'px';img.style.top=((190-sh*scale)/2)+'px'}}
-function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(512/sw,512/sh)*zoom;const dw=sw*scale,dh=sh*scale;ctx.drawImage(img,(512-dw)/2,(512-dh)/2,dw,dh);avatarData=c.toDataURL('image/jpeg',0.78)}}
-z.oninput=()=>{{zoom=Number(z.value);applyCrop();makeCrop()}};
-file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f);const next=new Image();next.onload=()=>{{img=next;zoom=1;z.value='1';wrap.innerHTML='';wrap.appendChild(img);applyCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
-async function saveProfile(){{const status=document.getElementById('saveStatus');try{{if(img)makeCrop();const payload={{display_name:document.getElementById('displayNameInput').value.trim(),bio:document.getElementById('bioInput').value.trim(),avatar:avatarData}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();status.style.display='block';status.textContent=d.ok?'✅ پروفایل با موفقیت ذخیره شد.':(d.error==='image_too_large'?'❌ عکس خیلی بزرگ است.':'❌ ذخیره پروفایل ناموفق بود.');status.style.color=d.ok?'var(--turquoise)':'var(--danger)'}}catch(e){{status.style.display='block';status.textContent='❌ خطا در ارتباط با سرور.';status.style.color='var(--danger)'}}}}
-async function changePass(){{try{{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:document.getElementById('oldPasswordInput').value,new_password:document.getElementById('newPasswordInput').value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}catch(e){{alert('خطا در ارتباط با سرور.')}}}}
-</script>'''
+    age=int(prof.get("age") or 18)
+    bio=html.escape(prof.get("bio") or '')
+    body=f"""<div class="settings-screen page-enter">
+      <div class="settings-header">
+        <a class="settings-close" href="/lobby">×</a>
+        <div><div class="settings-kicker">PLAYER SETTINGS</div><h1>تنظیمات</h1></div>
+        <div class="settings-gear">⚙️</div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-avatar-row">
+          <div class="settings-avatar"><div class="avatar-crop-wrap" id="cropWrap">{preview}</div></div>
+          <div><b>تصویر آواتار</b><p>تصویرت در پروفایل و منوی اصلی نمایش داده می‌شود.</p></div>
+        </div>
+        <input type="file" id="avatarFile" accept="image/*" class="file-input">
+        <div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"><span>＋</span></div>
+        <label for="ageInput">سن</label>
+        <div class="age-row"><input id="ageInput" type="number" min="1" max="90" value="{age}" inputmode="numeric"><span>سال</span></div>
+        <div class="field-hint">سن بین ۱ تا ۹۰ سال است و در پروفایل برای بقیه بازیکن‌ها نمایش داده می‌شود.</div>
+        <label for="bioInput">بیوگرافی</label>
+        <textarea id="bioInput" maxlength="70" placeholder="یک جمله کوتاه درباره خودت...">{bio}</textarea>
+        <div class="char-counter"><span id="bioCount">{len(prof.get('bio') or '')}</span>/70</div>
+        <button class="settings-save glow-btn" onclick="saveProfile()">💾 ذخیره تغییرات</button>
+        <div id="saveStatus" class="status-line" style="display:none;margin-top:10px"></div>
+      </div>
+      <div class="settings-card password-card">
+        <h2>🔐 تغییر رمز عبور</h2>
+        <input type="password" id="oldPasswordInput" placeholder="رمز فعلی" autocomplete="current-password">
+        <input type="password" id="newPasswordInput" placeholder="رمز جدید (حداقل ۴ کاراکتر)" autocomplete="new-password">
+        <button class="glow-btn" onclick="changePass()">تغییر رمز</button>
+      </div>
+      <div class="settings-note">آیدی حساب: <b>{html.escape(username)}</b> • آیدی قابل تغییر نیست.</div>
+      <div class="settings-links"><a href="/profile?u={quote(username,safe='')}">👤 پروفایل</a><a href="/lobby">🏠 لابی</a></div>
+    </div>
+    <script>
+    let avatarData={str(avatar)!r};let img=null;let zoom=1;
+    const wrap=document.getElementById('cropWrap'), z=document.getElementById('zoom'), file=document.getElementById('avatarFile');
+    function applyCrop(){{if(!img)return;const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(190/sw,190/sh)*zoom;img.style.width=(sw*scale)+'px';img.style.height=(sh*scale)+'px';img.style.left=((190-sw*scale)/2)+'px';img.style.top=((190-sh*scale)/2)+'px'}}
+    function makeCrop(){{if(!img)return;const c=document.createElement('canvas');c.width=512;c.height=512;const ctx=c.getContext('2d');const sw=img.naturalWidth,sh=img.naturalHeight;const scale=Math.max(512/sw,512/sh)*zoom;const dw=sw*scale,dh=sh*scale;ctx.drawImage(img,(512-dw)/2,(512-dh)/2,dw,dh);avatarData=c.toDataURL('image/jpeg',0.78)}}
+    z.oninput=()=>{{zoom=Number(z.value);applyCrop();makeCrop()}};
+    file.onchange=()=>{{const f=file.files&&file.files[0];if(!f)return;if(!f.type.startsWith('image/')){{alert('لطفاً یک عکس انتخاب کن.');file.value='';return}}if(f.size>8*1024*1024){{alert('حجم عکس باید کمتر از ۸ مگابایت باشد.');file.value='';return}}const u=URL.createObjectURL(f);const next=new Image();next.onload=()=>{{img=next;zoom=1;z.value='1';wrap.innerHTML='';wrap.appendChild(img);applyCrop();makeCrop();URL.revokeObjectURL(u)}};next.onerror=()=>{{URL.revokeObjectURL(u);alert('خواندن عکس ناموفق بود.')}};next.src=u}};
+    const bioEl=document.getElementById('bioInput'), bioCount=document.getElementById('bioCount'); bioEl.oninput=()=>bioCount.textContent=bioEl.value.length;
+    async function saveProfile(){{const status=document.getElementById('saveStatus');try{{if(img)makeCrop();const payload={{bio:bioEl.value.trim(),age:Number(document.getElementById('ageInput').value),avatar:avatarData}};const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});const d=await r.json();status.style.display='block';status.textContent=d.ok?'✅ پروفایل با موفقیت ذخیره شد.':d.error==='bio_too_long'?'❌ بیوگرافی باید حداکثر ۷۰ حرف باشد.':d.error==='bad_age'?'❌ سن باید بین ۱ تا ۹۰ باشد.':(d.error==='image_too_large'?'❌ عکس خیلی بزرگ است.':'❌ ذخیره ناموفق بود.');status.style.color=d.ok?'var(--turquoise)':'var(--danger)'}}catch(e){{status.style.display='block';status.textContent='❌ خطا در ارتباط با سرور.';status.style.color='var(--danger)'}}}}
+    async function changePass(){{try{{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:document.getElementById('oldPasswordInput').value,new_password:document.getElementById('newPasswordInput').value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.')}}catch(e){{alert('خطا در ارتباط با سرور.')}}}}
+    </script>"""
     return page_shell('تنظیمات',body,username)
 
 def _fmt_time(ts):
@@ -1311,6 +1397,55 @@ BASE_CSS += """
 @keyframes queueSpin{to{transform:rotate(360deg)}}
 @keyframes queuePop{0%{transform:scale(.4)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
 @media(prefers-reduced-motion:reduce){.queue-spinner{animation:none}.queue-dot.filled{animation:none}}@media(max-width:600px){.lobby-top-title{font-size:26px}.lobby-stat{min-height:100px}.lobby-stat .ico{font-size:31px}.lobby-stat b{font-size:22px}.lobby-bottom-actions a{font-size:14px}.mode-actions{grid-template-columns:1fr 1.5fr}.mode-actions a{font-size:16px}.neon-bottom-nav{bottom:5px}}
+/* === Neon redesign: lightweight, bright and mobile-first === */
+body{background:#080b18;color:#f7f8ff}
+.container{max-width:760px;padding:14px 12px 90px}
+.auth-screen{min-height:calc(100vh - 28px);display:flex;align-items:center;justify-content:center;position:relative;padding:18px}
+.auth-card{width:min(100%,440px);background:linear-gradient(155deg,#171b3c,#0e1026);border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:28px 22px;box-shadow:0 18px 55px rgba(0,0,0,.45),0 0 35px rgba(89,63,255,.14);position:relative;z-index:2}
+.auth-orb{position:absolute;width:150px;height:150px;border-radius:50%;display:grid;place-items:center;font-size:58px;background:linear-gradient(145deg,#ff4fc8,#704bff);box-shadow:0 0 55px rgba(255,79,200,.4);top:6%;right:8%;opacity:.9}
+.auth-kicker,.settings-kicker,.profile-kicker,.lobby-kicker{font-size:11px;letter-spacing:2px;color:#9d91ff;font-weight:900}
+.auth-card h1{font-size:28px;margin:6px 0}.auth-card p{margin:4px 0 18px}
+.auth-card label,.settings-card label{display:block;margin:13px 0 7px;font-weight:800;color:#fff}
+.auth-input{background:#090c1c!important;border-color:#30375f!important;border-radius:14px!important;padding:14px!important;margin-bottom:5px!important}
+.field-hint{font-size:11px;color:#8f96b7;margin:5px 0 8px}.field-hint b{color:#d8d3ff}
+.auth-submit{width:100%;margin-top:14px;border-radius:14px;background:linear-gradient(135deg,#ff4fca,#754cff);color:#fff;box-shadow:0 8px 24px rgba(117,76,255,.3)}
+.auth-bottom{text-align:center!important;margin-top:18px!important}.auth-bottom a{color:#ff74d5;font-weight:900;text-decoration:none}
+
+.lobby-bg{border-radius:30px;padding:14px 10px 105px;background:
+radial-gradient(circle at 12% 3%,rgba(0,210,255,.24),transparent 25%),
+radial-gradient(circle at 88% 8%,rgba(255,49,188,.25),transparent 27%),
+radial-gradient(circle at 55% 70%,rgba(92,65,255,.18),transparent 35%),
+linear-gradient(150deg,#101a3c 0%,#0d0a24 52%,#170d31 100%);
+box-shadow:inset 0 0 70px rgba(0,0,0,.3),0 15px 45px rgba(0,0,0,.3)}
+.lobby-topbar{display:flex;align-items:center;justify-content:space-between;padding:5px 7px 15px}
+.lobby-title{font-size:27px;font-weight:1000;color:#fff;text-shadow:0 0 18px rgba(255,255,255,.22)}
+.lobby-settings{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;text-decoration:none;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13)}
+.lobby-profile{display:flex;align-items:center;gap:12px;padding:13px;border-radius:22px;text-decoration:none;color:#fff;background:linear-gradient(135deg,rgba(35,40,86,.92),rgba(19,20,49,.92));border:1px solid rgba(139,116,255,.42);box-shadow:0 12px 30px rgba(0,0,0,.24),0 0 20px rgba(100,74,255,.1)}
+.lobby-profile-avatar{width:62px;height:62px;border-radius:18px;overflow:hidden;display:grid;place-items:center;background:#11152d;border:2px solid #ff5ecb;box-shadow:0 0 18px rgba(255,94,203,.25);flex:none}
+.lobby-profile-avatar>*{max-width:100%;max-height:100%}.lobby-profile-info{min-width:0;flex:1}.lobby-profile-name{font-size:20px;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lobby-profile-meta{font-size:11px;color:#aeb4d3;margin-top:4px}.lobby-profile-meta span{opacity:.5;margin:0 3px}.lobby-profile-arrow{font-size:30px;color:#bcaeff}
+.lobby-wallet{margin:10px auto 18px;width:max-content;max-width:100%;padding:7px 15px;border-radius:999px;background:rgba(255,205,71,.1);border:1px solid rgba(255,205,71,.35);color:#ffe08a;font-size:13px}.lobby-wallet span{opacity:.4;margin:0 5px}
+.section-heading{display:flex;align-items:end;justify-content:space-between;margin:0 4px 9px;color:#fff;font-weight:1000}.section-heading small{font-size:10px;color:#8f96b7;font-weight:600}
+.game-mode-card{position:relative;min-height:108px;margin:9px 2px;padding:14px 12px 13px 76px;border-radius:19px;display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.14);overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.22)}
+.game-mode-card::after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;right:-90px;top:-80px;background:rgba(255,255,255,.1);pointer-events:none}
+.mode-speed{background:linear-gradient(135deg,#132c55,#14204c)}.mode-draw{background:linear-gradient(135deg,#3a154f,#241947)}.mode-elim{background:linear-gradient(135deg,#46172e,#291333)}
+.mode-badge{position:absolute;top:8px;right:10px;font-size:10px;font-weight:1000;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff}.mode-icon{font-size:37px;flex:none}.mode-copy{min-width:0;flex:1}.mode-copy h2{font-size:18px;margin:15px 0 1px;color:#fff}.mode-copy p{font-size:10px;margin:0;color:#adb3d0}.mode-start{display:flex;align-items:center;gap:5px;text-decoration:none;color:#fff;background:linear-gradient(135deg,#6b5cff,#a348ff);border-radius:12px;padding:9px 10px;font-size:11px;font-weight:1000;box-shadow:0 5px 15px rgba(110,77,255,.24);z-index:1}.mode-speed .mode-start{background:linear-gradient(135deg,#12bfff,#476dff)}.mode-draw .mode-start{background:linear-gradient(135deg,#ff4fca,#a04bff)}.mode-elim .mode-start{background:linear-gradient(135deg,#ff8a38,#f04470)}
+.lobby-quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}.lobby-quick-grid a{min-width:0;text-decoration:none;color:#fff;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:15px;padding:10px 4px;text-align:center;font-size:19px}.lobby-quick-grid b,.lobby-quick-grid small{display:block}.lobby-quick-grid b{font-size:10px}.lobby-quick-grid small{font-size:8px;color:#8f96b7;margin-top:2px}
+
+.profile-card{background:linear-gradient(150deg,#171b3c,#0c1024);border:1px solid #413a79;border-radius:25px;padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.35),0 0 25px rgba(91,69,255,.12)}
+.profile-head{display:flex;align-items:center;gap:14px}.profile-head>div:first-child{width:82px;height:82px;border-radius:22px;overflow:hidden;display:grid;place-items:center;background:#11152d;border:2px solid #ff5ccf}.profile-head>div:first-child img{max-width:100%;max-height:100%}.profile-head h1{font-size:24px;margin:3px 0}.profile-age{font-size:12px;color:#b8bdd5;margin-top:3px}.profile-bio{margin:18px 0;padding:13px;border-radius:15px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);color:#d9dcef;word-break:break-word}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.stat-box{background:#11162e;border:1px solid #2d3561;border-radius:13px;padding:9px 3px;text-align:center;font-size:10px;color:#929ab9}.stat-box b{font-size:15px;color:#fff}.profile-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.profile-actions form{margin:0}.verified-support{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:999px;background:rgba(0,216,255,.1);color:#63e6ff;font-size:10px}.support-mini-card{display:flex;flex-direction:column;margin-top:10px;padding:13px;border-radius:15px;text-decoration:none;color:#fff;background:#151a35;border:1px solid #343d72}.support-mini-card span{font-size:11px;color:#9ba3c2;margin-top:2px}
+
+.settings-screen{min-height:calc(100vh - 28px);padding-bottom:25px}.settings-header{display:flex;align-items:center;gap:12px;padding:6px 3px 16px}.settings-header h1{margin:0;font-size:27px}.settings-gear{margin-right:auto;width:45px;height:45px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(135deg,#ff43c8,#704bff);box-shadow:0 0 20px rgba(255,67,200,.25)}.settings-close{width:45px;height:45px;border-radius:50%;display:grid;place-items:center;text-decoration:none;background:#e9ebf2;color:#252a3d;font-size:30px}
+.settings-card{background:linear-gradient(150deg,#171b3c,#0d1025);border:1px solid #343b67;border-radius:23px;padding:18px;margin-bottom:12px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
+.settings-avatar-row{display:flex;align-items:center;gap:13px}.settings-avatar{width:86px;height:86px;border-radius:21px;overflow:hidden;display:grid;place-items:center;background:#0a0d1d;border:2px solid #10d6ff;flex:none}.settings-avatar p,.settings-avatar-row p{font-size:10px;color:#9299b8;margin:3px 0 0}.avatar-crop-wrap{position:relative;width:86px;height:86px;overflow:hidden;border-radius:19px}.avatar-crop-wrap img{position:absolute;max-width:none}.file-input{width:100%;margin:12px 0 6px;padding:10px;border-radius:12px;background:#0a0d1d;color:#b8bed7;border:1px solid #2c345a}
+.zoom-row{display:flex;align-items:center;gap:9px;color:#9fa7c5}.zoom-row input{flex:1;accent-color:#ff55cc}.age-row{display:flex;align-items:center;gap:8px}.age-row input{width:100%;margin:0!important;background:#090c1c!important;border-color:#30375f!important}.age-row span{color:#aab1cb;white-space:nowrap}
+.settings-card textarea{width:100%;min-height:92px;resize:none;padding:12px;border-radius:13px;background:#090c1c;color:#fff;border:1px solid #30375f;font-family:inherit}.char-counter{text-align:left;direction:ltr;color:#777f9f;font-size:10px;margin-top:3px}.settings-save{width:100%;margin-top:10px;background:linear-gradient(135deg,#00c8ff,#5b5cff);color:#fff}.settings-note{text-align:center;color:#7f88a8;font-size:11px;margin:14px 0}.settings-links{display:flex;justify-content:center;gap:8px}.settings-links a{color:#fff;text-decoration:none;background:#171b37;border:1px solid #343d6c;border-radius:12px;padding:8px 15px;font-size:12px}
+
+.neon-bottom-nav{background:rgba(10,10,28,.97);border-color:#704cff;box-shadow:0 0 22px rgba(112,76,255,.32),0 12px 35px rgba(0,0,0,.45)}
+button,.btn{transition:transform .12s ease,filter .12s ease}.btn:hover,button:hover{transform:translateY(-1px);filter:brightness(1.08)}
+@media(max-width:600px){.container{padding:8px 8px 86px}.auth-orb{width:110px;height:110px;font-size:42px;top:3%;right:2%}.auth-card{padding:23px 17px}.lobby-title{font-size:24px}.game-mode-card{min-height:102px;padding-left:67px}.mode-icon{font-size:31px}.mode-copy h2{font-size:16px}.mode-start{padding:8px 9px}.lobby-quick-grid{grid-template-columns:repeat(2,1fr)}.stat-grid{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){.page-enter,.glow-btn,.btn,button{animation:none!important;transition:none!important}}
+
 """
 
 def _bottom_nav(active="home"):

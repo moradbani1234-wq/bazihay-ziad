@@ -9,13 +9,13 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at INTEGER NOT NULL,
             is_support INTEGER NOT NULL DEFAULT 0,
-            display_name TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT '', avatar TEXT NOT NULL DEFAULT '🎮')""")
+            display_name TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT '', avatar TEXT NOT NULL DEFAULT '🎮', age INTEGER NOT NULL DEFAULT 18)""")
         # Migration for databases created by older versions.
         try:
             await db.execute("ALTER TABLE users ADD COLUMN is_support INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
-        for col, definition in [("display_name", "TEXT NOT NULL DEFAULT ''"), ("bio", "TEXT NOT NULL DEFAULT ''"), ("avatar", "TEXT NOT NULL DEFAULT '🎮'")]:
+        for col, definition in [("display_name", "TEXT NOT NULL DEFAULT ''"), ("bio", "TEXT NOT NULL DEFAULT ''"), ("avatar", "TEXT NOT NULL DEFAULT '🎮'"), ("age", "INTEGER NOT NULL DEFAULT 18")]:
             try:
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
             except Exception:
@@ -135,7 +135,7 @@ async def save_message(room,sender,content,reply_to_id=None):
 async def get_recent_messages(room,limit=50):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,COALESCE(u.display_name,m.sender) display_name
+        cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,m.sender display_name
                              FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? ORDER BY m.id DESC LIMIT ?""", (room,limit))
         return [dict(r) for r in reversed(await cur.fetchall())]
 
@@ -219,9 +219,10 @@ async def get_active_bans(limit=200):
         return [dict(r) for r in await cur.fetchall()]
 
 
-async def update_profile(username, display_name, bio, avatar):
+async def update_profile(username, bio, avatar, age):
+    age = max(1, min(90, int(age or 18)))
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET display_name=?, bio=?, avatar=? WHERE username=?", (display_name[:40], bio[:300], avatar[:180000], username))
+        await db.execute("UPDATE users SET bio=?, avatar=?, age=? WHERE username=?", (bio[:70], avatar[:180000], age, username))
         await db.commit()
 
 async def update_password(username, password_hash, salt):
@@ -237,7 +238,7 @@ async def profile(username):
         return None
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT u.username,u.display_name,u.bio,u.avatar,
+        cur=await db.execute("""SELECT u.username,u.bio,u.avatar,COALESCE(u.age,18) age,
                                       COALESCE(s.wins,0) wins,COALESCE(s.losses,0) losses,COALESCE(s.draws,0) draws,COALESCE(s.points,0) points,
                                       COALESCE(s.correct_guesses,0) correct_guesses,COALESCE(s.wrong_guesses,0) wrong_guesses
                                FROM users u LEFT JOIN stats s ON s.username=u.username
@@ -249,7 +250,7 @@ async def profile(username):
 async def get_messages_after(room, after_id=0, limit=100):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,COALESCE(u.display_name,m.sender) display_name
+        cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,m.sender display_name
                               FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? AND m.id>? ORDER BY m.id ASC LIMIT ?""", (room, int(after_id), limit))
         return [dict(r) for r in await cur.fetchall()]
 
@@ -336,14 +337,14 @@ async def respond_friend_request(sender, receiver, accept):
 async def friend_requests_for(username):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("SELECT fr.id,fr.sender,fr.receiver,fr.created_at,COALESCE(u.display_name,fr.sender) display_name,COALESCE(u.avatar,'🎮') avatar FROM friend_requests fr LEFT JOIN users u ON u.username=fr.sender WHERE fr.receiver=? AND fr.status='pending' ORDER BY fr.id DESC",(username,))
+        cur=await db.execute("SELECT fr.id,fr.sender,fr.receiver,fr.created_at,fr.sender display_name,COALESCE(u.avatar,'🎮') avatar FROM friend_requests fr LEFT JOIN users u ON u.username=fr.sender WHERE fr.receiver=? AND fr.status='pending' ORDER BY fr.id DESC",(username,))
         return [dict(r) for r in await cur.fetchall()]
 
 async def friends_for(username):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
         cur=await db.execute("""SELECT CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END username,
-                               COALESCE(u.display_name,CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END) display_name,
+                               CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END display_name,
                                COALESCE(u.avatar,'🎮') avatar FROM friends f JOIN users u ON u.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END)
                                WHERE f.user1=? OR f.user2=? ORDER BY lower(display_name)""",(username,username,username,username,username))
         return [dict(r) for r in await cur.fetchall()]

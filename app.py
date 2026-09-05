@@ -3,6 +3,7 @@ import io
 import os
 import secrets
 import time
+import re
 from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, UploadFile, File
@@ -55,7 +56,9 @@ async def signup_get():
 async def signup_post(request: Request, username: str = Form(...), password: str = Form(...)):
     username = username.strip()
     if len(username) < 3:
-        return tpl.signup_page("نام کاربری باید حداقل ۳ حرف باشد.")
+        return tpl.signup_page("آیدی باید حداقل ۳ کاراکتر باشد.")
+    if not re.fullmatch(r"[a-z0-9]+", username):
+        return tpl.signup_page("آیدی فقط می‌تواند شامل حروف کوچک انگلیسی (a-z) و عدد (0-9) باشد.")
     if len(password) < 4:
         return tpl.signup_page("رمز عبور باید حداقل ۴ حرف باشد.")
 
@@ -362,11 +365,20 @@ async def settings_profile(request: Request):
         return {"ok": False, "error": "login_required"}
     data = await request.json()
     avatar = str(data.get("avatar") or "🎮")
+    bio = str(data.get("bio") or "").strip()
+    try:
+        age = int(data.get("age") or 18)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "bad_age"}
+    if not 1 <= age <= 90:
+        return {"ok": False, "error": "bad_age"}
+    if len(bio) > 70:
+        return {"ok": False, "error": "bio_too_long"}
     if avatar.startswith("data:image/") and len(avatar) > 180000:
         return {"ok": False, "error": "image_too_large"}
     if avatar.startswith("data:") and not avatar.startswith("data:image/"):
         return {"ok": False, "error": "bad_image"}
-    await db.update_profile(username, str(data.get("display_name") or username), str(data.get("bio") or ""), avatar)
+    await db.update_profile(username, bio, avatar, age)
     return {"ok": True}
 
 @app.post("/settings/password")
