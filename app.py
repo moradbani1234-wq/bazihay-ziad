@@ -141,9 +141,14 @@ async def report_content(request: Request):
     target = str(data.get("target") or "").strip()[:64]
     content = str(data.get("content") or "").strip()[:500]
     context = str(data.get("context") or "chat")[:32]
+    attachment = str(data.get("attachment") or "")
+    if attachment and len(attachment) > 350000:
+        attachment = ""
     if not target or target == username or not content:
         return {"ok": False, "error": "invalid"}
-    await db.create_report(username, target, context, content)
+    if not await db.get_user(target):
+        return {"ok": False, "error": "user_not_found"}
+    await db.create_report(username, target, context, content, attachment or None)
     return {"ok": True}
 
 @app.get("/leaderboard", response_class=HTMLResponse)
@@ -208,6 +213,49 @@ async def support_unban(request: Request):
     await db.unban_user(target, scope)
     return {"ok": True}
 
+@app.get("/profile/{target}", response_class=HTMLResponse)
+async def profile_page(request: Request, target: str):
+    username = _require_login(request)
+    if not username:
+        return RedirectResponse("/login")
+    prof = await db.profile(target)
+    if not prof:
+        return HTMLResponse("کاربر پیدا نشد.", status_code=404)
+    return tpl.profile_page(username, prof)
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    username = _require_login(request)
+    if not username:
+        return RedirectResponse("/login")
+    return tpl.settings_page(username, await db.profile(username))
+
+@app.post("/settings/profile")
+async def settings_profile(request: Request):
+    username = _require_login(request)
+    if not username:
+        return {"ok": False, "error": "login_required"}
+    data = await request.json()
+    await db.update_profile(username, str(data.get("display_name") or username), str(data.get("bio") or ""), str(data.get("avatar") or "🎮"))
+    return {"ok": True}
+
+@app.post("/settings/password")
+async def settings_password(request: Request):
+    username = _require_login(request)
+    if not username:
+        return {"ok": False, "error": "login_required"}
+    data = await request.json()
+    old = str(data.get("old_password") or "")
+    new = str(data.get("new_password") or "")
+    user = await db.get_user(username)
+    if not user or not auth.verify_password(old, user["salt"], user["password_hash"]):
+        return {"ok": False, "error": "old_password"}
+    if len(new) < 4:
+        return {"ok": False, "error": "short_password"}
+    h, salt = auth.hash_password(new)
+    await db.update_password(username, h, salt)
+    return {"ok": True}
+
 # ============================================================
 #                          LOBBY
 # ============================================================
@@ -226,7 +274,7 @@ async def start_private_chat(request: Request, other: str = Form(...)):
     if not username:
         return RedirectResponse("/login")
     other = other.strip()
-    if not other or other == username:
+    if not other or other == username or not await db.get_user(other):
         return RedirectResponse("/lobby", status_code=303)
     return RedirectResponse(f"/chat/private/{other}", status_code=303)
 
@@ -255,9 +303,9 @@ class ChatManager:
     def disconnect_public(self, ws: WebSocket):
         self.public_conns.discard(ws)
 
-    async def broadcast_public(self, sender: str, content: str):
-        await db.save_message("public", sender, content)
-        payload = {"sender": sender, "content": content}
+    async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
+        mid = await db.save_message("public", sender, content, reply_to_id)
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id}
         dead = []
         for ws in self.public_conns:
             try:
@@ -275,9 +323,9 @@ class ChatManager:
         if room in self.private_conns:
             self.private_conns[room].discard(ws)
 
-    async def broadcast_private(self, room: str, sender: str, content: str):
-        await db.save_message(room, sender, content)
-        payload = {"sender": sender, "content": content}
+    async def broadcast_private(self, room: str, sender: str, content: str, reply_to_id=None):
+        mid = await db.save_message(room, sender, content, reply_to_id)
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id}
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -306,7 +354,7 @@ async def ws_chat_public(websocket: WebSocket):
                 if not _is_support(username) and await _ban_for(username, "chat"):
                     await websocket.send_json({"type":"banned","message":"دسترسی چت شما موقتاً محدود است."})
                     continue
-                await chat_manager.broadcast_public(username, content[:500])
+                await chat_manager.broadcast_public(username, content[:500], data.get("reply_to_id"))
     except WebSocketDisconnect:
         chat_manager.disconnect_public(websocket)
 
@@ -343,7 +391,7 @@ async def ws_chat_private(websocket: WebSocket, other: str):
                 if not _is_support(username) and await _ban_for(username, "chat"):
                     await websocket.send_json({"type":"banned","message":"دسترسی چت شما موقتاً محدود است."})
                     continue
-                await chat_manager.broadcast_private(room, username, content[:500])
+                await chat_manager.broadcast_private(room, username, content[:500], data.get("reply_to_id"))
     except WebSocketDisconnect:
         chat_manager.disconnect_private(room, websocket)
 
@@ -704,9 +752,11 @@ class DrawingGameManager:
             return
 
         if word == game["word"]:
+            await db.update_stats(username, correct_guesses=1)
             await self._end_round(game_id, correct=True)
         else:
             game["wrong_words"].add(word)
+            await db.update_stats(username, wrong_guesses=1)
             await self._send(game, username, {"type": "guess_wrong", "word": word})
 
     async def _end_round(self, game_id: str, correct: bool):

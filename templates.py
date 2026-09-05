@@ -379,6 +379,7 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
           <div><b>گزارش {r['id']}</b> — {html.escape(r['context'])} — <span>{status}</span></div>
           <div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر گزارش‌شده: <b>{html.escape(r['target'])}</b></div>
           <p style="margin:8px 0"><b>محتوا:</b> {html.escape(r['content'])}</p>
+          {('<img src="'+html.escape(r.get("attachment") or '')+'" style="max-width:100%;border-radius:12px;border:1px solid var(--border);margin:8px 0" alt="نقاشی گزارش‌شده">' if r.get("attachment") else '')}
           <div class="draw-tools ban-controls">
             <select class="draw-size ban-scope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
             <input class="ban-hours" type="number" min="0" max="168" step="1" value="0" style="width:70px;margin:0" title="ساعت">
@@ -386,6 +387,7 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
             <input class="ban-minutes" type="number" min="0" max="59" step="1" value="3" style="width:70px;margin:0" title="دقیقه">
             <span class="ban-unit">دقیقه</span>
             <button class="glow-btn" onclick="banUser({r['id']}, this)">محروم کن</button>
+            <button class="btn" onclick="banReporter({r['id']}, {r['reporter']!r})">🚫 محرومیت گزارش‌دهنده</button>
           </div>
         </div>""")
 
@@ -462,6 +464,11 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
       const reason=document.getElementById('directReason').value.trim() || 'نقض قوانین';
       if(!target) {{ alert('نام کاربری را وارد کن'); return; }}
       await doBan({{target,scope,hours,minutes,reason}}, null, '');
+    }}
+
+    async function banReporter(id, target) {{
+      if(!confirm('اگر گزارش بی‌مورد بوده، گزارش‌دهنده را محروم کنیم؟')) return;
+      await doBan({{report_id:id,target,scope:'chat',minutes:10,reason:'گزارش بی‌مورد'}}, null, '');
     }}
 
     async function unbanUser(btn) {{
@@ -644,7 +651,8 @@ def tictactoe_page(username: str) -> str:
     function onMessage(ev) {{
       const data = JSON.parse(ev.data);
       if (data.type === "waiting") {{
-        statusEl.textContent = "⏳ در صف حریف — حداکثر ۳۰ ثانیه";
+        let left=30; statusEl.textContent = "⏳ در صف حریف — "+left+" ثانیه";
+        clearInterval(window.queueTimer); window.queueTimer=setInterval(()=>{{left--; statusEl.textContent="⏳ در صف حریف — "+Math.max(0,left)+" ثانیه"; if(left<=0) clearInterval(window.queueTimer);}},1000);
       }} else if (data.type === "queue_timeout") {{
         statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره صفحه را تازه کن.";
       }} else if (data.type === "state") {{
@@ -877,7 +885,8 @@ def drawing_page(username: str) -> str:
         const data = JSON.parse(ev.data);
 
         if (data.type === "waiting") {
-            statusEl.textContent = "⏳ در صف حریف — حداکثر ۳۰ ثانیه";
+            let queueLeft=30; statusEl.textContent = "⏳ در صف حریف — "+queueLeft+" ثانیه";
+            clearInterval(window.drawQueueTimer); window.drawQueueTimer=setInterval(()=>{queueLeft--; statusEl.textContent="⏳ در صف حریف — "+Math.max(0,queueLeft)+" ثانیه"; if(queueLeft<=0) clearInterval(window.drawQueueTimer);},1000);
             statusEl.style.display = "block";
             canvasWrap.style.display = "none";
             scoreBar.style.display = "none";
@@ -960,7 +969,7 @@ def drawing_page(username: str) -> str:
                 const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش نقاشی";
                 rb.onclick=async()=>{
                     const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},
-                      body:JSON.stringify({target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing"})});
+                      body:JSON.stringify({target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing",attachment:(canvas.toDataURL("image/jpeg",0.65)||"")})});
                     if((await r.json()).ok) alert("گزارش ثبت شد.");
                 };
                 resultPanel.appendChild(rb);
@@ -1010,3 +1019,52 @@ def drawing_page(username: str) -> str:
     connectDrawing();
     </script>"""
     return page_shell("نقاشی حدسی", body, username)
+
+
+BASE_CSS += """
+.reply-bar{display:flex;gap:8px;align-items:center;background:var(--surface-raised);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px}.reply-preview{flex:1;color:var(--text-muted);font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.msg-actions{display:flex;gap:5px;margin-top:5px}.msg-actions button{padding:4px 8px;font-size:11px;background:transparent;color:var(--saffron);border:1px solid var(--border)}.msg-reply{border-right:3px solid var(--saffron);padding:3px 8px;margin-bottom:5px;font-size:12px;opacity:.72}.profile-head{display:flex;gap:14px;align-items:center}.avatar-big{width:70px;height:70px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:38px;background:var(--surface-raised);border:1px solid var(--border)}.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat-box{padding:14px;background:var(--surface-raised);border:1px solid var(--border);border-radius:12px;text-align:center}.progress{height:10px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--border)}.progress>div{height:100%;background:var(--turquoise)}
+"""
+
+def _nav(username):
+    if username:
+        u=html.escape(username)
+        support='<a href="/support">🛡️ پشتیبانی</a>' if username=='morad' else ''
+        return f'''<div class="nav"><div class="nav-brand">🎲 بازی‌خونه — {u}</div><div><a href="/lobby">🏠 لابی</a><a href="/profile/{u}">👤 پروفایل</a><a href="/settings">⚙️ تنظیمات</a><a href="/leaderboard">🏆 رتبه‌بندی</a>{support}<a href="/logout">خروج</a></div></div>'''
+    return '<div class="nav"><div class="nav-brand">🎲 بازی‌خونه</div><div><a href="/login">ورود</a></div></div>'
+
+def lobby_page(username):
+    body=f'''<div class="card hero"><h1>🎮 خوش اومدی، {html.escape(username)}!</h1><p>بازی، چت، رتبه‌بندی و پروفایل از اینجا در دسترسه.</p><div class="grid-links"><a class="glow-btn" href="/game/tictactoe">⭕ دوز دو نفره زنده <small>رقابت سریع</small></a><a class="glow-btn" href="/game/drawing">🎨 نقاشی حدسی دو نفره <small>۴ دور، هر دور ۳۰ ثانیه</small></a><a class="glow-btn" href="/chat/public">💬 چت روم <small>ریپلای و گزارش</small></a><a class="glow-btn" href="/leaderboard">🏆 رتبه‌بندی <small>بخش مستقل</small></a><a class="glow-btn" href="/profile/{html.escape(username)}">👤 پروفایل من <small>آمار حدس‌ها</small></a><a class="glow-btn" href="/settings">⚙️ تنظیمات <small>حساب و پروفایل</small></a></div></div><div class="card"><h2>💌 چت خصوصی</h2><p>گفت‌وگوها در سرور ذخیره می‌شوند و با بستن سایت از بین نمی‌روند.</p><form method="post" action="/chat/private/start"><input type="text" name="other" placeholder="آیدی کاربر" required><button type="submit">💬 شروع چت</button></form></div>'''
+    return page_shell('لابی',body,username)
+
+def profile_page(username, prof):
+    total=prof.get('correct_guesses',0)+prof.get('wrong_guesses',0); correct=round(prof.get('correct_guesses',0)*100/total,1) if total else 0; wrong=round(prof.get('wrong_guesses',0)*100/total,1) if total else 0
+    body=f'''<div class="card hero"><div class="profile-head"><div class="avatar-big">{html.escape(prof.get('avatar') or '🎮')}</div><div><h1>{html.escape(prof.get('display_name') or prof['username'])}</h1><p style="margin:0">@{html.escape(prof['username'])}</p></div></div><p>{html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')}</p><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>برد</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div><p>درصد حدس درست</p><div class="progress"><div style="width:{correct}%"></div></div><p>درصد حدس غلط</p><div class="progress"><div style="width:{wrong}%"></div></div></div>'''
+    if prof['username']!=username:
+        body+=f'''<div class="card"><button class="glow-btn" onclick="reportUser()">🚩 گزارش کاربر</button></div><script>async function reportUser(){{const reason=prompt('دلیل گزارش:');if(!reason)return;const r=await fetch('/report',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{target:{prof['username']!r},content:reason,context:'profile'}})}});alert((await r.json()).ok?'گزارش ثبت شد.':'خطا');}}</script>'''
+    body+=f'<div style="text-align:center"><a class="btn" href="/chat/private/{html.escape(prof["username"])}">💬 پیام خصوصی</a> <a class="btn" href="/lobby">لابی</a></div>'
+    return page_shell('پروفایل',body,username)
+
+def settings_page(username, prof):
+    body=f'''<div class="card hero"><h1>⚙️ تنظیمات حساب</h1><p>آیدی حساب، نام نمایشی، آواتار و بیو را مدیریت کن.</p><label>آیدی حساب</label><input type="text" value="{html.escape(username)}" disabled><label>نام نمایشی</label><input type="text" id="display" value="{html.escape(prof.get('display_name') or username)}"><label>آواتار</label><input type="text" id="avatar" maxlength="8" value="{html.escape(prof.get('avatar') or '🎮')}"><label>بیوگرافی</label><textarea id="bio" style="width:100%;min-height:110px;padding:12px;border-radius:10px;background:var(--bg);color:var(--text);border:1px solid var(--border);font-family:inherit">{html.escape(prof.get('bio') or '')}</textarea><button style="margin-top:12px" onclick="saveProfile()">💾 ذخیره پروفایل</button></div><div class="card"><h2>🔐 تغییر رمز عبور</h2><input type="password" id="oldp" placeholder="رمز فعلی"><input type="password" id="newp" placeholder="رمز جدید"><button onclick="changePass()">تغییر رمز</button></div><div style="text-align:center"><a class="btn" href="/profile/{html.escape(username)}">پروفایل</a> <a class="btn" href="/lobby">لابی</a></div><script>async function saveProfile(){{const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{display_name:display.value,bio:bio.value,avatar:avatar.value}})}});alert((await r.json()).ok?'پروفایل ذخیره شد.':'خطا');}}async function changePass(){{const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password:oldp.value,new_password:newp.value}})}});const d=await r.json();alert(d.ok?'رمز تغییر کرد.':d.error==='old_password'?'رمز فعلی اشتباه است.':'رمز جدید کوتاه است.');}}</script>'''
+    return page_shell('تنظیمات',body,username)
+
+def _render_messages(messages, username):
+    if not messages:return '<div style="opacity:.6;text-align:center;padding:20px">هنوز پیامی نیست...</div>'
+    out=[]
+    for m in messages:
+        mid=int(m.get('id') or 0); sender=m['sender']; content=m['content']; cls='msg me' if sender==username else 'msg'; reply='<div class="msg-reply">↩️ پاسخ به پیام قبلی</div>' if m.get('reply_to_id') else ''
+        actions=f'<div class="msg-actions"><button onclick="replyTo({mid}, {sender!r}, {content!r})">↩️ ریپلای</button>'
+        if sender!=username: actions+=f'<button onclick="reportMsg({sender!r}, {content!r})">🚩 گزارش</button>'
+        actions+='</div>'; out.append(f'<div class="{cls}"><span class="sender">{html.escape(sender)}</span>{reply}{html.escape(content)}{actions}</div>')
+    return ''.join(out)
+
+def _chat_script(path, username):
+    return f'''<script>const wsProto=location.protocol==="https:"?"wss:":"ws:";const ws=new WebSocket(wsProto+"//"+location.host+"{path}");const box=document.getElementById("chatBox"),input=document.getElementById("msgInput"),replyBar=document.getElementById("replyBar"),replyPreview=document.getElementById("replyPreview");let replyId=null;function replyTo(id,s,c){{replyId=id;replyBar.style.display="flex";replyPreview.textContent="پاسخ به "+s+": "+c;input.focus();}}function cancelReply(){{replyId=null;replyBar.style.display="none";}}function addMsg(s,c,id,r){{const d=document.createElement("div");d.className=s==={username!r}?"msg me":"msg";d.innerHTML='<span class="sender"></span>'+(r?'<div class="msg-reply">↩️ پاسخ به پیام</div>':'')+'<span class="content"></span><div class="msg-actions"><button>↩️ ریپلای</button>'+(s!=={username!r}?'<button>🚩 گزارش</button>':'')+'</div>';d.querySelector('.sender').textContent=s;d.querySelector('.content').textContent=c;const b=d.querySelectorAll('button');b[0].onclick=()=>replyTo(id,s,c);if(b[1])b[1].onclick=()=>reportMsg(s,c);box.appendChild(d);box.scrollTop=box.scrollHeight;}}ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.sender)addMsg(d.sender,d.content,d.id,d.reply_to_id);}};function sendMsg(){{const t=input.value.trim();if(!t||ws.readyState!==1)return;ws.send(JSON.stringify({{content:t,reply_to_id:replyId}}));input.value='';cancelReply();}}input.addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg();}});async function reportMsg(target,content){{if(!confirm('این پیام را گزارش می‌کنی؟'))return;const r=await fetch('/report',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{target,content,context:'chat'}})}});alert((await r.json()).ok?'گزارش ثبت شد.':'خطا');}}box.scrollTop=box.scrollHeight;</script>'''
+
+def chat_public_page(username,messages):
+    body=f'''<div class="card"><h1>💬 چت روم</h1><div class="chat-box" id="chatBox">{_render_messages(messages,username)}</div><div class="reply-bar" id="replyBar" style="display:none"><span class="reply-preview" id="replyPreview"></span><button onclick="cancelReply()">✕</button></div><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنوی..." autocomplete="off"><button onclick="sendMsg()">ارسال</button></div></div>'''+_chat_script('/ws/chat/public',username)
+    return page_shell('چت روم',body,username)
+
+def chat_private_page(username,other,messages):
+    body=f'''<div class="card"><h1>💬 چت خصوصی با {html.escape(other)}</h1><div class="chat-box" id="chatBox">{_render_messages(messages,username)}</div><div class="reply-bar" id="replyBar" style="display:none"><span class="reply-preview" id="replyPreview"></span><button onclick="cancelReply()">✕</button></div><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیام خصوصی..." autocomplete="off"><button onclick="sendMsg()">ارسال</button></div></div>'''+_chat_script('/ws/chat/private/'+html.escape(other),username)
+    return page_shell('چت خصوصی',body,username)
