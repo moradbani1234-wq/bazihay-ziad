@@ -1,15 +1,16 @@
+import asyncio
 import os
-import random
 import secrets
+import time
 
-from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 import auth
 import database as db
 import templates as tpl
-import words_fa
+import words_draw
 
 app = FastAPI()
 app.add_middleware(
@@ -365,59 +366,272 @@ async def ws_tictactoe(websocket: WebSocket):
 
 
 # ============================================================
-#                  WORD GAME (حدس کلمه فارسی)
+#                 DRAWING GAME (نقاشی حدسی دو نفره)
 # ============================================================
 
-WORDGAME_SESSIONS: dict[str, dict] = {}
+DRAW_ROUND_SECONDS = 30
+DRAW_SCOREBOARD_SECONDS = 5
+DRAW_FINAL_RESULT_SECONDS = 7
+DRAW_TOTAL_ROUNDS = 4
+DRAW_OPTIONS_COUNT = 12
 
 
-@app.get("/game/wordgame", response_class=HTMLResponse)
-async def wordgame_page(request: Request):
+class DrawingGameManager:
+    def __init__(self):
+        self.waiting: tuple[str, WebSocket] | None = None
+        self.games: dict[str, dict] = {}
+        self.player_game: dict[str, str] = {}
+
+    # ---------------------------------------------------------- matchmaking
+    async def connect(self, username: str, ws: WebSocket):
+        await ws.accept()
+
+        game_id = self.player_game.get(username)
+        if game_id and game_id in self.games:
+            game = self.games[game_id]
+            game["sockets"][username] = ws
+            await self._send(game, username, self._round_start_payload(game, username))
+            return
+
+        if self.waiting is None or self.waiting[0] == username:
+            self.waiting = (username, ws)
+            await ws.send_json({"type": "waiting"})
+            return
+
+        other_username, other_ws = self.waiting
+        self.waiting = None
+
+        game_id = secrets.token_hex(6)
+        game = {
+            "id": game_id,
+            "players": [other_username, username],
+            "sockets": {other_username: other_ws, username: ws},
+            "scores": {other_username: 0, username: 0},
+            "round": 0,
+            "drawer": None,
+            "guesser": None,
+            "word": None,
+            "options": [],
+            "wrong_words": set(),
+            "round_active": False,
+            "round_deadline": 0.0,
+        }
+        self.games[game_id] = game
+        self.player_game[other_username] = game_id
+        self.player_game[username] = game_id
+
+        await self._next_round(game_id)
+
+    async def _send(self, game: dict, username: str, payload: dict):
+        ws = game["sockets"].get(username)
+        if not ws:
+            return
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            pass
+
+    async def _broadcast(self, game: dict, payload: dict):
+        for username in game["players"]:
+            await self._send(game, username, payload)
+
+    def _round_start_payload(self, game: dict, username: str) -> dict:
+        base = {
+            "type": "round_start",
+            "round": game["round"],
+            "total_rounds": DRAW_TOTAL_ROUNDS,
+            "duration": DRAW_ROUND_SECONDS,
+            "scores": game["scores"],
+        }
+        if username == game["drawer"]:
+            base["role"] = "drawer"
+            base["word"] = game["word"]
+            base["colors"] = words_draw.COLORS
+            base["opponent"] = game["guesser"]
+        else:
+            base["role"] = "guesser"
+            base["options"] = game["options"]
+            base["opponent"] = game["drawer"]
+        return base
+
+    # ---------------------------------------------------------------- rounds
+    async def _next_round(self, game_id: str):
+        game = self.games.get(game_id)
+        if not game:
+            return
+
+        game["round"] += 1
+        if game["round"] > DRAW_TOTAL_ROUNDS:
+            await self._finish_game(game_id)
+            return
+
+        players = game["players"]
+        drawer = players[(game["round"] - 1) % 2]
+        guesser = players[game["round"] % 2]
+        target, options = words_draw.pick_round_words(DRAW_OPTIONS_COUNT)
+
+        game.update({
+            "drawer": drawer,
+            "guesser": guesser,
+            "word": target,
+            "options": options,
+            "wrong_words": set(),
+            "round_active": True,
+            "round_deadline": time.monotonic() + DRAW_ROUND_SECONDS,
+        })
+
+        for username in players:
+            await self._send(game, username, self._round_start_payload(game, username))
+
+        asyncio.create_task(self._round_timeout(game_id, game["round"]))
+
+    async def _round_timeout(self, game_id: str, round_number: int):
+        await asyncio.sleep(DRAW_ROUND_SECONDS)
+        game = self.games.get(game_id)
+        if game and game["round_active"] and game["round"] == round_number:
+            await self._end_round(game_id, correct=False)
+
+    async def handle_draw(self, username: str, data: dict):
+        game_id = self.player_game.get(username)
+        game = self.games.get(game_id) if game_id else None
+        if not game or not game["round_active"] or username != game["drawer"]:
+            return
+        other = game["guesser"]
+        msg_type = data.get("type")
+        if msg_type == "draw":
+            await self._send(game, other, {
+                "type": "draw",
+                "x0": data.get("x0"), "y0": data.get("y0"),
+                "x1": data.get("x1"), "y1": data.get("y1"),
+                "color": data.get("color"),
+            })
+        elif msg_type == "clear":
+            await self._send(game, other, {"type": "clear"})
+
+    async def handle_guess(self, username: str, word: str):
+        game_id = self.player_game.get(username)
+        game = self.games.get(game_id) if game_id else None
+        if not game or not game["round_active"] or username != game["guesser"]:
+            return
+        word = (word or "").strip()
+        if not word or word in game["wrong_words"]:
+            return
+
+        if word == game["word"]:
+            await self._end_round(game_id, correct=True)
+        else:
+            game["wrong_words"].add(word)
+            await self._send(game, username, {"type": "guess_wrong", "word": word})
+
+    async def _end_round(self, game_id: str, correct: bool):
+        game = self.games.get(game_id)
+        if not game or not game["round_active"]:
+            return
+        game["round_active"] = False
+
+        points_guesser = 0
+        points_drawer = 0
+        if correct:
+            remaining = max(0.0, game["round_deadline"] - time.monotonic())
+            ratio = remaining / DRAW_ROUND_SECONDS
+            raw_points = round(ratio * 100) - 10 * len(game["wrong_words"])
+            points_guesser = max(10, raw_points)
+            points_drawer = 50
+            game["scores"][game["guesser"]] += points_guesser
+            game["scores"][game["drawer"]] += points_drawer
+
+        is_last = game["round"] >= DRAW_TOTAL_ROUNDS
+        await self._broadcast(game, {
+            "type": "round_result",
+            "round": game["round"],
+            "total_rounds": DRAW_TOTAL_ROUNDS,
+            "correct": correct,
+            "word": game["word"],
+            "drawer": game["drawer"],
+            "guesser": game["guesser"],
+            "points_guesser": points_guesser,
+            "points_drawer": points_drawer,
+            "scores": game["scores"],
+            "is_last": is_last,
+            "break_seconds": DRAW_FINAL_RESULT_SECONDS if is_last else DRAW_SCOREBOARD_SECONDS,
+        })
+
+        delay = DRAW_FINAL_RESULT_SECONDS if is_last else DRAW_SCOREBOARD_SECONDS
+        asyncio.create_task(self._advance_after_delay(game_id, delay))
+
+    async def _advance_after_delay(self, game_id: str, delay: float):
+        await asyncio.sleep(delay)
+        game = self.games.get(game_id)
+        if not game:
+            return
+        if game["round"] >= DRAW_TOTAL_ROUNDS:
+            await self._finish_game(game_id)
+        else:
+            await self._next_round(game_id)
+
+    async def _finish_game(self, game_id: str):
+        game = self.games.get(game_id)
+        if not game:
+            return
+        scores = game["scores"]
+        best = max(scores.values())
+        winners = [u for u, s in scores.items() if s == best]
+        winner = winners[0] if len(winners) == 1 else None
+        await self._broadcast(game, {
+            "type": "game_over",
+            "scores": scores,
+            "winner": winner,
+        })
+        for username in game["players"]:
+            self.player_game.pop(username, None)
+        self.games.pop(game_id, None)
+
+    # ------------------------------------------------------------- lifecycle
+    async def disconnect(self, username: str):
+        if self.waiting and self.waiting[0] == username:
+            self.waiting = None
+
+        game_id = self.player_game.pop(username, None)
+        if not game_id or game_id not in self.games:
+            return
+        game = self.games[game_id]
+        game["sockets"].pop(username, None)
+        game["round_active"] = False
+        for uname, ws in list(game["sockets"].items()):
+            try:
+                await ws.send_json({"type": "opponent_left"})
+            except Exception:
+                pass
+        self.player_game.pop(game["players"][0], None)
+        self.player_game.pop(game["players"][1], None)
+        self.games.pop(game_id, None)
+
+
+drawing_manager = DrawingGameManager()
+
+
+@app.get("/game/drawing", response_class=HTMLResponse)
+async def drawing_page(request: Request):
     username = _require_login(request)
     if not username:
         return RedirectResponse("/login")
-    return tpl.wordgame_page(username)
+    return tpl.drawing_page(username)
 
 
-@app.post("/api/wordgame/start")
-async def wordgame_start(request: Request):
-    username = _require_login(request)
+@app.websocket("/ws/drawing")
+async def ws_drawing(websocket: WebSocket):
+    username = websocket.session.get("username")
     if not username:
-        raise HTTPException(401, "لطفاً وارد شوید.")
-    word = words_fa.normalize(random.choice(words_fa.WORDS))
-    WORDGAME_SESSIONS[username] = {"word": word, "guesses": [], "finished": False}
-    return JSONResponse({"length": len(word), "max_attempts": 6})
-
-
-@app.post("/api/wordgame/guess")
-async def wordgame_guess(request: Request):
-    username = _require_login(request)
-    if not username:
-        raise HTTPException(401, "لطفاً وارد شوید.")
-
-    body = await request.json()
-    guess = words_fa.normalize((body.get("guess") or ""))
-
-    session = WORDGAME_SESSIONS.get(username)
-    if not session or session["finished"]:
-        raise HTTPException(400, "یک بازی جدید شروع کن.")
-
-    target = session["word"]
-    if len(guess) != len(target):
-        raise HTTPException(400, f"کلمه باید {len(target)} حرف باشد.")
-
-    feedback = words_fa.evaluate_guess(guess, target)
-    session["guesses"].append({"guess": guess, "feedback": feedback})
-
-    won = guess == target
-    lost = (not won) and len(session["guesses"]) >= 6
-    if won or lost:
-        session["finished"] = True
-
-    return JSONResponse({
-        "feedback": feedback,
-        "won": won,
-        "lost": lost,
-        "attempts": len(session["guesses"]),
-        "target": target if (won or lost) else None,
-    })
+        await websocket.close(code=4001)
+        return
+    await drawing_manager.connect(username, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+            if msg_type in ("draw", "clear"):
+                await drawing_manager.handle_draw(username, data)
+            elif msg_type == "guess":
+                await drawing_manager.handle_guess(username, data.get("word"))
+    except WebSocketDisconnect:
+        await drawing_manager.disconnect(username)

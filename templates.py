@@ -137,6 +137,54 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 .letter-box.present { background: #8A6A25; border-color: #8A6A25; color: #fff; }
 .letter-box.absent { background: var(--border); border-color: var(--border); color: var(--text-muted); }
 
+.draw-round-info {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; font-weight: 600; color: var(--text);
+}
+.draw-timer { color: var(--saffron); font-variant-numeric: tabular-nums; }
+
+.draw-scorebar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.draw-score-chip {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 20px;
+    padding: 6px 14px; font-size: 13.5px; font-weight: 600; color: var(--text-muted);
+}
+.draw-score-chip.me { color: var(--turquoise); border-color: var(--turquoise-dim); }
+
+.draw-canvas-wrap {
+    background: #fff; border-radius: 14px; overflow: hidden; margin-bottom: 12px;
+    border: 1px solid var(--border); line-height: 0;
+}
+.draw-canvas-wrap canvas {
+    width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair;
+}
+
+.draw-palette { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px; }
+.draw-swatch {
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border);
+}
+.draw-swatch.active { box-shadow: 0 0 0 2px var(--saffron); }
+
+.draw-word-box {
+    text-align: center; background: var(--surface-raised); border: 1px dashed var(--saffron);
+    border-radius: 10px; padding: 10px; margin-bottom: 12px; font-weight: 700; color: var(--saffron);
+}
+
+.draw-options {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px;
+}
+.draw-option-btn {
+    background: var(--surface-raised); color: var(--text); border: 1px solid var(--border);
+    padding: 12px 8px; font-size: 14px;
+}
+.draw-option-btn:hover:not(:disabled) { background: var(--turquoise-dim); color: #fff; }
+.draw-option-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.draw-option-btn.wrong { border-color: var(--danger); text-decoration: line-through; }
+
+.draw-result { text-align: center; background: var(--surface-raised); border-radius: 14px; padding: 18px; }
+.draw-result-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.draw-result-note { margin-top: 10px; color: var(--text-muted); font-size: 13.5px; }
+
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
 }
@@ -218,7 +266,7 @@ def lobby_page(username: str) -> str:
       <p style="margin-bottom:18px">یه بازی رو انتخاب کن، یا برو تو چت با بقیه گپ بزن.</p>
       <div class="grid-links">
         <a href="/game/tictactoe">⭕ دوز دو نفره زنده</a>
-        <a href="/game/wordgame">🔤 حدس کلمه</a>
+        <a href="/game/drawing">🎨 نقاشی حدسی دو نفره</a>
         <a href="/chat/public">💬 چت عمومی</a>
       </div>
     </div>
@@ -384,83 +432,293 @@ def tictactoe_page(username: str) -> str:
     return page_shell("دوز", body, username)
 
 
-def wordgame_page(username: str) -> str:
+def drawing_page(username: str) -> str:
     body = """
     <div class="card">
-      <h1>🔤 حدس کلمه (۵ حرفی فارسی)</h1>
-      <div class="status-line" id="status">یه کلمهٔ ۵ حرفی حدس بزن! (۶ فرصت داری)</div>
-      <div id="rows"></div>
-      <div class="chat-input-row">
-        <input type="text" id="guessInput" maxlength="5" placeholder="حدس تو..." autocomplete="off">
-        <button onclick="submitGuess()">حدس</button>
+      <h1>🎨 نقاشی حدسی دو نفره</h1>
+      <div class="status-line" id="status">در حال اتصال...</div>
+
+      <div id="roundInfo" class="draw-round-info" style="display:none">
+        <span id="roundLabel"></span>
+        <span id="timerLabel" class="draw-timer"></span>
       </div>
-      <div style="text-align:center;margin-top:12px">
-        <button onclick="startGame()">🔄 بازی جدید</button>
+
+      <div id="scoreBar" class="draw-scorebar" style="display:none"></div>
+
+      <div id="canvasWrap" class="draw-canvas-wrap" style="display:none">
+        <canvas id="board" width="600" height="420"></canvas>
+      </div>
+
+      <div id="palette" class="draw-palette" style="display:none"></div>
+      <div id="drawerWordBox" class="draw-word-box" style="display:none"></div>
+      <div style="text-align:center;display:none" id="clearBtnWrap">
+        <button id="clearBtn">🧹 پاک کردن بوم</button>
+      </div>
+
+      <div id="optionsGrid" class="draw-options" style="display:none"></div>
+
+      <div id="resultPanel" class="draw-result" style="display:none"></div>
+
+      <div style="text-align:center;margin-top:14px">
+        <a class="btn" href="/lobby">بازگشت به لابی</a>
       </div>
     </div>
+
     <script>
-    const rowsEl = document.getElementById("rows");
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(wsProto + "//" + location.host + "/ws/drawing");
+    const me = """ + f"{username!r}" + """;
+
     const statusEl = document.getElementById("status");
-    let wordLength = 5;
-    let attempts = 0;
-    let finished = false;
+    const roundInfo = document.getElementById("roundInfo");
+    const roundLabel = document.getElementById("roundLabel");
+    const timerLabel = document.getElementById("timerLabel");
+    const scoreBar = document.getElementById("scoreBar");
+    const canvasWrap = document.getElementById("canvasWrap");
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+    const palette = document.getElementById("palette");
+    const drawerWordBox = document.getElementById("drawerWordBox");
+    const clearBtnWrap = document.getElementById("clearBtnWrap");
+    const clearBtn = document.getElementById("clearBtn");
+    const optionsGrid = document.getElementById("optionsGrid");
+    const resultPanel = document.getElementById("resultPanel");
 
-    async function startGame() {
-        const res = await fetch("/api/wordgame/start", {method: "POST"});
-        const data = await res.json();
-        wordLength = data.length;
-        attempts = 0;
-        finished = false;
-        rowsEl.innerHTML = "";
-        statusEl.textContent = "یه کلمهٔ " + wordLength + " حرفی حدس بزن! (۶ فرصت داری)";
+    let role = null;
+    let currentColor = "#111111";
+    let drawing = false;
+    let lastX = null, lastY = null;
+    let countdownTimer = null;
+
+    function clearCanvas() {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    clearCanvas();
+
+    function renderScoreBar(scores) {
+        scoreBar.innerHTML = "";
+        Object.entries(scores || {}).forEach(([name, score]) => {
+            const chip = document.createElement("div");
+            chip.className = "draw-score-chip" + (name === me ? " me" : "");
+            chip.textContent = name + ": " + score;
+            scoreBar.appendChild(chip);
+        });
+        scoreBar.style.display = "flex";
     }
 
-    async function submitGuess() {
-        if (finished) return;
-        const input = document.getElementById("guessInput");
-        const guess = input.value.trim();
-        if (guess.length !== wordLength) {
-            statusEl.textContent = "⚠️ کلمه باید " + wordLength + " حرف باشد.";
-            return;
-        }
-        const res = await fetch("/api/wordgame/guess", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({guess: guess})
-        });
-        if (!res.ok) {
-            const err = await res.json();
-            statusEl.textContent = "⚠️ " + (err.detail || "خطا");
-            return;
-        }
-        const data = await res.json();
-        const row = document.createElement("div");
-        row.className = "word-row";
-        [...guess].forEach((ch, i) => {
-            const box = document.createElement("div");
-            box.className = "letter-box " + data.feedback[i];
-            box.textContent = ch;
-            row.appendChild(box);
-        });
-        rowsEl.appendChild(row);
-        input.value = "";
-        attempts = data.attempts;
-
-        if (data.won) {
-            statusEl.textContent = "🎉 بردی! کلمه همون بود که گفتی!";
-            finished = true;
-        } else if (data.lost) {
-            statusEl.textContent = "😢 فرصت‌ها تموم شد. کلمه این بود: " + data.target;
-            finished = true;
-        } else {
-            statusEl.textContent = "تلاش " + attempts + " از ۶";
-        }
+    function startCountdown(seconds, onTick) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        let remaining = seconds;
+        onTick(remaining);
+        countdownTimer = setInterval(() => {
+            remaining -= 1;
+            onTick(remaining);
+            if (remaining <= 0) clearInterval(countdownTimer);
+        }, 1000);
     }
 
-    document.getElementById("guessInput").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") submitGuess();
+    function normPoint(x, y) {
+        return {x: x / canvas.width, y: y / canvas.height};
+    }
+
+    function canvasPos(ev) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+        const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    function drawLine(x0, y0, x1, y1, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+    }
+
+    canvas.addEventListener("pointerdown", (ev) => {
+        if (role !== "drawer") return;
+        drawing = true;
+        const p = canvasPos(ev);
+        lastX = p.x; lastY = p.y;
+    });
+    canvas.addEventListener("pointermove", (ev) => {
+        if (role !== "drawer" || !drawing) return;
+        const p = canvasPos(ev);
+        drawLine(lastX, lastY, p.x, p.y, currentColor);
+        const n0 = normPoint(lastX, lastY);
+        const n1 = normPoint(p.x, p.y);
+        ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y, color: currentColor}));
+        lastX = p.x; lastY = p.y;
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(evName => {
+        canvas.addEventListener(evName, () => { drawing = false; });
     });
 
-    startGame();
+    clearBtn.addEventListener("click", () => {
+        clearCanvas();
+        ws.send(JSON.stringify({type: "clear"}));
+    });
+
+    function buildPalette(colors) {
+        palette.innerHTML = "";
+        colors.forEach((c, i) => {
+            const sw = document.createElement("div");
+            sw.className = "draw-swatch" + (i === 0 ? " active" : "");
+            sw.style.background = c;
+            sw.onclick = () => {
+                currentColor = c;
+                [...palette.children].forEach(el => el.classList.remove("active"));
+                sw.classList.add("active");
+            };
+            palette.appendChild(sw);
+        });
+        currentColor = colors[0];
+    }
+
+    function buildOptions(options) {
+        optionsGrid.innerHTML = "";
+        options.forEach((word) => {
+            const btn = document.createElement("button");
+            btn.className = "draw-option-btn";
+            btn.textContent = word;
+            btn.onclick = () => {
+                if (btn.disabled) return;
+                ws.send(JSON.stringify({type: "guess", word: word}));
+            };
+            btn.dataset.word = word;
+            optionsGrid.appendChild(btn);
+        });
+    }
+
+    function resetRoundUI() {
+        resultPanel.style.display = "none";
+        roundInfo.style.display = "flex";
+        clearCanvas();
+    }
+
+    ws.onmessage = (ev) => {
+        const data = JSON.parse(ev.data);
+
+        if (data.type === "waiting") {
+            statusEl.textContent = "⏳ در حال پیدا کردن حریف...";
+            statusEl.style.display = "block";
+            canvasWrap.style.display = "none";
+            scoreBar.style.display = "none";
+        }
+
+        else if (data.type === "round_start") {
+            statusEl.style.display = "none";
+            resetRoundUI();
+            role = data.role;
+            renderScoreBar(data.scores);
+            canvasWrap.style.display = "block";
+            roundLabel.textContent = "دور " + data.round + " از " + data.total_rounds +
+                (role === "drawer" ? " — نوبت نقاشی توئه" : " — حدس بزن " + data.opponent + " چی می‌کشه");
+
+            if (role === "drawer") {
+                drawerWordBox.style.display = "block";
+                drawerWordBox.textContent = "کلمه‌ای که باید بکشی: " + data.word;
+                palette.style.display = "flex";
+                clearBtnWrap.style.display = "block";
+                optionsGrid.style.display = "none";
+                buildPalette(data.colors);
+            } else {
+                drawerWordBox.style.display = "none";
+                palette.style.display = "none";
+                clearBtnWrap.style.display = "none";
+                optionsGrid.style.display = "grid";
+                buildOptions(data.options);
+            }
+
+            startCountdown(data.duration, (remaining) => {
+                timerLabel.textContent = "⏱ " + Math.max(0, remaining) + " ثانیه";
+            });
+        }
+
+        else if (data.type === "draw") {
+            const x0 = data.x0 * canvas.width, y0 = data.y0 * canvas.height;
+            const x1 = data.x1 * canvas.width, y1 = data.y1 * canvas.height;
+            drawLine(x0, y0, x1, y1, data.color);
+        }
+
+        else if (data.type === "clear") {
+            clearCanvas();
+        }
+
+        else if (data.type === "guess_wrong") {
+            const btn = optionsGrid.querySelector('[data-word="' + CSS.escape(data.word) + '"]');
+            if (btn) { btn.disabled = true; btn.classList.add("wrong"); }
+        }
+
+        else if (data.type === "round_result") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            roundInfo.style.display = "none";
+            palette.style.display = "none";
+            clearBtnWrap.style.display = "none";
+            drawerWordBox.style.display = "none";
+            optionsGrid.style.display = "none";
+            renderScoreBar(data.scores);
+
+            resultPanel.style.display = "block";
+            let html = "<div class='draw-result-title'>" +
+                (data.correct ? "✅ حدس درست بود!" : "⌛ زمان تموم شد!") +
+                "</div>";
+            html += "<div>کلمه: <b>" + data.word + "</b></div>";
+            if (data.correct) {
+                html += "<div>" + data.guesser + " امتیاز " + data.points_guesser + " گرفت و " +
+                    data.drawer + " امتیاز " + data.points_drawer + " گرفت.</div>";
+            } else {
+                html += "<div>این دور امتیازی داده نشد.</div>";
+            }
+            resultPanel.innerHTML = html;
+            const noteEl = document.createElement("div");
+            noteEl.className = "draw-result-note";
+            resultPanel.appendChild(noteEl);
+            startCountdown(data.break_seconds, (remaining) => {
+                noteEl.textContent = data.is_last
+                    ? "نمایش نتیجهٔ نهایی... " + Math.max(0, remaining)
+                    : "دور بعدی تا " + Math.max(0, remaining) + " ثانیهٔ دیگر شروع می‌شود...";
+            });
+        }
+
+        else if (data.type === "game_over") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            statusEl.style.display = "none";
+            roundInfo.style.display = "none";
+            canvasWrap.style.display = "none";
+            palette.style.display = "none";
+            clearBtnWrap.style.display = "none";
+            optionsGrid.style.display = "none";
+            renderScoreBar(data.scores);
+
+            resultPanel.style.display = "block";
+            const entries = Object.entries(data.scores).sort((a, b) => b[1] - a[1]);
+            let html = "<div class='draw-result-title'>🏁 نتیجهٔ نهایی</div>";
+            entries.forEach(([name, score]) => {
+                const tag = (data.winner === name) ? " 🏆" : "";
+                html += "<div>" + name + ": " + score + tag + "</div>";
+            });
+            if (!data.winner) html += "<div>🤝 مساوی شدید!</div>";
+            resultPanel.innerHTML = html;
+        }
+
+        else if (data.type === "opponent_left") {
+            if (countdownTimer) clearInterval(countdownTimer);
+            statusEl.style.display = "block";
+            statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
+            roundInfo.style.display = "none";
+            canvasWrap.style.display = "none";
+            palette.style.display = "none";
+            clearBtnWrap.style.display = "none";
+            optionsGrid.style.display = "none";
+        }
+    };
     </script>"""
-    return page_shell("حدس کلمه", body, username)
+    return page_shell("نقاشی حدسی", body, username)
