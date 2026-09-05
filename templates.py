@@ -3,67 +3,143 @@
 import html
 
 BASE_CSS = """
-* { box-sizing: border-box; }
-body {
-    background: #0f1117; color: #e8e8ec; font-family: Tahoma, sans-serif;
-    margin: 0; padding: 0; direction: rtl;
+@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+
+:root {
+    --bg: #101A30;
+    --surface: #182A4A;
+    --surface-raised: #1F3459;
+    --border: #2D4670;
+    --text: #EEEAE0;
+    --text-muted: #93A2C4;
+    --turquoise: #2FA9A0;
+    --turquoise-dim: #23807A;
+    --saffron: #E8A94A;
+    --danger: #E2665E;
 }
+
+* { box-sizing: border-box; }
+
+body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    margin: 0; padding: 0; direction: rtl;
+    font-size: 15px; line-height: 1.8;
+}
+
+:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+
 .nav {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 14px 20px; background: #171a23; border-bottom: 1px solid #262a36;
+    padding: 16px 22px; background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    position: relative;
 }
-.nav a { color: #8ab4ff; text-decoration: none; margin-inline-start: 14px; }
-.container { max-width: 640px; margin: 0 auto; padding: 20px; }
+.nav::after {
+    content: ""; position: absolute; bottom: -2px; right: 0; left: 0; height: 2px;
+    background: repeating-linear-gradient(-45deg, var(--turquoise) 0 6px, var(--saffron) 6px 12px);
+    opacity: 0.5;
+}
+.nav-brand { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.nav a { color: var(--turquoise); text-decoration: none; margin-inline-start: 16px; font-weight: 600; }
+.nav a:hover { color: var(--saffron); }
+
+.container { max-width: 620px; margin: 0 auto; padding: 24px 18px 60px; }
+
+h1 { font-size: 25px; font-weight: 700; margin: 0 0 14px; line-height: 1.5; }
+h2 { font-size: 18px; font-weight: 600; margin: 0 0 14px; color: var(--text); }
+p { color: var(--text-muted); }
+
 .card {
-    background: #171a23; border: 1px solid #262a36; border-radius: 14px;
-    padding: 22px; margin-bottom: 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; margin-bottom: 18px;
 }
-h1, h2 { margin-top: 0; }
+
+.hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, var(--surface-raised), var(--surface));
+}
+.hero::before {
+    content: ""; position: absolute; inset: -30%;
+    background-image: radial-gradient(circle, rgba(232,169,74,0.10) 0 2px, transparent 2.5px);
+    background-size: 28px 28px;
+    transform: rotate(12deg);
+    pointer-events: none;
+}
+.hero > * { position: relative; }
+
 input[type=text], input[type=password] {
-    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333747;
-    background: #0f1117; color: #fff; margin-bottom: 12px; font-size: 15px;
+    width: 100%; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); margin-bottom: 14px; font-size: 15px;
+    font-family: inherit;
 }
+input:focus { border-color: var(--turquoise); }
+
 button, .btn {
-    background: #5865f2; color: #fff; border: none; padding: 12px 18px;
-    border-radius: 8px; font-size: 15px; cursor: pointer; text-decoration: none;
-    display: inline-block;
+    background: var(--turquoise); color: #0B1626; border: none; padding: 13px 20px;
+    border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+    text-decoration: none; display: inline-block; font-family: inherit;
+    transition: background 0.15s ease;
 }
-button:hover, .btn:hover { background: #4752c4; }
-.error { color: #ff6b6b; margin-bottom: 10px; }
-.grid-links { display: grid; gap: 12px; }
+button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
+
+.error {
+    color: var(--danger); background: rgba(226,102,94,0.1); border: 1px solid rgba(226,102,94,0.3);
+    padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 14px;
+}
+
+.grid-links { display: grid; gap: 12px; margin-top: 6px; }
 .grid-links a {
-    background: #1f2330; border: 1px solid #2c3040; border-radius: 12px;
-    padding: 18px; text-align: center; color: #fff; text-decoration: none; font-size: 17px;
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; text-align: center; color: var(--text); text-decoration: none;
+    font-size: 17px; font-weight: 600; transition: border-color 0.15s ease, transform 0.1s ease;
 }
-.grid-links a:hover { background: #262b3b; }
+.grid-links a:hover { border-color: var(--saffron); transform: translateY(-1px); }
+
 .chat-box {
-    height: 360px; overflow-y: auto; background: #0f1117; border: 1px solid #262a36;
-    border-radius: 10px; padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px;
+    height: 380px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px;
 }
-.msg { padding: 8px 12px; border-radius: 10px; background: #1f2330; max-width: 80%; }
-.msg.me { align-self: flex-end; background: #5865f2; }
-.msg .sender { font-size: 12px; opacity: 0.7; display: block; margin-bottom: 2px; }
+.msg {
+    padding: 9px 13px; border-radius: 12px 12px 12px 2px; background: var(--surface-raised);
+    max-width: 78%; font-size: 14.5px; align-self: flex-start;
+}
+.msg.me {
+    align-self: flex-end; background: var(--turquoise-dim); border-radius: 12px 12px 2px 12px;
+}
+.msg .sender { font-size: 12px; opacity: 0.65; display: block; margin-bottom: 2px; font-weight: 600; }
 .chat-input-row { display: flex; gap: 8px; }
 .chat-input-row input { flex: 1; margin-bottom: 0; }
+
+.status-line {
+    text-align: center; font-size: 15.5px; margin-bottom: 14px; color: var(--saffron); font-weight: 600;
+}
+
 .ttt-board {
-    display: grid; grid-template-columns: repeat(3, 90px); grid-template-rows: repeat(3, 90px);
+    display: grid; grid-template-columns: repeat(3, 88px); grid-template-rows: repeat(3, 88px);
     gap: 8px; justify-content: center; margin: 20px 0;
 }
 .ttt-cell {
-    background: #1f2330; border: 1px solid #2c3040; border-radius: 10px;
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 36px; cursor: pointer; user-select: none;
+    font-size: 34px; font-weight: 700; cursor: pointer; user-select: none;
+    color: var(--turquoise); transition: background 0.15s ease;
 }
-.ttt-cell:hover { background: #262b3b; }
-.status-line { text-align: center; font-size: 16px; margin-bottom: 8px; }
+.ttt-cell:hover { background: var(--border); }
+
 .word-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 6px; }
 .letter-box {
-    width: 48px; height: 48px; border: 2px solid #333747; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center; font-size: 22px;
+    width: 46px; height: 46px; border: 2px solid var(--border); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 21px; font-weight: 700;
+    background: var(--surface-raised); color: var(--text);
 }
-.letter-box.correct { background: #2e7d32; border-color: #2e7d32; }
-.letter-box.present { background: #b8860b; border-color: #b8860b; }
-.letter-box.absent { background: #333747; border-color: #333747; }
+.letter-box.correct { background: var(--turquoise-dim); border-color: var(--turquoise-dim); color: #fff; }
+.letter-box.present { background: #8A6A25; border-color: #8A6A25; color: #fff; }
+.letter-box.absent { background: var(--border); border-color: var(--border); color: var(--text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}
 """
 
 
@@ -72,7 +148,7 @@ def _nav(username: str | None) -> str:
         u = html.escape(username)
         return f"""
         <div class="nav">
-          <div>🎮 <b>{u}</b></div>
+          <div class="nav-brand">🎲 بازی‌خونه — {u}</div>
           <div>
             <a href="/lobby">لابی</a>
             <a href="/logout">خروج</a>
@@ -80,7 +156,7 @@ def _nav(username: str | None) -> str:
         </div>"""
     return """
     <div class="nav">
-      <div>🎮 بازی‌خونه</div>
+      <div class="nav-brand">🎲 بازی‌خونه</div>
       <div><a href="/login">ورود</a></div>
     </div>"""
 
@@ -107,14 +183,14 @@ def login_page(error: str | None = None) -> str:
     err_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
     body = f"""
     <div class="card">
-      <h1>ورود</h1>
+      <h1>ورود به بازی‌خونه</h1>
       {err_html}
       <form method="post" action="/login">
         <input type="text" name="username" placeholder="نام کاربری" required>
         <input type="password" name="password" placeholder="رمز عبور" required>
         <button type="submit">ورود</button>
       </form>
-      <p>حساب نداری؟ <a href="/signup" style="color:#8ab4ff">ثبت‌نام کن</a></p>
+      <p>حساب نداری؟ <a href="/signup" style="color:var(--turquoise)">ثبت‌نام کن</a></p>
     </div>"""
     return page_shell("ورود", body)
 
@@ -123,25 +199,26 @@ def signup_page(error: str | None = None) -> str:
     err_html = f'<div class="error">{html.escape(error)}</div>' if error else ""
     body = f"""
     <div class="card">
-      <h1>ثبت‌نام</h1>
+      <h1>ساخت حساب جدید</h1>
       {err_html}
       <form method="post" action="/signup">
         <input type="text" name="username" placeholder="نام کاربری (حداقل ۳ حرف)" required>
         <input type="password" name="password" placeholder="رمز عبور (حداقل ۴ حرف)" required>
         <button type="submit">ساخت حساب</button>
       </form>
-      <p>حساب داری؟ <a href="/login" style="color:#8ab4ff">وارد شو</a></p>
+      <p>حساب داری؟ <a href="/login" style="color:var(--turquoise)">وارد شو</a></p>
     </div>"""
     return page_shell("ثبت‌نام", body)
 
 
 def lobby_page(username: str) -> str:
     body = f"""
-    <div class="card">
+    <div class="card hero">
       <h1>خوش اومدی، {html.escape(username)}!</h1>
+      <p style="margin-bottom:18px">یه بازی رو انتخاب کن، یا برو تو چت با بقیه گپ بزن.</p>
       <div class="grid-links">
         <a href="/game/tictactoe">⭕ دوز دو نفره زنده</a>
-        <a href="/game/wordgame">🔤 حدس کلمه (فارسی)</a>
+        <a href="/game/wordgame">🔤 حدس کلمه</a>
         <a href="/chat/public">💬 چت عمومی</a>
       </div>
     </div>
@@ -157,7 +234,7 @@ def lobby_page(username: str) -> str:
 
 def _render_messages(messages: list[dict], username: str) -> str:
     if not messages:
-        return '<div style="opacity:0.6;text-align:center">هنوز پیامی نیست...</div>'
+        return '<div style="opacity:0.6;text-align:center;padding:20px 0">هنوز پیامی نیست...</div>'
     out = []
     for m in messages:
         cls = "msg me" if m["sender"] == username else "msg"
