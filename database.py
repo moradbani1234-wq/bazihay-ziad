@@ -7,7 +7,13 @@ async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at INTEGER NOT NULL)""")
+            password_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at INTEGER NOT NULL,
+            is_support INTEGER NOT NULL DEFAULT 0)""")
+        # Migration for databases created by older versions.
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN is_support INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass
         await db.execute("""CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, sender TEXT NOT NULL,
             content TEXT NOT NULL, created_at INTEGER NOT NULL)""")
@@ -28,16 +34,26 @@ async def init_db():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
         await db.commit()
 
-async def create_user(username, password_hash, salt):
+async def create_user(username, password_hash, salt, is_support=False):
     try:
         async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("INSERT INTO users (username,password_hash,salt,created_at) VALUES (?,?,?,?)",
-                             (username,password_hash,salt,int(time.time())))
+            await db.execute("INSERT INTO users (username,password_hash,salt,created_at,is_support) VALUES (?,?,?,?,?)",
+                             (username,password_hash,salt,int(time.time()),1 if is_support else 0))
             await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)", (username,))
             await db.commit()
         return True
     except aiosqlite.IntegrityError:
         return False
+
+async def ensure_support_account(username, password_hash, salt):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""INSERT INTO users(username,password_hash,salt,created_at,is_support)
+                           VALUES(?,?,?,?,1)
+                           ON CONFLICT(username) DO UPDATE SET
+                           password_hash=excluded.password_hash, salt=excluded.salt, is_support=1""",
+                       (username,password_hash,salt,int(time.time())))
+        await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)", (username,))
+        await db.commit()
 
 async def get_user(username):
     async with aiosqlite.connect(DB_PATH) as db:

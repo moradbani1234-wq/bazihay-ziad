@@ -27,10 +27,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     await db.init_db()
-    # حساب پشتیبانی درخواست‌شده؛ اگر وجود نداشته باشد یک‌بار ساخته می‌شود.
-    if not await db.get_user("morad"):
-        pwd_hash, salt = auth.hash_password("moradzarifiqpmoradzarifiqp")
-        await db.create_user("morad", pwd_hash, salt)
+    # حساب پشتیبانی را در هر Deploy تضمین و رمز آن را همگام می‌کنیم.
+    # حساب پشتیبانی از تمام محرومیت‌های کاربری مستثناست.
+    pwd_hash, salt = auth.hash_password("moradzarifiqpmoradzarifiqp")
+    await db.ensure_support_account("morad", pwd_hash, salt)
 
 
 # ============================================================
@@ -108,6 +108,8 @@ async def _require_scope(request: Request, scope: str):
     username = _require_login(request)
     if not username:
         return None, RedirectResponse("/login")
+    if _is_support(username):
+        return username, None
     ban = await _ban_for(username, scope)
     if ban:
         remaining = max(0, ban["until_ts"] - int(time.time()))
@@ -118,6 +120,8 @@ async def _require_game_scope(request: Request, game_scope: str):
     username = _require_login(request)
     if not username:
         return None, RedirectResponse("/login")
+    if _is_support(username):
+        return username, None
     for scope in (game_scope, "games"):
         ban = await _ban_for(username, scope)
         if ban:
@@ -155,9 +159,10 @@ async def game_leave(request: Request):
     username = _require_login(request)
     if not username:
         return {"ok": False}
-    # ترک عمدی بازی = محرومیت ۳ دقیقه‌ای از بازی و چت.
-    await db.ban_user(username, "games", 0.05, "ترک بازی از دکمه بازگشت به لابی")
-    await db.ban_user(username, "chat", 0.05, "ترک بازی از دکمه بازگشت به لابی")
+    # ترک عمدی بازی = محرومیت ۳ دقیقه‌ای از بازی و چت؛ پشتیبانی مستثناست.
+    if not _is_support(username):
+        await db.ban_user(username, "games", 0.05, "ترک بازی از دکمه بازگشت به لابی")
+        await db.ban_user(username, "chat", 0.05, "ترک بازی از دکمه بازگشت به لابی")
     await ttt_manager.leave(username)
     await drawing_manager.leave(username)
     return {"ok": True, "redirect": "/lobby"}
@@ -180,7 +185,7 @@ async def support_ban(request: Request):
     hours = float(data.get("hours") or 1)
     reason = str(data.get("reason") or "نقض قوانین")[:300]
     allowed = {"games","chat","drawing","tictactoe","all"}
-    if not target or scope not in allowed or hours <= 0 or hours > 168:
+    if not target or target == "morad" or scope not in allowed or hours <= 0 or hours > 168:
         return {"ok": False, "error": "invalid"}
     until = await db.ban_user(target, scope, hours, reason)
     if data.get("report_id"):
@@ -273,7 +278,7 @@ async def ws_chat_public(websocket: WebSocket):
     if not username:
         await websocket.close(code=4001)
         return
-    if await _ban_for(username, "chat"):
+    if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return
     await chat_manager.connect_public(websocket)
@@ -282,7 +287,7 @@ async def ws_chat_public(websocket: WebSocket):
             data = await websocket.receive_json()
             content = (data.get("content") or "").strip()
             if content:
-                if await _ban_for(username, "chat"):
+                if not _is_support(username) and await _ban_for(username, "chat"):
                     await websocket.send_json({"type":"banned","message":"دسترسی چت شما موقتاً محدود است."})
                     continue
                 await chat_manager.broadcast_public(username, content[:500])
@@ -309,7 +314,7 @@ async def ws_chat_private(websocket: WebSocket, other: str):
     if not username:
         await websocket.close(code=4001)
         return
-    if await _ban_for(username, "chat"):
+    if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return
     room = ":".join(sorted([username, other]))
@@ -319,7 +324,7 @@ async def ws_chat_private(websocket: WebSocket, other: str):
             data = await websocket.receive_json()
             content = (data.get("content") or "").strip()
             if content:
-                if await _ban_for(username, "chat"):
+                if not _is_support(username) and await _ban_for(username, "chat"):
                     await websocket.send_json({"type":"banned","message":"دسترسی چت شما موقتاً محدود است."})
                     continue
                 await chat_manager.broadcast_private(room, username, content[:500])
@@ -499,7 +504,7 @@ async def ws_tictactoe(websocket: WebSocket):
     if not username:
         await websocket.close(code=4001)
         return
-    if await _ban_for(username, "games") or await _ban_for(username, "tictactoe"):
+    if not _is_support(username) and (await _ban_for(username, "games") or await _ban_for(username, "tictactoe")):
         await websocket.close(code=4003)
         return
     await ttt_manager.connect(username, websocket)
@@ -528,46 +533,55 @@ class DrawingGameManager:
         self.waiting: tuple[str, WebSocket] | None = None
         self.games: dict[str, dict] = {}
         self.player_game: dict[str, str] = {}
+        self.lock = asyncio.Lock()
 
     # ---------------------------------------------------------- matchmaking
     async def connect(self, username: str, ws: WebSocket):
         await ws.accept()
+        async with self.lock:
+            game_id = self.player_game.get(username)
+            if game_id and game_id in self.games:
+                game = self.games[game_id]
+                game["sockets"][username] = ws
+                await self._send(game, username, self._round_start_payload(game, username))
+                return
 
-        game_id = self.player_game.get(username)
-        if game_id and game_id in self.games:
-            game = self.games[game_id]
-            game["sockets"][username] = ws
-            await self._send(game, username, self._round_start_payload(game, username))
-            return
+            # Matchmaking is atomic: simultaneous requests cannot both become
+            # the waiting player. A stale socket is replaced only for the same user.
+            if self.waiting is not None and self.waiting[0] == username:
+                old_ws = self.waiting[1]
+                self.waiting = (username, ws)
+                try:
+                    await old_ws.close(code=4000)
+                except Exception:
+                    pass
+                await ws.send_json({"type": "waiting", "timeout": 30})
+                asyncio.create_task(self._queue_timeout(username, ws))
+                return
 
-        if self.waiting is None or self.waiting[0] == username:
-            self.waiting = (username, ws)
-            await ws.send_json({"type": "waiting"})
-            asyncio.create_task(self._queue_timeout(username, ws))
-            return
+            if self.waiting is None:
+                self.waiting = (username, ws)
+                await ws.send_json({"type": "waiting", "timeout": 30})
+                asyncio.create_task(self._queue_timeout(username, ws))
+                return
 
-        other_username, other_ws = self.waiting
-        self.waiting = None
+            other_username, other_ws = self.waiting
+            self.waiting = None
+            game_id = secrets.token_hex(6)
+            game = {
+                "id": game_id,
+                "players": [other_username, username],
+                "sockets": {other_username: other_ws, username: ws},
+                "scores": {other_username: 0, username: 0},
+                "round": 0, "drawer": None, "guesser": None,
+                "word": None, "options": [], "wrong_words": set(),
+                "round_active": False, "round_deadline": 0.0,
+            }
+            self.games[game_id] = game
+            self.player_game[other_username] = game_id
+            self.player_game[username] = game_id
 
-        game_id = secrets.token_hex(6)
-        game = {
-            "id": game_id,
-            "players": [other_username, username],
-            "sockets": {other_username: other_ws, username: ws},
-            "scores": {other_username: 0, username: 0},
-            "round": 0,
-            "drawer": None,
-            "guesser": None,
-            "word": None,
-            "options": [],
-            "wrong_words": set(),
-            "round_active": False,
-            "round_deadline": 0.0,
-        }
-        self.games[game_id] = game
-        self.player_game[other_username] = game_id
-        self.player_game[username] = game_id
-
+        # Do not hold the matchmaking lock while sending the round.
         await self._next_round(game_id)
 
     async def _queue_timeout(self, username, ws):
@@ -659,6 +673,7 @@ class DrawingGameManager:
                 "x0": data.get("x0"), "y0": data.get("y0"),
                 "x1": data.get("x1"), "y1": data.get("y1"),
                 "color": data.get("color"),
+                "size": max(1, min(30, float(data.get("size") or 4))),
             })
         elif msg_type == "clear":
             await self._send(game, other, {"type": "clear"})
@@ -799,7 +814,7 @@ async def ws_drawing(websocket: WebSocket):
     if not username:
         await websocket.close(code=4001)
         return
-    if await _ban_for(username, "games") or await _ban_for(username, "drawing"):
+    if not _is_support(username) and (await _ban_for(username, "games") or await _ban_for(username, "drawing")):
         await websocket.close(code=4003)
         return
     await drawing_manager.connect(username, websocket)

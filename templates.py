@@ -209,6 +209,11 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 .report-item { padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:var(--surface-raised); }
 .report-meta { color:var(--text-muted); font-size:12px; }
 
+
+.game-card, .grid-links a { transition: transform .22s ease, box-shadow .22s ease, filter .22s ease; }
+.grid-links a:hover { transform: translateY(-4px) scale(1.015); filter: brightness(1.06); }
+.grid-links a small { display:block; opacity:.7; font-size:11px; margin-top:4px; }
+.status-line { min-height: 24px; transition: opacity .2s ease, transform .2s ease; }
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
 }
@@ -223,6 +228,8 @@ def _nav(username: str | None) -> str:
           <div class="nav-brand">🎲 بازی‌خونه — {u}</div>
           <div>
             <a href="/lobby">لابی</a>
+            <a href="/leaderboard">🏆 رتبه‌بندی</a>
+            {('<a href="/support">🛡️ پشتیبانی</a>' if username == 'morad' else '')}
             <a href="/logout">خروج</a>
           </div>
         </div>"""
@@ -289,9 +296,9 @@ def lobby_page(username: str) -> str:
       <h1>خوش اومدی، {html.escape(username)}!</h1>
       <p style="margin-bottom:18px">یه بازی رو انتخاب کن، یا برو تو چت با بقیه گپ بزن.</p>
       <div class="grid-links">
-        <a href="/game/tictactoe">⭕ دوز دو نفره زنده</a>
-        <a href="/game/drawing">🎨 نقاشی حدسی دو نفره</a>
-        <a href="/chat/public">💬 چت عمومی</a>
+        <a class="glow-btn" href="/game/tictactoe">⭕ دوز دو نفره زنده <small>رقابت سریع</small></a>
+        <a class="glow-btn" href="/game/drawing">🎨 نقاشی حدسی دو نفره <small>همزمان و زنده</small></a>
+        <a class="glow-btn" href="/chat/public">💬 چت عمومی <small>گفت‌وگو و گزارش</small></a>
       </div>
     </div>
     <div class="card">
@@ -418,7 +425,7 @@ def chat_public_page(username: str, messages: list[dict]) -> str:
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }}
-    ws.onmessage = (ev) => {{
+    function onMessage(ev) {{
         const data = JSON.parse(ev.data);
         addMsg(data.sender, data.content);
     }};
@@ -499,55 +506,65 @@ def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
 
 def tictactoe_page(username: str) -> str:
     body = f"""
-    <div class="card">
+    <div class="card page-enter">
       <h1>⭕ دوز دو نفره زنده</h1>
-      <div class="status-line" id="status">در حال اتصال...</div>
+      <div class="status-line" id="status">🔌 اتصال به سرور...</div>
       <div class="ttt-board" id="board"></div>
-      <div style="text-align:center"><button onclick="location.reload()">بازی جدید / جستجوی دوباره</button></div>
+      <div style="text-align:center"><button class="glow-btn" onclick="location.reload()">🔁 بازی جدید / جستجوی دوباره</button></div>
     </div>
     <script>
     const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(wsProto + "//" + location.host + "/ws/tictactoe");
     const boardEl = document.getElementById("board");
     const statusEl = document.getElementById("status");
-    let mySymbol = null;
-    let currentBoard = Array(9).fill("");
+    let ws = null, reconnectTimer = null, intentionallyLeaving = false;
+    let mySymbol = null, currentBoard = Array(9).fill("");
+
+    function connect() {{
+      statusEl.textContent = "🔌 اتصال سریع به سرور بازی...";
+      ws = new WebSocket(wsProto + "//" + location.host + "/ws/tictactoe");
+      ws.onopen = () => statusEl.textContent = "⚡ وصل شد! در حال پیدا کردن حریف...";
+      ws.onerror = () => statusEl.textContent = "⚠️ مشکل اتصال؛ دوباره تلاش می‌کنیم...";
+      ws.onclose = () => {{
+        if (!intentionallyLeaving && !reconnectTimer) {{
+          statusEl.textContent = "🔄 اتصال قطع شد؛ تلاش مجدد...";
+          reconnectTimer = setTimeout(() => {{ reconnectTimer = null; connect(); }}, 1200);
+        }}
+      }};
+      ws.onmessage = onMessage;
+    }}
 
     function render() {{
-        boardEl.innerHTML = "";
-        currentBoard.forEach((val, i) => {{
-            const cell = document.createElement("div");
-            cell.className = "ttt-cell";
-            cell.textContent = val;
-            cell.onclick = () => {{
-                if (!val) ws.send(JSON.stringify({{type: "move", cell: i}}));
-            }};
-            boardEl.appendChild(cell);
-        }});
+      boardEl.innerHTML = "";
+      currentBoard.forEach((val, i) => {{
+        const cell = document.createElement("div");
+        cell.className = "ttt-cell" + (val ? " filled" : "");
+        cell.textContent = val;
+        cell.onclick = () => {{
+          if (!val && ws && ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({{type:"move", cell:i}}));
+        }};
+        boardEl.appendChild(cell);
+      }});
     }}
+
+    function onMessage(ev) {{
+      const data = JSON.parse(ev.data);
+      if (data.type === "waiting") {{
+        statusEl.textContent = "⏳ در صف حریف — حداکثر ۳۰ ثانیه";
+      }} else if (data.type === "queue_timeout") {{
+        statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره صفحه را تازه کن.";
+      }} else if (data.type === "state") {{
+        mySymbol = data.your_symbol; currentBoard = data.board; render();
+        if (data.winner === "draw") statusEl.textContent = "🤝 مساوی شد!";
+        else if (data.winner) statusEl.textContent = data.winner === mySymbol ? "🏆 بردی!" : "😢 باختی!";
+        else statusEl.textContent = "شما: " + mySymbol + " | حریف: " + data.opponent + " | نوبت: " + (data.turn === mySymbol ? "توئه! 🔥" : "حریف");
+      }} else if (data.type === "opponent_left") {{
+        statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
+      }}
+    }}
+
     render();
-
-    ws.onmessage = (ev) => {{
-        const data = JSON.parse(ev.data);
-        if (data.type === "waiting") {{
-            statusEl.textContent = "⏳ در حال پیدا کردن حریف... (۳۰ ثانیه)";
-
-        }} else if (data.type === "state") {{
-            mySymbol = data.your_symbol;
-            currentBoard = data.board;
-            render();
-            if (data.winner === "draw") {{
-                statusEl.textContent = "🤝 مساوی شد!";
-            }} else if (data.winner) {{
-                statusEl.textContent = (data.winner === mySymbol) ? "🏆 بردی!" : "😢 باختی!";
-            }} else {{
-                statusEl.textContent = "شما: " + mySymbol + " | حریف: " + data.opponent +
-                    " | نوبت: " + (data.turn === mySymbol ? "توئه!" : "حریف");
-            }}
-        }} else if (data.type === "opponent_left") {{
-            statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
-        }}
-    }};
+    connect();
     </script>"""
     return page_shell("دوز", body, username)
 
@@ -587,13 +604,15 @@ def drawing_page(username: str) -> str:
       <div id="resultPanel" class="draw-result" style="display:none"></div>
 
       <div style="text-align:center;margin-top:14px">
-        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); fetch('/game/leave',{method:'POST'}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
+        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{method:'POST'}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
       </div>
     </div>
 
     <script>
     const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(wsProto + "//" + location.host + "/ws/drawing");
+    let ws = null;
+    let reconnectTimer = null;
+    let intentionallyLeaving = false;
     const me = """ + f"{username!r}" + """;
 
     const statusEl = document.getElementById("status");
@@ -664,9 +683,9 @@ def drawing_page(username: str) -> str:
         };
     }
 
-    function drawLine(x0, y0, x1, y1, color) {
+    function drawLine(x0, y0, x1, y1, color, size = currentSize) {
         ctx.strokeStyle = color;
-        ctx.lineWidth = currentSize;
+        ctx.lineWidth = size;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(x0, y0);
@@ -683,10 +702,11 @@ def drawing_page(username: str) -> str:
     canvas.addEventListener("pointermove", (ev) => {
         if (role !== "drawer" || !drawing) return;
         const p = canvasPos(ev);
-        drawLine(lastX, lastY, p.x, p.y, currentColor);
+        const paintColor = tool === "eraser" ? "#ffffff" : currentColor;
+        drawLine(lastX, lastY, p.x, p.y, paintColor, currentSize);
         const n0 = normPoint(lastX, lastY);
         const n1 = normPoint(p.x, p.y);
-        ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y,
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y,
             color: tool === "eraser" ? "#ffffff" : currentColor, size: currentSize}));
         lastX = p.x; lastY = p.y;
     });
@@ -696,7 +716,7 @@ def drawing_page(username: str) -> str:
 
     clearBtn.addEventListener("click", () => {
         clearCanvas();
-        ws.send(JSON.stringify({type: "clear"}));
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "clear"}));
     });
     penTool.onclick=()=>{tool="pen"; penTool.classList.add("active"); eraserTool.classList.remove("active");};
     eraserTool.onclick=()=>{tool="eraser"; eraserTool.classList.add("active"); penTool.classList.remove("active");};
@@ -731,7 +751,7 @@ def drawing_page(username: str) -> str:
             btn.textContent = word;
             btn.onclick = () => {
                 if (btn.disabled) return;
-                ws.send(JSON.stringify({type: "guess", word: word}));
+                if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "guess", word: word}));
             };
             btn.dataset.word = word;
             optionsGrid.appendChild(btn);
@@ -744,14 +764,35 @@ def drawing_page(username: str) -> str:
         clearCanvas();
     }
 
-    ws.onmessage = (ev) => {
+    function connectDrawing() {
+        statusEl.style.display = "block";
+        statusEl.textContent = "🔌 اتصال سریع به سرور بازی...";
+        ws = new WebSocket(wsProto + "//" + location.host + "/ws/drawing");
+        ws.onopen = () => { statusEl.textContent = "⚡ وصل شد! حریف در حال پیدا شدن..."; };
+        ws.onerror = () => { statusEl.textContent = "⚠️ اتصال ناپایدار؛ دوباره تلاش می‌کنیم..."; };
+        ws.onclose = () => {
+            if (!intentionallyLeaving && !reconnectTimer) {
+                statusEl.textContent = "🔄 اتصال قطع شد؛ اتصال مجدد...";
+                reconnectTimer = setTimeout(() => { reconnectTimer=null; connectDrawing(); }, 1200);
+            }
+        };
+        ws.onmessage = onDrawingMessage;
+    }
+
+    function onDrawingMessage(ev) {
         const data = JSON.parse(ev.data);
 
         if (data.type === "waiting") {
-            statusEl.textContent = "⏳ در حال پیدا کردن حریف...";
+            statusEl.textContent = "⏳ در صف حریف — حداکثر ۳۰ ثانیه";
             statusEl.style.display = "block";
             canvasWrap.style.display = "none";
             scoreBar.style.display = "none";
+        }
+
+        else if (data.type === "queue_timeout") {
+            statusEl.style.display = "block";
+            statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره وارد شو.";
+            canvasWrap.style.display = "none";
         }
 
         else if (data.type === "round_start") {
@@ -787,8 +828,8 @@ def drawing_page(username: str) -> str:
         else if (data.type === "draw") {
             const x0 = data.x0 * canvas.width, y0 = data.y0 * canvas.height;
             const x1 = data.x1 * canvas.width, y1 = data.y1 * canvas.height;
-            currentSize = Number(data.size) || 4;
-            drawLine(x0, y0, x1, y1, data.color);
+            const remoteSize = Math.max(1, Math.min(30, Number(data.size) || 4));
+            drawLine(x0, y0, x1, y1, data.color || "#111111", remoteSize);
         }
 
         else if (data.type === "clear") {
@@ -871,6 +912,7 @@ def drawing_page(username: str) -> str:
             clearBtnWrap.style.display = "none";
             optionsGrid.style.display = "none";
         }
-    };
+    }
+    connectDrawing();
     </script>"""
     return page_shell("نقاشی حدسی", body, username)
