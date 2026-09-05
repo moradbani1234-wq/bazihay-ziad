@@ -265,21 +265,13 @@ def _nav(username: str | None) -> str:
 
 
 def page_shell(title: str, body: str, username: str | None = None) -> str:
-    return f"""<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html.escape(title)}</title>
-<style>{BASE_CSS}</style>
-</head>
-<body>
-{_nav(username)}
-<div class="container">
-{body}
-</div>
-</body>
-</html>"""
+    active="home"
+    if "رتبه" in title: active="leaderboard"
+    elif "پیام" in title or "چت" in title or "گفتگو" in title: active="messages"
+    elif "فروشگاه" in title: active="shop"
+    elif "تنظیمات" in title: active="settings"
+    nav=_neon_nav(username,active) if username else _nav(username)
+    return f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title><style>{BASE_CSS}</style></head><body>{nav}<div class="container">{body}</div></body></html>"""
 
 
 def login_page(error: str | None = None) -> str:
@@ -351,21 +343,12 @@ def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
     return page_shell("محرومیت موقت", body, username)
 
 def leaderboard_page(username: str, rows: list[dict]) -> str:
-    items=[]
-    medals=["🥇","🥈","🥉"]
+    items=[]; medals=["🥇","🥈","🥉"]
     for i,r in enumerate(rows,1):
         medal=medals[i-1] if i<=3 else str(i)
         cls=" me" if r["username"]==username else ""
-        items.append(f"""<div class="leader-row{cls}">
-          <div class="rank-medal">{medal}</div><div><b>{html.escape(r['username'])}</b></div>
-          <div>{r['rating']} امتیاز</div><div>{r['wins']} برد</div>
-        </div>""")
-    body=f"""
-    <div class="card hero page-enter"><h1>🏆 رتبه‌بندی</h1>
-      <p>رتبه بر اساس برد و مساوی محاسبه می‌شود؛ امتیاز بازی هم به عنوان معیار دوم ثبت می‌شود.</p>
-      <div>{''.join(items) or '<p>هنوز آماری ثبت نشده.</p>'}</div>
-      <div style="text-align:center;margin-top:16px"><a class="btn" href="/lobby">لابی</a></div>
-    </div>"""
+        items.append(f'''<div class="leader-row{cls}"><div class="rank-medal">{medal}</div><div><b>{html.escape(r["username"])}</b><div class="report-meta">بازیکن Draw Battle</div></div><div><b>{r["rating"]}</b><small> امتیاز</small></div><div><b>{r["wins"]}</b><small> برد</small></div></div>''')
+    body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><p>برترین بازیکن‌های بازی اینجا می‌درخشند. رتبه‌ها بر اساس عملکرد بازی محاسبه می‌شوند.</p><div>{"".join(items) or "<p>هنوز آماری ثبت نشده.</p>"}</div></div>'''
     return page_shell("رتبه‌بندی",body,username)
 
 def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None) -> str:
@@ -1075,21 +1058,29 @@ BASE_CSS += """
 @media(max-width:600px){.container{padding:8px 5px 25px}.chat-screen{border-radius:22px 22px 0 0;margin:0 -5px}.chat-box{height:calc(100vh - 290px);min-height:430px;padding:12px 9px}.msg{max-width:86%}.chat-title{font-size:15px}.icon-btn{width:38px;height:38px}}
 """
 
+
+BASE_CSS += """
+html{background:#09051d}body{background:radial-gradient(circle at 50% -10%,rgba(150,50,255,.22),transparent 34%),linear-gradient(180deg,#0b0620,#09051b 55%,#070414);min-height:100vh}.container{max-width:920px;padding:22px 16px 80px}.nav{display:none}.neon-nav-wrap{padding:10px 0 22px;position:relative}.neon-nav{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;min-height:142px;padding:16px 10px 10px;border:2px solid #9c2cff;border-radius:32px;background:linear-gradient(180deg,#220c4b,#0c0725);box-shadow:0 0 0 1px rgba(255,91,246,.35) inset,0 0 18px rgba(153,39,255,.7),0 0 55px rgba(99,29,218,.25);overflow:visible}.neon-nav:before{content:"";position:absolute;left:3%;right:3%;top:-7px;height:12px;border-radius:50%;border-top:3px solid #ff4edb;box-shadow:0 -1px 12px #ff4edb,0 0 15px #762cff}.neon-nav:after{content:"◆";position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:23px;background:radial-gradient(circle,#ff55ea 0 24%,#7a2dff 25% 55%,#18063c 56%);border:2px solid #ff9aee;box-shadow:0 0 12px #ff4ddc,0 0 34px rgba(136,40,255,.8)}.neon-item{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#fff;text-decoration:none;border-radius:22px;padding:9px 4px 4px;transition:.25s;position:relative}.neon-item .ni-icon{font-size:48px;line-height:1;filter:drop-shadow(0 0 8px rgba(255,78,221,.45));transition:.25s;animation:neonFloat 3s ease-in-out infinite}.neon-item .ni-title{font-size:19px;font-weight:950;text-shadow:0 0 9px rgba(255,255,255,.25)}.neon-item .ni-line{width:82px;max-width:80%;height:4px;border-radius:999px;background:linear-gradient(90deg,transparent,#ff5fe3,transparent);box-shadow:0 0 9px #ff5fe3}.neon-item:hover,.neon-item.active{background:radial-gradient(circle at 50% 70%,rgba(214,50,255,.2),transparent 62%);transform:translateY(-4px)}.neon-item:hover .ni-icon,.neon-item.active .ni-icon{transform:scale(1.08);filter:drop-shadow(0 0 12px #ff54dc)}.neon-item.active .ni-title{text-shadow:0 0 11px #ff5ce0}.neon-item.active .ni-line{box-shadow:0 0 14px #ff5ce0}.page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 18px}.page-heading h1{margin:0;font-size:28px;color:#fff;text-shadow:0 0 14px rgba(238,88,226,.35)}.page-heading .sub{color:#9a91bd;font-size:12px}.card,.hero{background:linear-gradient(145deg,rgba(30,17,67,.97),rgba(13,10,36,.97));border-color:#3a2269;box-shadow:0 14px 45px rgba(0,0,0,.3),0 0 25px rgba(113,31,214,.08)}.card{border-radius:24px}.leader-row{border-color:#32205a;background:linear-gradient(90deg,rgba(65,29,112,.12),transparent);border-radius:16px;margin:6px 0}.leader-row.me{background:linear-gradient(90deg,rgba(212,48,228,.18),rgba(91,42,197,.12))}.friend-row{border-color:#382261;background:linear-gradient(145deg,#191032,#100b25);transition:.22s}.friend-row:hover{transform:translateY(-2px);border-color:#9143df;box-shadow:0 8px 24px rgba(126,35,224,.18)}.profile-card{background:linear-gradient(145deg,#21134d,#0f0a2a);border:2px solid #7626c8;box-shadow:0 0 30px rgba(154,45,255,.2)}.chat-screen{border-color:#5c2ca1;box-shadow:0 0 34px rgba(128,36,235,.2),0 20px 60px rgba(0,0,0,.45)}.music-bar{border-color:#4b267a;background:linear-gradient(90deg,#1b0d38,#100a26)}@keyframes neonFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}@media(max-width:650px){.container{padding:12px 8px 55px}.neon-nav{min-height:112px;border-radius:23px;padding:10px 4px 7px}.neon-nav:after{width:44px;height:44px;top:-24px;font-size:17px}.neon-item{border-radius:16px;padding:6px 2px 3px}.neon-item .ni-icon{font-size:34px}.neon-item .ni-title{font-size:14px}.neon-item .ni-line{width:54px;height:3px}.page-heading h1{font-size:23px}}@media(max-width:420px){.neon-item .ni-icon{font-size:29px}.neon-item .ni-title{font-size:12px}.neon-nav{gap:1px}}
+"""
+
+def _neon_nav(username, active="home"):
+    if not username:return ""
+    items=[("leaderboard","🏆","لیدر بورد","/leaderboard"),("messages","💬","گفتگوها","/messages"),("shop","🛍️","فروشگاه","/shop"),("settings","⚙️","تنظیمات","/settings")]
+    cells=[]
+    for key,icon,title,url in items:
+        cls=" active" if active==key else ""
+        cells.append(f'<a class="neon-item{cls}" href="{url}"><span class="ni-icon">{icon}</span><span class="ni-title">{title}</span><span class="ni-line"></span></a>')
+    return '<div class="neon-nav-wrap"><div class="neon-nav">'+''.join(cells)+'</div></div>'
+
 def _nav(username):
     if username:
         u=html.escape(username)
-        support='<a href="/support">🛡️ پشتیبانی</a>' if username=='morad' else ''
-        return f'''<div class="nav"><div class="nav-brand">🎲 بازی‌خونه — {u}</div><div><a href="/lobby">🏠 لابی</a><a href="/profile?u={quote(username,safe='')}">👤 پروفایل</a><a href="/settings">⚙️ تنظیمات</a>{support}<a href="/logout">خروج</a></div></div>'''
-    return '<div class="nav"><div class="nav-brand">🎲 بازی‌خونه</div><div><a href="/login">ورود</a></div></div>'
+        return f'<div class="nav"><div class="nav-brand">🎲 بازی‌خونه — {u}</div></div>'
+    return '<div class="nav"><div class="nav-brand">🎲 بازی‌خونه</div></div>'
+
 
 def lobby_page(username):
-    body=f"""<div class="lobby-shell page-enter">
-      <div class="lobby-profile hero"><div class="lobby-profile-main"><a href="/profile?u={quote(username,safe='')}" class="lobby-avatar">🎮</a><div><div class="lobby-name">{html.escape(username)}</div><div class="lobby-sub">برای پروفایل کلیک کن 👆</div></div></div><div class="lobby-stats"><span>🏆 جدول امتیازات</span><span>💎 امتیاز و دستاوردها</span></div></div>
-      <div class="lobby-promo-grid"><a class="promo-card orange" href="/leaderboard"><span>🏆</span><b>برترین‌ها</b><small>جدول امتیازات</small></a><a class="promo-card purple" href="/shop"><span>🛍️</span><b>فروشگاه</b><small>با سکه خرید کن</small><em>🎁 ۲ روز</em></a></div>
-      <div class="lobby-sep">یا</div><div class="lobby-duo"><a href="/messages">🔒<b>چت خصوصی</b></a><a href="/chat/public">💬<b>چت عمومی</b></a></div>
-      <div class="lobby-sep">یا</div><a class="lobby-play" href="/games">🎮 ورود به بازی</a>
-      <div class="lobby-mini-actions"><a href="/messages">💌 پیام‌ها</a><a href="/support/ticket">🛡️ تیکت پشتیبانی</a><a href="/settings">⚙️ تنظیمات</a></div>
-    </div>"""
+    body=f"""<div class="lobby-shell page-enter"><div class="page-heading"><div><div class="sub">DRAW BATTLE • ARCADE</div><h1>خوش اومدی، {html.escape(username)} ✨</h1></div><a class="btn" href="/profile?u={quote(username,safe='')}">👤 پروفایل</a></div><div class="lobby-profile hero"><div class="lobby-profile-main"><a href="/profile?u={quote(username,safe='')}" class="lobby-avatar">🎮</a><div><div class="lobby-name">{html.escape(username)}</div><div class="lobby-sub">برای پروفایل کلیک کن 👆</div></div></div><div class="lobby-stats"><span>🏆 جدول امتیازات</span><span>💎 امتیاز و دستاوردها</span></div></div><div class="lobby-promo-grid"><a class="promo-card orange" href="/leaderboard"><span>🏆</span><b>لیدر بورد</b><small>برترین بازیکنان</small></a><a class="promo-card purple" href="/shop"><span>🛍️</span><b>فروشگاه</b><small>آیتم و سکه</small><em>🎁 ۲ روز</em></a></div><div class="lobby-sep">یا</div><div class="lobby-duo"><a href="/messages">💬<b>گفتگوها</b></a><a href="/chat/public">🌐<b>چت عمومی</b></a></div><div class="lobby-sep">یا</div><a class="lobby-play" href="/games">🎮 ورود به بازی</a><div class="lobby-mini-actions"><a href="/messages">💌 پیام‌ها</a><a href="/support/ticket">🛡️ تیکت پشتیبانی</a><a href="/settings">⚙️ تنظیمات</a></div></div>"""
     return page_shell('لابی',body,username)
 
 def games_page(username):
@@ -1193,5 +1184,5 @@ def support_ticket_page(username):
 
 
 def shop_page(username):
-    body=f"""<div class="card hero page-enter"><h1>🛍️ فروشگاه</h1><p>سکه‌ها و آیتم‌های تزئینی بازی را از این بخش مدیریت کن.</p><div class="lobby-promo-grid"><div class="promo-card purple"><span>💎</span><b>بسته سکه</b><small>به‌زودی</small></div><div class="promo-card orange"><span>🎁</span><b>آیتم ویژه</b><small>به‌زودی</small></div></div></div><div style="text-align:center"><a class="btn" href="/lobby">بازگشت به منو</a></div>"""
-    return page_shell('فروشگاه',body,username)
+    body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • ITEMS</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><p>سکه‌ها و آیتم‌های تزئینی بازی را از اینجا مدیریت کن.</p><div class="lobby-promo-grid"><div class="promo-card purple"><span>💎</span><b>بسته سکه</b><small>به‌زودی</small></div><div class="promo-card orange"><span>🎁</span><b>آیتم ویژه</b><small>به‌زودی</small></div></div></div><div class="card page-enter"><h2>✨ ویترین ویژه</h2><p>آیتم‌های بعدی با همین استایل نئونی اضافه می‌شوند.</p></div>'''
+    return page_shell("فروشگاه",body,username)
