@@ -185,6 +185,30 @@ button:hover, .btn:hover { background: var(--turquoise-dim); color: #fff; }
 .draw-result-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
 .draw-result-note { margin-top: 10px; color: var(--text-muted); font-size: 13.5px; }
 
+
+.report-btn {
+    margin-inline-start: 8px; padding: 3px 7px; border-radius: 7px;
+    background: transparent; border: 1px solid var(--danger); color: var(--danger);
+    font-size: 11px; cursor: pointer; opacity: .75;
+}
+.report-btn:hover { opacity: 1; background: rgba(226,102,94,.12); }
+.draw-tools { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; }
+.draw-tool, .draw-size {
+    background:var(--surface-raised); color:var(--text); border:1px solid var(--border);
+    padding:8px 12px; border-radius:10px; cursor:pointer;
+}
+.draw-tool.active, .draw-size.active { border-color:var(--saffron); box-shadow:0 0 0 2px rgba(232,169,74,.18); }
+.page-enter { animation: pageIn .35s ease both; }
+@keyframes pageIn { from {opacity:0; transform:translateY(8px) scale(.99)} to {opacity:1;transform:none} }
+.glow-btn { box-shadow:0 0 0 rgba(47,169,160,0); transition:transform .2s, box-shadow .2s; }
+.glow-btn:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(47,169,160,.2); }
+.leader-row { display:grid; grid-template-columns:42px 1fr 70px 70px; gap:8px; align-items:center; padding:12px; border-bottom:1px solid var(--border); }
+.leader-row.me { background:rgba(47,169,160,.08); border-radius:10px; }
+.rank-medal { font-size:20px; text-align:center; }
+.admin-card { border-color:var(--saffron); }
+.report-item { padding:14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:var(--surface-raised); }
+.report-meta { color:var(--text-muted); font-size:12px; }
+
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
 }
@@ -280,15 +304,88 @@ def lobby_page(username: str) -> str:
     return page_shell("لابی", body, username)
 
 
+
+def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
+    mins = max(1, (remaining + 59) // 60)
+    scope_text = {"games":"بازی‌ها", "chat":"چت‌ها", "drawing":"نقاشی", "tictactoe":"دوز", "all":"همه بخش‌ها"}.get(scope, scope)
+    body=f"""
+    <div class="card hero page-enter" style="text-align:center">
+      <div style="font-size:52px">🚫</div>
+      <h1>دسترسی موقتاً محدود شده</h1>
+      <p>شما از <b>{html.escape(scope_text)}</b> محروم هستید.</p>
+      <p>زمان باقی‌مانده: <b>{mins} دقیقه</b></p>
+      <p>دلیل: {html.escape(reason or "نقض قوانین")}</p>
+      <a class="btn glow-btn" href="/lobby">بازگشت به منو</a>
+    </div>"""
+    return page_shell("محرومیت موقت", body, username)
+
+def leaderboard_page(username: str, rows: list[dict]) -> str:
+    items=[]
+    medals=["🥇","🥈","🥉"]
+    for i,r in enumerate(rows,1):
+        medal=medals[i-1] if i<=3 else str(i)
+        cls=" me" if r["username"]==username else ""
+        items.append(f"""<div class="leader-row{cls}">
+          <div class="rank-medal">{medal}</div><div><b>{html.escape(r['username'])}</b></div>
+          <div>{r['rating']} امتیاز</div><div>{r['wins']} برد</div>
+        </div>""")
+    body=f"""
+    <div class="card hero page-enter"><h1>🏆 رتبه‌بندی</h1>
+      <p>رتبه بر اساس برد و مساوی محاسبه می‌شود؛ امتیاز بازی هم به عنوان معیار دوم ثبت می‌شود.</p>
+      <div>{''.join(items) or '<p>هنوز آماری ثبت نشده.</p>'}</div>
+      <div style="text-align:center;margin-top:16px"><a class="btn" href="/lobby">لابی</a></div>
+    </div>"""
+    return page_shell("رتبه‌بندی",body,username)
+
+def support_page(username: str, reports: list[dict]) -> str:
+    items=[]
+    for r in reports:
+        status="حل‌شده" if r["status"]!="open" else "باز"
+        items.append(f"""
+        <div class="report-item" data-id="{r['id']}">
+          <div><b>گزارش {r['id']}</b> — {html.escape(r['context'])} — <span>{status}</span></div>
+          <div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر گزارش‌شده: <b>{html.escape(r['target'])}</b></div>
+          <p style="margin:8px 0"><b>محتوا:</b> {html.escape(r['content'])}</p>
+          <div class="draw-tools">
+            <select class="draw-size ban-scope"><option value="all">همه</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="tictactoe">دوز</option></select>
+            <input class="ban-hours" type="number" min="1" max="168" value="3" style="width:80px;margin:0" title="ساعت">
+            <button class="glow-btn" onclick="banUser({r['id']}, this)">محروم کن</button>
+          </div>
+        </div>""")
+    body=f"""
+    <div class="card admin-card page-enter">
+      <h1>🛡️ پنل پشتیبانی</h1>
+      <p>گزارش‌ها را بررسی کن و در صورت تخلف، محرومیت را فقط برای همان بخش یا برای همه بخش‌ها اعمال کن.</p>
+      <div>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div>
+      <a class="btn" href="/lobby">بازگشت</a>
+    </div>
+    <script>
+    async function banUser(id, btn) {{
+      const item=btn.closest('.report-item');
+      const target=item.querySelector('.report-meta b').textContent.trim();
+      const scope=item.querySelector('.ban-scope').value;
+      const hours=Number(item.querySelector('.ban-hours').value);
+      const reason=item.querySelector('p').textContent.replace(/^محتوا:\\s*/,'').slice(0,300);
+      const r=await fetch('/support/ban',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+        body:JSON.stringify({{report_id:id,target,scope,hours,reason}})}});
+      const d=await r.json();
+      if(d.ok) {{ btn.textContent='✅ محروم شد'; btn.disabled=true; }}
+      else alert('خطا در اعمال محرومیت');
+    }}
+    </script>"""
+    return page_shell("پنل پشتیبانی",body,username)
+
 def _render_messages(messages: list[dict], username: str) -> str:
     if not messages:
         return '<div style="opacity:0.6;text-align:center;padding:20px 0">هنوز پیامی نیست...</div>'
     out = []
     for m in messages:
         cls = "msg me" if m["sender"] == username else "msg"
-        out.append(
-            f'<div class="{cls}"><span class="sender">{html.escape(m["sender"])}</span>{html.escape(m["content"])}</div>'
-        )
+        sender=html.escape(m["sender"])
+        content=html.escape(m["content"])
+        report="" if m["sender"] == username else (
+            f'<button class="report-btn" onclick="reportMsg({m["sender"]!r}, {m["content"]!r})">گزارش</button>')
+        out.append(f'<div class="{cls}"><span class="sender">{sender}</span>{content}{report}</div>')
     return "".join(out)
 
 
@@ -313,6 +410,11 @@ def chat_public_page(username: str, messages: list[dict]) -> str:
         div.innerHTML = "<span class='sender'></span>";
         div.querySelector(".sender").textContent = sender;
         div.appendChild(document.createTextNode(content));
+        if (sender !== me) {{
+            const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش";
+            rb.onclick=()=>reportMsg(sender, content);
+            div.appendChild(rb);
+        }}
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }}
@@ -320,6 +422,12 @@ def chat_public_page(username: str, messages: list[dict]) -> str:
         const data = JSON.parse(ev.data);
         addMsg(data.sender, data.content);
     }};
+    async function reportMsg(target, content) {{
+        if (!confirm("این پیام را گزارش می‌کنی؟")) return;
+        const r = await fetch("/report", {{method:"POST", headers:{{"Content-Type":"application/json"}},
+            body:JSON.stringify({{target, content, context:"chat_public"}})}});
+        if ((await r.json()).ok) alert("گزارش ثبت شد.");
+    }}
     function sendMsg() {{
         const input = document.getElementById("msgInput");
         const text = input.value.trim();
@@ -356,6 +464,11 @@ def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
         div.innerHTML = "<span class='sender'></span>";
         div.querySelector(".sender").textContent = sender;
         div.appendChild(document.createTextNode(content));
+        if (sender !== me) {{
+            const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش";
+            rb.onclick=()=>reportMsg(sender, content);
+            div.appendChild(rb);
+        }}
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }}
@@ -363,6 +476,12 @@ def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
         const data = JSON.parse(ev.data);
         addMsg(data.sender, data.content);
     }};
+    async function reportMsg(target, content) {{
+        if (!confirm("این پیام را گزارش می‌کنی؟")) return;
+        const r = await fetch("/report", {{method:"POST", headers:{{"Content-Type":"application/json"}},
+            body:JSON.stringify({{target, content, context:"chat_private"}})}});
+        if ((await r.json()).ok) alert("گزارش ثبت شد.");
+    }}
     function sendMsg() {{
         const input = document.getElementById("msgInput");
         const text = input.value.trim();
@@ -411,7 +530,8 @@ def tictactoe_page(username: str) -> str:
     ws.onmessage = (ev) => {{
         const data = JSON.parse(ev.data);
         if (data.type === "waiting") {{
-            statusEl.textContent = "⏳ در حال پیدا کردن حریف...";
+            statusEl.textContent = "⏳ در حال پیدا کردن حریف... (۳۰ ثانیه)";
+
         }} else if (data.type === "state") {{
             mySymbol = data.your_symbol;
             currentBoard = data.board;
@@ -450,6 +570,13 @@ def drawing_page(username: str) -> str:
       </div>
 
       <div id="palette" class="draw-palette" style="display:none"></div>
+      <div id="tools" class="draw-tools" style="display:none">
+        <button class="draw-tool active" id="penTool">✏️ قلم</button>
+        <button class="draw-tool" id="eraserTool">🧽 پاک‌کن</button>
+        <button class="draw-size active" data-size="4">باریک</button>
+        <button class="draw-size" data-size="8">متوسط</button>
+        <button class="draw-size" data-size="14">ضخیم</button>
+      </div>
       <div id="drawerWordBox" class="draw-word-box" style="display:none"></div>
       <div style="text-align:center;display:none" id="clearBtnWrap">
         <button id="clearBtn">🧹 پاک کردن بوم</button>
@@ -460,7 +587,7 @@ def drawing_page(username: str) -> str:
       <div id="resultPanel" class="draw-result" style="display:none"></div>
 
       <div style="text-align:center;margin-top:14px">
-        <a class="btn" href="/lobby">بازگشت به لابی</a>
+        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); fetch('/game/leave',{method:'POST'}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
       </div>
     </div>
 
@@ -478,6 +605,9 @@ def drawing_page(username: str) -> str:
     const canvas = document.getElementById("board");
     const ctx = canvas.getContext("2d");
     const palette = document.getElementById("palette");
+    const tools = document.getElementById("tools");
+    const penTool = document.getElementById("penTool");
+    const eraserTool = document.getElementById("eraserTool");
     const drawerWordBox = document.getElementById("drawerWordBox");
     const clearBtnWrap = document.getElementById("clearBtnWrap");
     const clearBtn = document.getElementById("clearBtn");
@@ -486,6 +616,8 @@ def drawing_page(username: str) -> str:
 
     let role = null;
     let currentColor = "#111111";
+    let currentSize = 4;
+    let tool = "pen";
     let drawing = false;
     let lastX = null, lastY = null;
     let countdownTimer = null;
@@ -534,7 +666,7 @@ def drawing_page(username: str) -> str:
 
     function drawLine(x0, y0, x1, y1, color) {
         ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = currentSize;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(x0, y0);
@@ -554,7 +686,8 @@ def drawing_page(username: str) -> str:
         drawLine(lastX, lastY, p.x, p.y, currentColor);
         const n0 = normPoint(lastX, lastY);
         const n1 = normPoint(p.x, p.y);
-        ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y, color: currentColor}));
+        ws.send(JSON.stringify({type: "draw", x0: n0.x, y0: n0.y, x1: n1.x, y1: n1.y,
+            color: tool === "eraser" ? "#ffffff" : currentColor, size: currentSize}));
         lastX = p.x; lastY = p.y;
     });
     ["pointerup", "pointerleave", "pointercancel"].forEach(evName => {
@@ -565,6 +698,14 @@ def drawing_page(username: str) -> str:
         clearCanvas();
         ws.send(JSON.stringify({type: "clear"}));
     });
+    penTool.onclick=()=>{tool="pen"; penTool.classList.add("active"); eraserTool.classList.remove("active");};
+    eraserTool.onclick=()=>{tool="eraser"; eraserTool.classList.add("active"); penTool.classList.remove("active");};
+    document.querySelectorAll(".draw-size").forEach(btn=>btn.onclick=()=>{
+        currentSize=Number(btn.dataset.size)||4;
+        document.querySelectorAll(".draw-size").forEach(x=>x.classList.remove("active"));
+        btn.classList.add("active");
+    });
+
 
     function buildPalette(colors) {
         palette.innerHTML = "";
@@ -626,6 +767,7 @@ def drawing_page(username: str) -> str:
                 drawerWordBox.style.display = "block";
                 drawerWordBox.textContent = "کلمه‌ای که باید بکشی: " + data.word;
                 palette.style.display = "flex";
+                tools.style.display = "flex";
                 clearBtnWrap.style.display = "block";
                 optionsGrid.style.display = "none";
                 buildPalette(data.colors);
@@ -645,6 +787,7 @@ def drawing_page(username: str) -> str:
         else if (data.type === "draw") {
             const x0 = data.x0 * canvas.width, y0 = data.y0 * canvas.height;
             const x1 = data.x1 * canvas.width, y1 = data.y1 * canvas.height;
+            currentSize = Number(data.size) || 4;
             drawLine(x0, y0, x1, y1, data.color);
         }
 
@@ -678,6 +821,15 @@ def drawing_page(username: str) -> str:
                 html += "<div>این دور امتیازی داده نشد.</div>";
             }
             resultPanel.innerHTML = html;
+            if (data.drawer !== me) {{
+                const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش نقاشی";
+                rb.onclick=async()=>{{
+                    const r=await fetch("/report",{{method:"POST",headers:{{"Content-Type":"application/json"}},
+                      body:JSON.stringify({{target:data.drawer,content:"نقاشی/محتوای دور گزارش شد",context:"drawing"}})}});
+                    if((await r.json()).ok) alert("گزارش ثبت شد.");
+                }};
+                resultPanel.appendChild(rb);
+            }}
             const noteEl = document.createElement("div");
             noteEl.className = "draw-result-note";
             resultPanel.appendChild(noteEl);
