@@ -52,9 +52,15 @@ async def init_db():
         except Exception:
             pass
         await db.execute("""CREATE TABLE IF NOT EXISTS room_music (
-            room TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL,
+            room TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL DEFAULT '',
             added_by TEXT NOT NULL, target_user TEXT NOT NULL DEFAULT '',
-            created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
+            created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+            audio_blob BLOB, mime_type TEXT NOT NULL DEFAULT 'audio/mpeg', filename TEXT NOT NULL DEFAULT '')""")
+        for col, definition in [("audio_blob", "BLOB"), ("mime_type", "TEXT NOT NULL DEFAULT 'audio/mpeg'"), ("filename", "TEXT NOT NULL DEFAULT ''")]:
+            try:
+                await db.execute(f"ALTER TABLE room_music ADD COLUMN {col} {definition}")
+            except Exception:
+                pass
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
@@ -98,8 +104,8 @@ async def save_message(room,sender,content,reply_to_id=None):
 async def get_recent_messages(room,limit=50):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("SELECT id,sender,content,reply_to_id,created_at FROM messages WHERE room=? ORDER BY id DESC LIMIT ?",
-                             (room,limit))
+        cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,COALESCE(u.display_name,m.sender) display_name
+                             FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? ORDER BY m.id DESC LIMIT ?""", (room,limit))
         return [dict(r) for r in reversed(await cur.fetchall())]
 
 async def ensure_stats(username):
@@ -184,7 +190,7 @@ async def get_active_bans(limit=200):
 
 async def update_profile(username, display_name, bio, avatar):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET display_name=?, bio=?, avatar=? WHERE username=?", (display_name[:40], bio[:300], avatar[:8], username))
+        await db.execute("UPDATE users SET display_name=?, bio=?, avatar=? WHERE username=?", (display_name[:40], bio[:300], avatar[:180000], username))
         await db.commit()
 
 async def update_password(username, password_hash, salt):
@@ -206,18 +212,35 @@ async def profile(username):
 async def get_messages_after(room, after_id=0, limit=100):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur = await db.execute("SELECT id,sender,content,reply_to_id,created_at FROM messages WHERE room=? AND id>? ORDER BY id ASC LIMIT ?", (room, int(after_id), limit))
+        cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,COALESCE(u.display_name,m.sender) display_name
+                              FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? AND m.id>? ORDER BY m.id ASC LIMIT ?""", (room, int(after_id), limit))
         return [dict(r) for r in await cur.fetchall()]
 
-async def set_room_music(room, title, url, added_by, target_user=''):
+async def set_room_music_file(room, title, audio_blob, mime_type, filename, added_by, target_user=''):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("INSERT INTO room_music(room,title,url,added_by,target_user,created_at,active) VALUES(?,?,?,?,?,?,1) ON CONFLICT(room) DO UPDATE SET title=excluded.title,url=excluded.url,added_by=excluded.added_by,target_user=excluded.target_user,created_at=excluded.created_at,active=1", (room, title[:120], url[:1000], added_by, target_user[:64], int(time.time())))
+        await db.execute("""INSERT INTO room_music(room,title,url,added_by,target_user,created_at,active,audio_blob,mime_type,filename)
+                           VALUES(?,?, '', ?,?,?,1,?,?,?)
+                           ON CONFLICT(room) DO UPDATE SET title=excluded.title,url='',added_by=excluded.added_by,
+                           target_user=excluded.target_user,created_at=excluded.created_at,active=1,
+                           audio_blob=excluded.audio_blob,mime_type=excluded.mime_type,filename=excluded.filename""",
+                       (room, title[:120], added_by, target_user[:64], int(time.time()), audio_blob, mime_type[:100], filename[:180]))
         await db.commit()
 
 async def get_room_music(room):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("SELECT * FROM room_music WHERE room=? AND active=1", (room,))
+        cur=await db.execute("SELECT room,title,added_by,target_user,created_at,active,filename,mime_type FROM room_music WHERE room=? AND active=1", (room,))
+        r=await cur.fetchone()
+        if not r:
+            return None
+        data=dict(r)
+        data["url"] = "/chat/public/audio" if room == "public" else ""
+        return data
+
+async def get_room_music_audio(room):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT audio_blob,mime_type,filename FROM room_music WHERE room=? AND active=1", (room,))
         r=await cur.fetchone()
         return dict(r) if r else None
 

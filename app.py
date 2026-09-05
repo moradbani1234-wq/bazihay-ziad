@@ -1,11 +1,12 @@
 import asyncio
+import io
 import os
 import secrets
 import time
 from urllib.parse import quote
 
-from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 import auth
@@ -213,6 +214,20 @@ async def support_unban(request: Request):
     await db.unban_user(target, scope)
     return {"ok": True}
 
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_query_page(request: Request, u: str = ""):
+    username = _require_login(request)
+    if not username:
+        return RedirectResponse("/login")
+    target = str(u or "").strip()
+    if not target:
+        target = username
+    prof = await db.profile(target)
+    if not prof:
+        return HTMLResponse("کاربر پیدا نشد.", status_code=404)
+    return tpl.profile_page(username, prof)
+
+
 @app.get("/profile/{target}", response_class=HTMLResponse)
 async def profile_page(request: Request, target: str):
     username = _require_login(request)
@@ -236,7 +251,12 @@ async def settings_profile(request: Request):
     if not username:
         return {"ok": False, "error": "login_required"}
     data = await request.json()
-    await db.update_profile(username, str(data.get("display_name") or username), str(data.get("bio") or ""), str(data.get("avatar") or "🎮"))
+    avatar = str(data.get("avatar") or "🎮")
+    if avatar.startswith("data:image/") and len(avatar) > 180000:
+        return {"ok": False, "error": "image_too_large"}
+    if avatar.startswith("data:") and not avatar.startswith("data:image/"):
+        return {"ok": False, "error": "bad_image"}
+    await db.update_profile(username, str(data.get("display_name") or username), str(data.get("bio") or ""), avatar)
     return {"ok": True}
 
 @app.post("/settings/password")
@@ -305,7 +325,8 @@ class ChatManager:
 
     async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message("public", sender, content, reply_to_id)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time())}
+        prof = await db.profile(sender)
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", "🎮"), "display_name": (prof or {}).get("display_name", sender)}
         dead = []
         for ws in self.public_conns:
             try:
@@ -325,7 +346,8 @@ class ChatManager:
 
     async def broadcast_private(self, room: str, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message(room, sender, content, reply_to_id)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time())}
+        prof = await db.profile(sender)
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", "🎮"), "display_name": (prof or {}).get("display_name", sender)}
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -392,22 +414,37 @@ class MusicManager:
 music_manager = MusicManager()
 
 @app.post("/support/music")
-async def support_music(request: Request):
+async def support_music(request: Request, music: UploadFile = File(...)):
     username = _require_login(request)
     if not username or not _is_support(username):
         return {"ok": False, "error": "forbidden"}
-    data = await request.json()
-    title = str(data.get("title") or "آهنگ چت روم").strip()[:120]
-    url = str(data.get("url") or "").strip()[:1000]
-    target = str(data.get("target_user") or "").strip()[:64]
-    if not url or not (url.startswith("https://") or url.startswith("http://")):
-        return {"ok": False, "error": "bad_url"}
+    title = (str(request.query_params.get("title") or music.filename or "آهنگ چت روم").strip()[:120])
+    target = str(request.query_params.get("target_user") or "").strip()[:64]
     if target and not await db.get_user(target):
         return {"ok": False, "error": "user_not_found"}
-    await db.set_room_music("public", title, url, username, target)
-    music = await db.get_room_music("public")
-    await music_manager.broadcast({"type":"music","music":music})
-    return {"ok": True, "music": music}
+    allowed = {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a", "audio/aac"}
+    mime = (music.content_type or "audio/mpeg").lower()
+    if mime not in allowed and not (mime.startswith("audio/")):
+        return {"ok": False, "error": "bad_audio"}
+    blob = await music.read()
+    if not blob:
+        return {"ok": False, "error": "empty_audio"}
+    if len(blob) > 15 * 1024 * 1024:
+        return {"ok": False, "error": "audio_too_large"}
+    await db.set_room_music_file("public", title, blob, mime, music.filename or "music", username, target)
+    music_info = await db.get_room_music("public")
+    await music_manager.broadcast({"type":"music","music":music_info})
+    return {"ok": True, "music": music_info}
+
+@app.get("/chat/public/audio")
+async def public_music_audio(request: Request):
+    username, blocked = await _require_scope(request, "chat")
+    if blocked:
+        return blocked
+    item = await db.get_room_music_audio("public")
+    if not item or not item.get("audio_blob"):
+        return HTMLResponse("آهنگی فعال نیست.", status_code=404)
+    return StreamingResponse(io.BytesIO(item["audio_blob"]), media_type=item.get("mime_type") or "audio/mpeg")
 
 @app.post("/support/music/clear")
 async def support_music_clear(request: Request):
