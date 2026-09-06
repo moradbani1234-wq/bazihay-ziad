@@ -396,18 +396,23 @@ def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
     </div>"""
     return page_shell("محرومیت موقت", body, username)
 
-def leaderboard_page(username: str, rows: list[dict]) -> str:
+def leaderboard_page(username: str, rows: list[dict], by: str = "wins") -> str:
     podium=[]; rest=[]
+    value_key = "points" if by == "points" else "wins"
+    value_label = "امتیاز" if by == "points" else "جام"
+    value_icon = "💎" if by == "points" else "🏆"
     for i,r in enumerate(rows,1):
         raw_avatar=r.get('avatar') or '🎮'
         avatar=(f'<img class="leader-avatar" src="{html.escape(str(raw_avatar),quote=True)}" alt="">' if str(raw_avatar).startswith('data:image/') else f'<div class="leader-avatar leader-avatar-fallback">{html.escape(str(raw_avatar)[:2])}</div>')
         name=html.escape(r['username']); age=int(r.get('age') or 18)
+        value=r.get(value_key) or 0
         if i<=3:
-            podium.append(f'''<a class="leader-podium-card rank-{i}" href="/profile?u={quote(r['username'],safe='')}"><div class="leader-rank">{['🥇','🥈','🥉'][i-1]}</div>{avatar}<div class="leader-name">@{name}</div><div class="leader-age">🎂 {age} سال</div><div class="leader-score">{r['rating']} امتیاز</div></a>''')
+            podium.append(f'''<a class="leader-podium-card rank-{i}" href="/profile?u={quote(r['username'],safe='')}"><div class="leader-rank">{['🥇','🥈','🥉'][i-1]}</div>{avatar}<div class="leader-name">@{name}</div><div class="leader-age">🎂 {age} سال</div><div class="leader-score">{value_icon} {value} {value_label}</div></a>''')
         else:
             cls=' me' if r['username']==username else ''
-            rest.append(f'''<a class="leader-row{cls}" href="/profile?u={quote(r['username'],safe='')}"><div class="rank-medal">{i}</div><div class="leader-list-avatar">{avatar}</div><div><b>@{name}</b><div class="report-meta">🎂 {age} سال</div></div><div><b>{r['rating']}</b><small> امتیاز</small></div></a>''')
-    body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><p>سه نفر اول با پروفایل نئونی ویژه نمایش داده می‌شوند؛ روی پروفایل هر بازیکن بزن.</p><div class="leader-podium">{''.join(podium) or '<p>هنوز آماری ثبت نشده.</p>'}</div><div class="leader-list">{''.join(rest)}</div></div>'''
+            rest.append(f'''<a class="leader-row{cls}" href="/profile?u={quote(r['username'],safe='')}"><div class="rank-medal">{i}</div><div class="leader-list-avatar">{avatar}</div><div><b>@{name}</b><div class="report-meta">🎂 {age} سال</div></div><div><b>{value}</b><small> {value_label}</small></div></a>''')
+    tabs=f'''<div class="leader-tabs"><a class="leader-tab{" active" if by=="wins" else ""}" href="/leaderboard?by=wins">🏆 بیشترین جام</a><a class="leader-tab{" active" if by=="points" else ""}" href="/leaderboard?by=points">💎 بیشترین امتیاز</a></div>'''
+    body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter">{tabs}<p>سه نفر اول با پروفایل نئونی ویژه نمایش داده می‌شوند؛ روی پروفایل هر بازیکن بزن.</p><div class="leader-podium">{''.join(podium) or '<p>هنوز آماری ثبت نشده.</p>'}</div><div class="leader-list">{''.join(rest)}</div></div>'''
     return page_shell('رتبه‌بندی',body,username)
 
 def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None) -> str:
@@ -966,6 +971,100 @@ def profile_page(username, prof):
     return page_shell('پروفایل',body,username)
 
 
+def settings_page(username, prof):
+    prof = prof or {'username': username, 'bio': '', 'avatar': '🎮', 'age': 18}
+    raw_avatar = prof.get('avatar') or '🎮'
+    is_image = str(raw_avatar).startswith('data:image/')
+    avatar_html = _avatar_html(raw_avatar, cls="profile-avatar-img")
+    emoji_value = '' if is_image else html.escape(str(raw_avatar), quote=True)
+    bio = html.escape(prof.get('bio') or '')
+    age = int(prof.get('age') or 18)
+    body = f'''<div class="settings-screen page-enter">
+      <div class="settings-header"><div class="settings-gear">⚙️</div><h1>تنظیمات</h1><a class="settings-close" href="/lobby">×</a></div>
+      <div class="settings-card">
+        <div class="settings-kicker">پروفایل</div>
+        <div class="settings-avatar-row">
+          <div class="settings-avatar" id="avatarPreview">{avatar_html}</div>
+          <div><p>یک عکس آپلود کن یا یک اموجی به‌عنوان آواتار انتخاب کن.</p></div>
+        </div>
+        <input type="file" id="avatarFile" class="file-input" accept="image/*">
+        <label for="avatarEmoji">اموجی آواتار</label>
+        <input type="text" id="avatarEmoji" maxlength="8" placeholder="🎮" value="{emoji_value}">
+        <label for="bioInput">بیوگرافی</label>
+        <textarea id="bioInput" maxlength="70" placeholder="چیزی درباره‌ی خودت بنویس...">{bio}</textarea>
+        <div class="char-counter"><span id="bioCount">0</span>/70</div>
+        <div class="age-row"><span>سن:</span><input type="number" id="ageInput" min="1" max="90" value="{age}"></div>
+        <button class="settings-save" id="saveProfileBtn" onclick="saveProfile()">💾 ذخیره تغییرات</button>
+        <div id="profileStatus" class="status-line" style="display:none"></div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-kicker">امنیت حساب</div>
+        <label for="oldPassword">رمز عبور فعلی</label>
+        <input type="password" id="oldPassword" placeholder="رمز فعلی">
+        <label for="newPassword">رمز عبور جدید</label>
+        <input type="password" id="newPassword" placeholder="حداقل ۴ کاراکتر">
+        <button class="settings-save" id="savePasswordBtn" onclick="savePassword()">🔑 تغییر رمز عبور</button>
+        <div id="passwordStatus" class="status-line" style="display:none"></div>
+      </div>
+      <div class="settings-note">تغییرات بلافاصله روی پروفایل عمومی اعمال می‌شود.</div>
+      <div class="settings-links"><a href="/lobby">🏠 لابی</a><a href="/profile?u={quote(username,safe='')}">👤 پروفایل من</a></div>
+    </div>
+    <script>
+    let pendingAvatar=null;
+    const bioEl=document.getElementById('bioInput'),bioCount=document.getElementById('bioCount');
+    function refreshCount(){{bioCount.textContent=bioEl.value.length}}
+    refreshCount(); bioEl.addEventListener('input',refreshCount);
+    document.getElementById('avatarFile').addEventListener('change',function(e){{
+      const file=e.target.files[0]; if(!file)return;
+      const reader=new FileReader();
+      reader.onload=function(ev){{
+        const img=new Image();
+        img.onload=function(){{
+          const size=Math.min(img.width,img.height);
+          const canvas=document.createElement('canvas'); canvas.width=320; canvas.height=320;
+          const ctx=canvas.getContext('2d');
+          ctx.drawImage(img,(img.width-size)/2,(img.height-size)/2,size,size,0,0,320,320);
+          pendingAvatar=canvas.toDataURL('image/jpeg',0.85);
+          document.getElementById('avatarPreview').innerHTML='<img src="'+pendingAvatar+'" class="profile-avatar-img">';
+        }};
+        img.src=ev.target.result;
+      }};
+      reader.readAsDataURL(file);
+    }});
+    async function saveProfile(){{
+      const btn=document.getElementById('saveProfileBtn'); btn.disabled=true;
+      const bio=bioEl.value.trim(); const age=Number(document.getElementById('ageInput').value)||18;
+      const emoji=document.getElementById('avatarEmoji').value.trim();
+      const payload={{bio,age}};
+      const avatar=pendingAvatar||emoji;
+      if(avatar) payload.avatar=avatar;
+      const s=document.getElementById('profileStatus'); s.style.display='block';
+      try{{
+        const r=await fetch('/settings/profile',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});
+        const d=await r.json();
+        s.textContent=d.ok?'✅ تغییرات ذخیره شد.':'❌ ذخیره نشد؛ اطلاعات را بررسی کن.';
+        if(d.ok){{pendingAvatar=null;setTimeout(()=>location.reload(),700)}}
+      }}catch(e){{s.textContent='❌ خطا در ارتباط با سرور.'}}
+      btn.disabled=false;
+    }}
+    async function savePassword(){{
+      const old_password=document.getElementById('oldPassword').value;
+      const new_password=document.getElementById('newPassword').value;
+      const s=document.getElementById('passwordStatus'); s.style.display='block';
+      if(new_password.length<4){{s.textContent='رمز جدید باید حداقل ۴ کاراکتر باشد.';return}}
+      const btn=document.getElementById('savePasswordBtn'); btn.disabled=true;
+      try{{
+        const r=await fetch('/settings/password',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{old_password,new_password}})}});
+        const d=await r.json();
+        s.textContent=d.ok?'✅ رمز عبور تغییر کرد.':'❌ رمز فعلی اشتباه است یا رمز جدید کوتاه است.';
+        if(d.ok){{document.getElementById('oldPassword').value='';document.getElementById('newPassword').value=''}}
+      }}catch(e){{s.textContent='❌ خطا در ارتباط با سرور.'}}
+      btn.disabled=false;
+    }}
+    </script>'''
+    return page_shell('تنظیمات', body, username)
+
+
 BASE_CSS += """
 .game-choice{text-align:center;overflow:hidden}.game-choice-icon{font-size:58px;filter:drop-shadow(0 8px 18px rgba(47,169,160,.22));animation:floatGame 2.8s ease-in-out infinite}.game-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:22px 0}.game-choice-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:24px 12px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(145deg,var(--surface-raised),var(--surface));color:var(--text);text-decoration:none;transform:translateZ(0);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.game-choice-card span{font-size:46px}.game-choice-card b{font-size:19px}.game-choice-card small{color:var(--text-muted)}.game-choice-card:hover{transform:translateY(-5px);border-color:var(--turquoise);box-shadow:0 12px 30px rgba(47,169,160,.16)}.draw-result{animation:pageIn .25s ease both}.card{transform:translateZ(0)}@keyframes floatGame{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}@media(max-width:520px){.game-choice-grid{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.game-choice-icon{animation:none}}
 """
@@ -1155,4 +1254,5 @@ body *{backdrop-filter:none!important}
 
 BASE_CSS += """
 .notification-bell{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:10px 0;padding:10px 14px;border-radius:16px;background:linear-gradient(135deg,#271052,#112d59);color:#fff;border:1px solid #6d48d8;box-shadow:0 0 18px rgba(114,70,255,.18)}.notification-bell span{min-width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:#ff3fb9;font-size:11px}.notification-panel{display:none;margin:0 0 12px;border:1px solid #51358e;border-radius:18px;background:#0e0b21;box-shadow:0 0 28px rgba(125,60,255,.18);overflow:hidden}.notification-panel.show{display:block}.notification-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #29234a}.notification-head button{padding:6px 9px;font-size:10px;background:#25204a;color:#fff}.notification-item{padding:10px 12px;border-bottom:1px solid #201c39;display:flex;flex-direction:column;gap:2px}.notification-item b{color:#fff;font-size:12px}.notification-item span{color:#aaa7c4;font-size:11px}.notification-item.unread{background:rgba(255,65,190,.06);border-right:3px solid #ff4fbf}.support-tag{display:inline-block;margin:4px 3px 0 0;padding:4px 9px;border-radius:999px;background:linear-gradient(90deg,#ff43c8,#7658ff);color:#fff;font-size:10px;font-weight:900;box-shadow:0 0 12px rgba(255,67,200,.25)}.support-tags{margin-top:5px}.report-user-main{background:linear-gradient(135deg,#ff416c,#b721ff)!important;color:#fff!important}.pin-btn{margin-inline-start:6px;padding:3px 7px;border-radius:7px;background:rgba(100,82,255,.12);border:1px solid #5b4bb1;color:#aaa1ff;font-size:10px}.pinned-box{display:flex;gap:6px;overflow:auto;padding-top:8px}.pinned-item{white-space:nowrap;padding:6px 9px;border-radius:10px;background:#1b1434;border:1px solid #45317b;color:#d7d0ff;font-size:11px}.pinned-empty{opacity:.55;text-align:center;padding:10px;font-size:11px}
+.leader-tabs{display:flex;gap:8px;margin-bottom:14px}.leader-tab{flex:1;text-align:center;padding:10px 8px;border-radius:14px;text-decoration:none;font-size:13px;font-weight:900;color:#c9c4e6;background:#171339;border:1px solid #372c66}.leader-tab.active{color:#fff;background:linear-gradient(135deg,#ff43c8,#7658ff);border-color:transparent;box-shadow:0 0 16px rgba(255,67,200,.3)}
 """

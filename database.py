@@ -167,14 +167,17 @@ async def update_stats(username, *, wins=0, losses=0, draws=0, points=0, correct
                             WHERE username=?""",(wins,losses,draws,points,correct_guesses,wrong_guesses,username))
         await db.commit()
 
-async def leaderboard(limit=50):
+async def leaderboard(limit=50, by="wins"):
+    # دو رتبه‌بندی جدا: بر اساس بیشترین جام (wins) یا بیشترین امتیاز (points).
+    primary = "s.points" if by == "points" else "s.wins"
+    secondary = "s.wins" if by == "points" else "s.points"
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT s.username,s.wins,s.losses,s.draws,s.points,
-                                COALESCE(u.avatar,'🎮') AS avatar, COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio,
-                                (s.wins*3+s.draws) AS rating FROM stats s
+        cur=await db.execute(f"""SELECT s.username,s.wins,s.losses,s.draws,s.points,
+                                COALESCE(u.avatar,'🎮') AS avatar, COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio
+                                FROM stats s
                                 LEFT JOIN users u ON u.username=s.username
-                                ORDER BY rating DESC, s.points DESC, s.wins DESC LIMIT ?""",(limit,))
+                                ORDER BY {primary} DESC, {secondary} DESC LIMIT ?""",(limit,))
         return [dict(r) for r in await cur.fetchall()]
 
 async def create_report(reporter,target,context,content,attachment=None,category="other"):

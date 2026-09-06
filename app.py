@@ -173,8 +173,11 @@ async def leaderboard_page(request: Request):
     username = _require_login(request)
     if not username:
         return RedirectResponse("/login")
-    rows = await db.leaderboard()
-    return tpl.leaderboard_page(username, rows)
+    by = request.query_params.get("by", "wins")
+    if by not in ("wins", "points"):
+        by = "wins"
+    rows = await db.leaderboard(by=by)
+    return tpl.leaderboard_page(username, rows, by)
 
 @app.post("/game/leave")
 async def game_leave(request: Request):
@@ -847,8 +850,13 @@ class MultiplayerDrawingManager:
     async def _finish(self,gid):
         g=self.games.pop(gid,None)
         if not g:return
-        winner=max(g["active"],key=lambda u:g["scores"].get(u,0)) if g["active"] else None
-        if winner: await db.update_stats(winner,wins=1,points=g["scores"].get(winner,0))
+        # رتبه‌بندی هر ۴ بازیکن اصلی بر اساس امتیاز نهایی، حتی اگر کسی زودتر خارج شده باشد.
+        ranked=sorted(g["players"],key=lambda u:g["scores"].get(u,0),reverse=True)
+        trophy_by_rank=[10,5,0,-1]
+        for i,u in enumerate(ranked):
+            trophies=trophy_by_rank[i] if i<len(trophy_by_rank) else 0
+            if trophies: await db.update_stats(u,wins=trophies)
+        winner=ranked[0] if ranked else None
         await self._broadcast(g,{"type":"game_over","winner":winner,"scores":g["scores"],"active":g["active"]})
         for u in g["players"]:self.player_game.pop(u,None)
     async def leave(self,username):
@@ -1116,7 +1124,7 @@ class DrawingGameManager:
         })
         if winner:
             loser = next(u for u in game["players"] if u != winner)
-            await db.update_stats(winner, wins=1, points=scores[winner])
+            await db.update_stats(winner, wins=5, points=scores[winner])
             await db.update_stats(loser, losses=1, points=scores[loser])
         else:
             for u in game["players"]:
@@ -1132,7 +1140,7 @@ class DrawingGameManager:
         game["round_active"] = False
         winner = next((u for u in game["players"] if u != leaving), None)
         if winner:
-            await db.update_stats(winner, wins=1, points=max(1, game["scores"].get(winner, 0)))
+            await db.update_stats(winner, wins=5, points=max(1, game["scores"].get(winner, 0)))
             await self._send(game, winner, {"type":"game_won", "winner":winner, "reason":"حریف از بازی خارج شد."})
         for u in game["players"]:
             self.player_game.pop(u, None)
