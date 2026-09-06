@@ -239,13 +239,36 @@ async def daily_claim(request: Request):
     ok,w=await db.claim_daily(username)
     return {"ok":ok,"wallet":w,"message":"جایزه امروز قبلاً گرفته شده." if not ok else f"🎁 +{w.get('reward',0)} سکه"}
 
+SHOP_CATALOG = {
+    "neon_pen": {"cost":250, "type":"custom"},
+    "profile_frame": {"cost":400, "type":"custom"},
+    "victory_fx": {"cost":650, "type":"custom"},
+    "crown_badge": {"cost":900, "type":"custom"},
+    "chat_bubble": {"cost":300, "type":"custom"},
+    "name_effect": {"cost":500, "type":"custom"},
+    "draw_glow": {"cost":450, "type":"custom"},
+    "bronze_frame": {"cost":550, "type":"league", "min_trophies":250},
+    "bronze_badge": {"cost":350, "type":"league", "min_trophies":250},
+    "davinci_frame": {"cost":1100, "type":"league", "min_trophies":750},
+    "davinci_effect": {"cost":900, "type":"league", "min_trophies":750},
+    "picasso_frame": {"cost":1800, "type":"league", "min_trophies":1500},
+    "picasso_effect": {"cost":1500, "type":"league", "min_trophies":1500},
+}
+
 @app.post("/shop/buy")
 async def shop_buy(request: Request):
     username=_require_login(request)
     if not username: return {"ok":False,"error":"login_required"}
-    data=await request.json(); key=str(data.get("item_key") or "").strip(); cost=int(data.get("cost") or 0)
-    catalog={"neon_pen":250,"profile_frame":400,"victory_fx":650,"crown_badge":900}
-    if key not in catalog or cost!=catalog[key]: return {"ok":False,"error":"invalid_item"}
+    data=await request.json(); key=str(data.get("item_key") or "").strip()
+    item=SHOP_CATALOG.get(key)
+    if not item: return {"ok":False,"error":"invalid_item"}
+    cost=int(item["cost"])
+    # قیمت فقط از کاتالوگ سرور گرفته می‌شود؛ کلاینت نمی‌تواند قیمت را دستکاری کند.
+    if item.get("type")=="league":
+        prof=await db.profile(username) or {}
+        trophies=int(prof.get("wins",0) or 0)
+        if trophies < int(item.get("min_trophies",0)):
+            return {"ok":False,"status":"league_locked","message":"این آیتم مخصوص لیگ بالاتر است."}
     ok,status,w=await db.buy_item(username,key,cost)
     return {"ok":ok,"status":status,"wallet":w}
 
@@ -399,6 +422,15 @@ async def support_receipt_status(request: Request):
     elif status=="rejected":
         await db.create_notification(r["username"],"support_receipt","❌ رسید رد شد","رسید پرداخت شما توسط پشتیبانی رد شد.")
     return {"ok":True,"status":status}
+
+@app.post("/support/report/delete")
+async def support_report_delete(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); rid=int(data.get("report_id") or 0)
+    if rid<=0: return {"ok":False,"error":"invalid"}
+    await db.delete_report(rid)
+    return {"ok":True}
 
 @app.post("/support/report/review")
 async def support_report_review(request: Request):
@@ -780,9 +812,6 @@ async def ws_chat_public(websocket: WebSocket):
     if not username:
         await websocket.close(code=4001)
         return
-    other = await db.resolve_username(other) or other
-    if not await db.get_user(other):
-        await websocket.close(code=4004); return
     if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return

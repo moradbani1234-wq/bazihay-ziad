@@ -231,8 +231,22 @@ async def get_report_media(report_id):
 async def get_reports(limit=100):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT * FROM reports ORDER BY id DESC LIMIT ?""",(limit,))
+        cur=await db.execute("""SELECT r.*, rm.mime_type AS media_mime, rm.filename AS media_filename
+                              FROM reports r LEFT JOIN report_media rm ON rm.report_id=r.id
+                              ORDER BY r.id DESC LIMIT ?""",(limit,))
         return [dict(r) for r in await cur.fetchall()]
+
+async def delete_report(report_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM report_media WHERE report_id=?", (int(report_id),))
+        await db.execute("DELETE FROM reports WHERE id=?", (int(report_id),))
+        await db.commit()
+        return True
+
+async def owned_items_for(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur=await db.execute("SELECT item_key FROM owned_items WHERE username=? ORDER BY purchased_at DESC", (username,))
+        return [r[0] for r in await cur.fetchall()]
 
 async def resolve_report(report_id):
     async with aiosqlite.connect(DB_PATH) as db:
