@@ -97,6 +97,18 @@ async def init_db():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, kind TEXT NOT NULL,
+            title TEXT NOT NULL, content TEXT NOT NULL, data TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0)""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(username,read,id)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS pinned_messages (
+            message_id INTEGER PRIMARY KEY, room TEXT NOT NULL, pinned_by TEXT NOT NULL, created_at INTEGER NOT NULL)""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_pinned_room ON pinned_messages(room,created_at)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS support_tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, tag TEXT NOT NULL,
+            created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_support_tags_user ON support_tags(username,active,id)")
         await db.commit()
 
 async def create_user(username, password_hash, salt, is_support=False):
@@ -323,6 +335,7 @@ async def send_friend_request(sender, receiver):
             await db.execute("INSERT INTO friend_requests(sender,receiver,status,created_at,updated_at) VALUES(?,?,?,?,?)",(sender,receiver,'pending',now,now))
         except aiosqlite.IntegrityError: return False,"already_sent"
         await db.commit()
+    await create_notification(receiver, "friend", "درخواست دوستی جدید", f"@{sender} برای شما درخواست دوستی فرستاد.")
     return True,"sent"
 
 async def respond_friend_request(sender, receiver, accept):
@@ -407,3 +420,65 @@ async def buy_item(username,item_key,cost):
         await db.commit()
         cur=await db.execute("SELECT * FROM wallet WHERE username=?",(username,)); w=dict(await cur.fetchone())
         return True,"ok",w
+
+
+async def create_notification(username, kind, title, content, data=""):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT INTO notifications(username,kind,title,content,data,created_at,read) VALUES(?,?,?,?,?,?,0)",
+                         (username, kind[:40], title[:120], content[:500], data[:500], int(time.time())))
+        await db.commit()
+
+async def notifications_for(username, limit=50):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT * FROM notifications WHERE username=? ORDER BY id DESC LIMIT ?", (username,limit))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def unread_notification_count(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur=await db.execute("SELECT COUNT(*) FROM notifications WHERE username=? AND read=0", (username,))
+        return int((await cur.fetchone())[0])
+
+async def mark_notifications_read(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE notifications SET read=1 WHERE username=?", (username,))
+        await db.commit()
+
+async def pin_message(message_id, room, pinned_by):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT OR REPLACE INTO pinned_messages(message_id,room,pinned_by,created_at) VALUES(?,?,?,?)",
+                         (int(message_id), room[:120], pinned_by, int(time.time())))
+        await db.commit()
+
+async def unpin_message(message_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM pinned_messages WHERE message_id=?", (int(message_id),))
+        await db.commit()
+
+async def get_pinned_messages(room, limit=20):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("""SELECT p.*,m.sender,m.content,m.created_at AS message_created_at,COALESCE(u.avatar,'🎮') avatar
+                              FROM pinned_messages p JOIN messages m ON m.id=p.message_id
+                              LEFT JOIN users u ON u.username=m.sender
+                              WHERE p.room=? ORDER BY p.id DESC LIMIT ?""", (room,limit))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def add_support_tag(username, tag):
+    tag=str(tag or '').strip()[:40]
+    if not tag: return False
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT INTO support_tags(username,tag,created_at,active) VALUES(?,?,?,1)",(username,tag,int(time.time())))
+        await db.commit()
+    return True
+
+async def remove_support_tags(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE support_tags SET active=0 WHERE username=? AND active=1",(username,))
+        await db.commit()
+
+async def tags_for(username):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT id,tag,created_at FROM support_tags WHERE username=? AND active=1 ORDER BY id DESC",(username,))
+        return [dict(r) for r in await cur.fetchall()]

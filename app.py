@@ -162,6 +162,10 @@ async def report_content(request: Request):
     if not await db.get_user(target):
         return {"ok": False, "error": "user_not_found"}
     await db.create_report(username, target, context, content, attachment or None, category)
+    if context.startswith("drawing") or category == "drawing":
+        await db.create_notification(target, "report", "نقاشی شما گزارش شد", f"نقاشی/محتوای نقاشی شما با موضوع «{category}» گزارش شد و توسط پشتیبانی بررسی می‌شود.")
+    else:
+        await db.create_notification(target, "report", "گزارش برای محتوای شما", f"یک گزارش با موضوع «{category}» برای محتوای شما ثبت شد.")
     return {"ok": True}
 
 @app.get("/leaderboard", response_class=HTMLResponse)
@@ -225,7 +229,15 @@ async def notifications(request: Request):
         conn.row_factory=aiosqlite.Row
         cur=await conn.execute("SELECT id,sender,mode,created_at FROM game_invites WHERE receiver=? AND status='pending' AND mode='drawing4' ORDER BY id DESC LIMIT 20",(username,))
         inv=[dict(r) for r in await cur.fetchall()]
-    return {"ok":True,"friend_requests":reqs,"invites":inv,"count":len(reqs)+len(inv)}
+    notes=await db.notifications_for(username)
+    return {"ok":True,"friend_requests":reqs,"invites":inv,"notifications":notes,"count":len(reqs)+len(inv)+sum(1 for n in notes if not n.get('read'))}
+
+@app.post("/notifications/read")
+async def notifications_read(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    await db.mark_notifications_read(username)
+    return {"ok":True}
 
 @app.post("/game/invite/respond")
 async def game_invite_respond(request: Request):
@@ -238,6 +250,57 @@ async def game_invite_respond(request: Request):
         if not row: return {"ok":False,"error":"not_found"}
         await conn.execute("UPDATE game_invites SET status=? WHERE id=?",("accepted" if accept else "rejected",iid)); await conn.commit()
     return {"ok":True,"mode":row["mode"] if accept else None}
+
+@app.post("/support/message")
+async def support_message(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); target=str(data.get("target") or "").strip()[:64]; content=str(data.get("content") or "").strip()[:500]
+    if not target or target=="morad" or not await db.get_user(target) or not content: return {"ok":False,"error":"invalid"}
+    room=":".join(sorted([username,target]))
+    await chat_manager.broadcast_private(room,username,content)
+    return {"ok":True}
+
+@app.post("/support/pin")
+async def support_pin(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); mid=int(data.get("message_id") or 0); room=str(data.get("room") or "public")
+    if not mid or room!="public": return {"ok":False,"error":"invalid"}
+    await db.pin_message(mid,room,username)
+    pinned=await db.get_pinned_messages(room,20)
+    await chat_manager.broadcast_public_event({"type":"pinned_messages","messages":pinned})
+    return {"ok":True,"messages":pinned}
+
+@app.post("/support/unpin")
+async def support_unpin(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); mid=int(data.get("message_id") or 0)
+    if not mid: return {"ok":False,"error":"invalid"}
+    await db.unpin_message(mid)
+    pinned=await db.get_pinned_messages("public",20)
+    await chat_manager.broadcast_public_event({"type":"pinned_messages","messages":pinned})
+    return {"ok":True,"messages":pinned}
+
+@app.post("/support/tag")
+async def support_tag(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); target=str(data.get("target") or "").strip()[:64]; tag=str(data.get("tag") or "").strip()[:40]
+    if not target or target=="morad" or not await db.get_user(target) or not tag: return {"ok":False,"error":"invalid"}
+    await db.add_support_tag(target,tag)
+    await db.create_notification(target,"tag","تگ جدید از پشتیبانی",f"پشتیبانی یک تگ جدید برای پروفایل شما ثبت کرد: {tag}")
+    return {"ok":True,"tags":await db.tags_for(target)}
+
+@app.post("/support/tag/remove")
+async def support_tag_remove(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); target=str(data.get("target") or "").strip()[:64]
+    if not target or not await db.get_user(target): return {"ok":False,"error":"invalid"}
+    await db.remove_support_tags(target)
+    return {"ok":True}
 
 @app.get("/support", response_class=HTMLResponse)
 async def support_page(request: Request):
@@ -264,6 +327,8 @@ async def support_ban(request: Request):
     until = await db.ban_user(target, scope, hours, reason)
     if data.get("report_id"):
         await db.resolve_report(int(data["report_id"]))
+    mins=max(1, int(hours*60))
+    await db.create_notification(target, "ban", "محدودیت دسترسی", f"پشتیبانی دسترسی «{scope}» شما را برای {mins} دقیقه محدود کرد. دلیل: {reason}")
     return {"ok": True, "until": until}
 
 @app.post("/support/unban")
@@ -295,6 +360,7 @@ async def profile_query_page(request: Request, u: str = ""):
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
+    prof["support_tags"] = await db.tags_for(prof["username"])
     return tpl.profile_page(username, prof)
 
 
@@ -308,6 +374,7 @@ async def profile_page(request: Request, target: str):
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
+    prof["support_tags"] = await db.tags_for(prof["username"])
     return tpl.profile_page(username, prof)
 
 @app.post("/friends/request")
@@ -465,7 +532,8 @@ async def chat_public(request: Request):
     username, blocked = await _require_scope(request, "chat")
     if blocked: return blocked
     history = await db.get_recent_messages("public")
-    return tpl.chat_public_page(username, history)
+    pinned = await db.get_pinned_messages("public")
+    return tpl.chat_public_page(username, history, pinned)
 
 
 class ChatManager:
@@ -493,6 +561,13 @@ class ChatManager:
         for ws in dead:
             self.public_conns.discard(ws)
 
+    async def broadcast_public_event(self, payload):
+        dead=[]
+        for ws in list(self.public_conns):
+            try: await ws.send_json(payload)
+            except Exception: dead.append(ws)
+        for ws in dead: self.public_conns.discard(ws)
+
     async def connect_private(self, room: str, ws: WebSocket):
         await ws.accept()
         self.private_conns.setdefault(room, set()).add(ws)
@@ -503,6 +578,11 @@ class ChatManager:
 
     async def broadcast_private(self, room: str, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message(room, sender, content, reply_to_id)
+        try:
+            a,b=room.split(":",1); receiver=b if sender==a else a
+            await db.create_notification(receiver, "message", "پیام خصوصی جدید", f"@{sender}: {content}")
+        except Exception:
+            pass
         prof = await db.profile(sender)
         payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", "🎮"), "display_name": (prof or {}).get("display_name", sender)}
         for ws in list(self.private_conns.get(room, [])):
@@ -756,12 +836,8 @@ class MultiplayerDrawingManager:
     async def _end_round(self,gid,correct):
         g=self.games.get(gid)
         if not g or not g["round_active"]:return
-        g["round_active"]=False; eliminated=None
-        if g["mode"]==6 and g["round"] < 6 and len(g["active"])>1:
-            candidates=[u for u in g["active"] if u!=g["drawer"]]
-            if candidates:
-                eliminated=max(candidates,key=lambda u:g["guesses"].get(u,float('inf'))); g["active"].remove(eliminated); await db.update_stats(eliminated,losses=1)
-        await self._broadcast(g,{"type":"round_result","round":g["round"],"total_rounds":g["mode"],"word":g["word"],"scores":g["scores"],"eliminated":eliminated,"active":g["active"],"is_last":g["round"]>=g["mode"],"break_seconds":5})
+        g["round_active"]=False
+        await self._broadcast(g,{"type":"round_result","round":g["round"],"total_rounds":g["mode"],"word":g["word"],"scores":g["scores"],"active":g["active"],"is_last":g["round"]>=g["mode"],"break_seconds":5})
         asyncio.create_task(self._advance(gid))
     async def _advance(self,gid):
         await asyncio.sleep(5); g=self.games.get(gid)
