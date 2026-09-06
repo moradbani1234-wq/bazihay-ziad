@@ -1039,7 +1039,7 @@ def _frame_overlay_html(owned, active_frame=None):
     b64=FRAME_B64.get(key)
     if not b64: return ''
     cls=FRAME_CLASS[key]
-    size={"gold_frame":"172%","ice_frame":"163%","angel_frame":"174%","fire_frame":"172%","lightning_frame":"174%","purple_frame":"174%","king_frame":"174%"}.get(key,"170%")
+    size={"gold_frame":"142%","ice_frame":"142%","angel_frame":"140%","fire_frame":"140%","lightning_frame":"140%","purple_frame":"142%","king_frame":"142%"}.get(key,"140%")
     img=f'<img class="avatar-frame-img {cls}" alt="" src="data:image/webp;base64,{b64}">'
     particles={
         "gold_frame":''.join(f'<span class="gold-spark gold-spark-{i}"></span>' for i in (1,2,3,4)),
@@ -1127,7 +1127,7 @@ def _leader_avatar(r, cls="leader-avatar"):
     base = _avatar_html(raw, cls=cls) if raw else f'<div class="{cls} leader-avatar-fallback">●</div>'
     active=_active_frame(r)
     overlay=_frame_overlay_html(r.get('owned_items') or [], active)
-    if overlay and raw:
+    if overlay:
         return f'<div class="leader-avatar-wrap has-img-frame">{base}{overlay}</div>'
     return base
 
@@ -1445,8 +1445,8 @@ BASE_CSS += """
 
 BASE_CSS += """
 /* V7 — persistent single active frame + lightweight visual effects */
-.frame-effect-layer{position:absolute!important;inset:0!important;overflow:visible!important;pointer-events:none!important;z-index:5!important}
-.frame-effect-layer .avatar-frame-img{position:absolute!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:var(--frame-size)!important;height:var(--frame-size)!important;max-width:none!important;max-height:none!important;object-fit:contain!important;border:0!important;border-radius:0!important;pointer-events:none!important;z-index:5!important}
+.frame-effect-layer{position:absolute!important;inset:0!important;overflow:visible!important;pointer-events:none!important;z-index:4!important}
+.frame-effect-layer .avatar-frame-img{position:absolute!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:var(--frame-size)!important;height:var(--frame-size)!important;max-width:none!important;max-height:none!important;object-fit:contain!important;border:0!important;border-radius:0!important;pointer-events:none!important;z-index:4!important}.has-img-frame>.profile-avatar-img,.has-img-frame>.leader-avatar,.has-img-frame>.leader-avatar-fallback{position:relative!important;z-index:6!important}.profile-head>div:first-child>.profile-avatar-img{position:relative!important;z-index:6!important}.leader-avatar-wrap .leader-avatar{z-index:6!important}
 .frame-effect-layer.frame-fire .avatar-frame-img{animation:frameFireBreath 1.15s ease-in-out infinite alternate;transform-origin:center}
 .frame-effect-layer.frame-ice .avatar-frame-img{animation:frameIcePulse 2s ease-in-out infinite alternate}
 .frame-effect-layer.frame-lightning .avatar-frame-img{animation:frameLightningPulse 1.35s ease-in-out infinite}
@@ -1484,8 +1484,8 @@ BASE_CSS += """
 
 .leader-avatar-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:visible}.leader-avatar-wrap .frame-effect-layer{inset:0!important}.leader-avatar-wrap .leader-avatar{position:relative;z-index:1}
 .chat-avatar{position:relative;width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:grid;place-items:center;background:#11152d;border:2px solid #7650ff;overflow:visible;font-size:14px}
-.chat-avatar::after,.draw-avatar::after{content:"";position:absolute;inset:-34%;background-repeat:no-repeat;background-position:center;background-size:contain;pointer-events:none;z-index:3}
-.chat-avatar-img,.draw-avatar img{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.chat-avatar::after,.draw-avatar::after{content:"";position:absolute;inset:-22%;background-repeat:no-repeat;background-position:center;background-size:contain;pointer-events:none;z-index:3}
+.chat-avatar-img,.draw-avatar img{position:relative;z-index:6;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .chat-avatar.frame-premium,.draw-avatar.frame-premium{border-color:#7c4dff;box-shadow:0 0 10px rgba(124,77,255,.45)}
 .chat-avatar.frame-bronze,.draw-avatar.frame-bronze{border-color:#cd7f32;box-shadow:0 0 10px rgba(205,127,50,.42)}
 .chat-avatar.frame-davinci,.draw-avatar.frame-davinci{border-color:#32d9d0;box-shadow:0 0 10px rgba(50,217,208,.42)}
@@ -1500,6 +1500,33 @@ BASE_CSS += """
 .chat-message-body{min-width:0;display:flex;flex-direction:column}.msg{display:flex;align-items:flex-start;gap:7px}.msg .chat-message-body{max-width:calc(100% - 42px)}.msg .sender{margin-bottom:1px}.chat-avatar-fallback{opacity:.7}
 .draw-avatar{position:relative;overflow:visible!important;z-index:1}
 .frame-store-item.purchased{border-color:rgba(39,216,173,.5)}.frame-toggle-btn{min-width:66px}.frame-toggle-btn.is-active{background:linear-gradient(135deg,#ff4fca,#754cff)!important;box-shadow:0 0 14px rgba(255,79,202,.32)}.frame-store-item .is-owned-badge{opacity:.65}.frame-store-item .is-active-badge{background:linear-gradient(135deg,#27d8ad,#19b8ff);color:#04231c;box-shadow:0 0 13px rgba(39,216,173,.28)}
-@media(max-width:600px){.chat-avatar{width:30px;height:30px;flex-basis:30px}.chat-avatar::after{inset:-43%}.msg .chat-message-body{max-width:calc(100% - 38px)}}
+@media(max-width:600px){.chat-avatar{width:30px;height:30px;flex-basis:30px}.chat-avatar::after{inset:-22%}.msg .chat-message-body{max-width:calc(100% - 38px)}}
 @media(prefers-reduced-motion:reduce){.frame-effect-layer .avatar-frame-img,.fire-ember,.ice-mist,.ice-shard,.lightning-flash,.angel-feather,.purple-orbit,.king-spark{animation:none!important}.lightning-flash,.angel-feather,.fire-ember,.king-spark{opacity:.7!important}}
+"""
+
+
+BASE_CSS += """
+/* V8 — compact frames and isolated leaderboard cells */
+.leader-podium{gap:18px;overflow:visible!important;padding:6px 8px 12px}
+.leader-podium-card{overflow:visible!important;min-width:0}
+.leader-podium-card .leader-avatar-wrap{width:82px;height:82px;margin:auto;position:relative;isolation:isolate}
+.leader-podium-card.rank-1 .leader-avatar-wrap{width:94px;height:94px}
+.leader-list-avatar{position:relative;isolation:isolate;overflow:visible!important}
+.leader-list-avatar .leader-avatar-wrap{width:34px;height:34px;position:relative;isolation:isolate}
+.leader-list-avatar .frame-effect-layer{transform:scale(.92)}
+.leader-name,.leader-age{position:relative;z-index:8;margin-inline:10px}
+.leader-row{min-width:0;overflow:visible!important}
+.leader-row>div:nth-child(3){min-width:0;margin-inline-start:8px}
+@media(max-width:600px){
+  .leader-podium{gap:10px;padding-inline:3px}
+  .leader-podium-card .leader-avatar-wrap{width:64px;height:64px}
+  .leader-podium-card.rank-1 .leader-avatar-wrap{width:78px;height:78px}
+  .leader-list-avatar .leader-avatar-wrap{width:30px;height:30px}
+  .leader-list-avatar .frame-effect-layer{transform:scale(.88)}
+  .leader-row>div:nth-child(3){margin-inline-start:5px}
+}
+.profile-head>div:first-child.has-img-frame,.lobby-profile-avatar.has-img-frame,.leader-avatar-wrap.has-img-frame{isolation:isolate}
+.profile-head>div:first-child.has-img-frame>.profile-avatar-img,.leader-avatar-wrap.has-img-frame>.leader-avatar,.leader-avatar-wrap.has-img-frame>.leader-avatar-fallback{z-index:20!important}
+.frame-effect-layer{z-index:10!important}
+.frame-effect-layer .avatar-frame-img{z-index:10!important}
 """
