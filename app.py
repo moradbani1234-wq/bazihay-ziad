@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 import auth
@@ -17,6 +18,11 @@ import words_draw
 import aiosqlite
 
 app = FastAPI()
+
+# فایل‌های استاتیک فروشگاه (تصاویر قاب‌ها و ...)؛ cache طولانی چون فایل‌ها تغییر نمی‌کنند و لگ ایجاد نمی‌شود.
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(_STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 app.add_middleware(
     SessionMiddleware,
     # مقدار واقعی را در Railway/AppMint در SESSION_SECRET قرار بده؛ fallback فقط برای اجرای محلی است.
@@ -261,6 +267,8 @@ SHOP_CATALOG = {
     "davinci_effect": {"cost":900, "type":"league", "min_trophies":750},
     "picasso_frame": {"cost":1800, "type":"league", "min_trophies":1500},
     "picasso_effect": {"cost":1500, "type":"league", "min_trophies":1500},
+    "gold_frame": {"cost":1300, "type":"custom"},
+    "ice_frame": {"cost":1300, "type":"custom"},
 }
 
 @app.post("/shop/buy")
