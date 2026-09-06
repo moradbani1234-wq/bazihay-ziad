@@ -79,7 +79,8 @@ async def login_get():
 
 @app.post("/login", response_class=HTMLResponse)
 async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
-    username = username.strip()
+    username_input = username.strip()
+    username = await db.resolve_username(username_input) or username_input
     user = await db.get_user(username)
     if not user or not auth.verify_password(password, user["salt"], user["password_hash"]):
         return tpl.login_page("نام کاربری یا رمز عبور اشتباه است.")
@@ -148,7 +149,8 @@ async def report_content(request: Request):
         data = await request.json()
     except Exception:
         return {"ok": False, "error": "bad_request"}
-    target = str(data.get("target") or "").strip()[:64]
+    target_input = str(data.get("target") or "").strip()[:64]
+    target = await db.resolve_username(target_input)
     content = str(data.get("content") or "").strip()[:500]
     context = str(data.get("context") or "chat")[:32]
     category = str(data.get("category") or "other").strip()[:32]
@@ -170,6 +172,39 @@ async def report_content(request: Request):
     else:
         await db.create_notification(target, "report", "گزارش برای محتوای شما", f"یک گزارش با موضوع «{category}» برای محتوای شما ثبت شد.")
     return {"ok": True}
+
+@app.post("/report/drawing")
+async def report_drawing(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    form=await request.form()
+    target_input=str(form.get("target") or "").strip()[:64]
+    target=await db.resolve_username(target_input)
+    if not target or target==username or target.lower()=="morad": return {"ok":False,"error":"invalid_target"}
+    content=str(form.get("content") or "گزارش نقاشی")[:500]
+    if not content.strip(): content="گزارش نقاشی"
+    rid=await db.create_report(username,target,"drawing",content,None,"drawing")
+    saved_video=False
+    media=form.get("video")
+    if media and hasattr(media,"read"):
+        blob=await media.read()
+        mime=str(getattr(media,"content_type","") or "video/webm")
+        if blob and len(blob)<=8*1024*1024:
+            await db.save_report_media(rid,mime,getattr(media,"filename","") or "drawing.webm",blob)
+            saved_video=True
+    drawing_data=str(form.get("drawing_data") or "")
+    if not saved_video and drawing_data and len(drawing_data)<=250000:
+        await db.save_report_media(rid,"application/json","drawing-replay.json",drawing_data.encode("utf-8"))
+    await db.create_notification("morad","report","🚩 گزارش نقاشی جدید",f"@{username} نقاشی @{target} را گزارش کرده است.",str(rid))
+    return {"ok":True,"report_id":rid}
+
+@app.get("/support/report/{report_id}/media")
+async def support_report_media(request: Request, report_id:int):
+    username=_require_login(request)
+    if not username or not _is_support(username): return Response(status_code=403)
+    media=await db.get_report_media(report_id)
+    if not media: return Response(status_code=404)
+    return Response(content=media["blob"],media_type=media["mime_type"],headers={"Content-Disposition":f'inline; filename="{str(media.get("filename") or "drawing").replace(chr(34),"")}"',"Cache-Control":"no-store"})
 
 @app.get("/leaderboard", response_class=HTMLResponse)
 async def leaderboard_page(request: Request):
@@ -233,7 +268,7 @@ async def notifications_read(request: Request):
 async def support_message(request: Request):
     username=_require_login(request)
     if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
-    data=await request.json(); target=str(data.get("target") or "").strip()[:64]; content=str(data.get("content") or "").strip()[:500]
+    data=await request.json(); target=await db.resolve_username(str(data.get("target") or "").strip()[:64]); content=str(data.get("content") or "").strip()[:500]
     if not target or target=="morad" or not await db.get_user(target) or not content: return {"ok":False,"error":"invalid"}
     room=":".join(sorted([username,target]))
     await chat_manager.broadcast_private(room,username,content)
@@ -291,7 +326,7 @@ async def support_page(request: Request):
 async def support_adjust(request: Request):
     username=_require_login(request)
     if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
-    data=await request.json(); target=str(data.get("target") or "").strip()[:64]
+    data=await request.json(); target=await db.resolve_username(str(data.get("target") or "").strip()[:64])
     if not target or target.lower()=="morad" or not await db.get_user(target): return {"ok":False,"error":"invalid"}
     try: coins=int(data.get("coins") or 0); trophies=int(data.get("trophies") or 0)
     except Exception: return {"ok":False,"error":"invalid"}
@@ -365,13 +400,28 @@ async def support_receipt_status(request: Request):
         await db.create_notification(r["username"],"support_receipt","❌ رسید رد شد","رسید پرداخت شما توسط پشتیبانی رد شد.")
     return {"ok":True,"status":status}
 
+@app.post("/support/report/review")
+async def support_report_review(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); rid=int(data.get("report_id") or 0); decision=str(data.get("decision") or "")
+    if rid<=0 or decision not in {"valid","invalid"}: return {"ok":False,"error":"invalid"}
+    reports=await db.get_reports(200); report=next((r for r in reports if int(r.get("id"))==rid),None)
+    if not report: return {"ok":False,"error":"not_found"}
+    await db.resolve_report(rid)
+    if decision=="invalid":
+        await db.create_notification(report["reporter"],"report_review","⚠️ گزارش بی‌اساس",f"گزارش #{rid} بررسی شد و بی‌اساس تشخیص داده شد. در صورت تکرار گزارش‌های بی‌اساس، ممکن است محروم شوید.")
+    else:
+        await db.create_notification(report["reporter"],"report_review","✅ گزارش بررسی شد",f"گزارش #{rid} بررسی شد و مورد پیگیری قرار گرفت.")
+    return {"ok":True,"decision":decision}
+
 @app.post("/support/ban")
 async def support_ban(request: Request):
     username = _require_login(request)
     if not username or not _is_support(username):
         return {"ok": False, "error": "forbidden"}
     data = await request.json()
-    target = str(data.get("target") or "").strip()[:64]
+    target = await db.resolve_username(str(data.get("target") or "").strip()[:64])
     scope = str(data.get("scope") or "games")
     # مدت محرومیت می‌تواند به‌صورت ساعت (hours) و/یا دقیقه (minutes) ارسال شود؛
     # این دو با هم جمع می‌شوند تا هم محرومیت چند دقیقه‌ای هم چند ساعته ممکن باشد.
@@ -386,8 +436,11 @@ async def support_ban(request: Request):
     if data.get("report_id"):
         await db.resolve_report(int(data["report_id"]))
     mins=max(1, int(hours*60))
-    await db.create_notification(target, "ban", "محدودیت دسترسی", f"پشتیبانی دسترسی «{scope}» شما را برای {mins} دقیقه محدود کرد. دلیل: {reason}")
-    return {"ok": True, "until": until}
+    replacement=None
+    if scope=="username":
+        p=await db.profile(target) or {}; replacement=p.get("public_username")
+    await db.create_notification(target, "ban", "محدودیت دسترسی", f"پشتیبانی دسترسی «{scope}» شما را برای {mins} دقیقه محدود کرد. دلیل: {reason}" + (f" آیدی موقت شما: @{replacement}" if replacement else ""))
+    return {"ok": True, "until": until, "replacement_id": replacement}
 
 @app.post("/support/unban")
 async def support_unban(request: Request):
@@ -413,7 +466,8 @@ async def profile_query_page(request: Request, u: str = ""):
         target = target[1:]
     if not target:
         target = username
-    prof = await db.profile(target)
+    resolved = await db.resolve_username(target)
+    prof = await db.profile(resolved or target)
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
@@ -433,7 +487,8 @@ async def profile_page(request: Request, target: str):
     username = _require_login(request)
     if not username:
         return RedirectResponse("/login")
-    prof = await db.profile(target)
+    resolved = await db.resolve_username(target)
+    prof = await db.profile(resolved or target)
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
@@ -531,6 +586,14 @@ async def settings_profile(request: Request):
         return {"ok": False, "error": "login_required"}
     data = await request.json()
     current = await db.profile(username) or {}
+    public_id = str(data.get("public_username") or current.get("public_username") or username).strip().lower()
+    if not _is_support(username):
+        username_ban = await db.get_active_ban(username, "username")
+        if username_ban and public_id != (current.get("public_username") or username):
+            return {"ok":False,"error":"username_banned","message":"فعلاً اجازه تغییر آیدی نداری."}
+        if public_id != (current.get("public_username") or username):
+            ok_id,status_id=await db.set_public_username(username,public_id)
+            if not ok_id: return {"ok":False,"error":"username_taken" if status_id=='taken' else "bad_username"}
     avatar_value = data.get("avatar")
     avatar_changed = avatar_value not in (None, "")
     avatar = str(avatar_value) if avatar_changed else (current.get("avatar") or "")
@@ -612,7 +675,7 @@ async def start_private_chat(request: Request, other: str = Form(...)):
     username = _require_login(request)
     if not username:
         return RedirectResponse("/login")
-    other = other.strip()
+    other = await db.resolve_username(other.strip()) or other.strip()
     if not other or other == username or not await db.get_user(other):
         return RedirectResponse("/lobby", status_code=303)
     if not _is_support(username):
@@ -660,7 +723,7 @@ class ChatManager:
     async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message("public", sender, content, reply_to_id)
         prof = await db.profile(sender)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
+        payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
         dead = []
         for ws in self.public_conns:
             try:
@@ -693,7 +756,7 @@ class ChatManager:
         except Exception:
             pass
         prof = await db.profile(sender)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
+        payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -717,6 +780,9 @@ async def ws_chat_public(websocket: WebSocket):
     if not username:
         await websocket.close(code=4001)
         return
+    other = await db.resolve_username(other) or other
+    if not await db.get_user(other):
+        await websocket.close(code=4004); return
     if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return
@@ -833,6 +899,8 @@ async def support_music_clear(request: Request):
 async def chat_private(request: Request, other: str):
     username, blocked = await _require_scope(request, "chat")
     if blocked: return blocked
+    other = await db.resolve_username(other) or other
+    if not await db.get_user(other): return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     if not _is_support(username):
         if await db.any_block(username, other):
             return HTMLResponse("این کاربر را بلاک کرده‌ای یا او شما را بلاک کرده است.", status_code=403)
@@ -840,7 +908,8 @@ async def chat_private(request: Request, other: str):
             return HTMLResponse("برای شروع چت خصوصی، اول باید درخواست دوستی ارسال و توسط این کاربر پذیرفته شود.", status_code=403)
     room = ":".join(sorted([username, other]))
     history = await db.get_recent_messages(room)
-    return tpl.chat_private_page(username, other, history)
+    other_prof=await db.profile(other) or {}
+    return tpl.chat_private_page(username, other, history, other_prof.get("public_username") or other)
 
 
 @app.websocket("/ws/chat/private/{other}")
@@ -849,6 +918,9 @@ async def ws_chat_private(websocket: WebSocket, other: str):
     if not username:
         await websocket.close(code=4001)
         return
+    other = await db.resolve_username(other) or other
+    if not await db.get_user(other):
+        await websocket.close(code=4004); return
     if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return
@@ -895,7 +967,7 @@ async def presence(request: Request, target: str):
 DRAW_PREVIEW_SECONDS = 5
 DRAW_BREAK_SECONDS = 10
 DRAW_TOTAL_ROUNDS = 6
-DRAW_OPTIONS_COUNT = 18
+DRAW_OPTIONS_COUNT = 20
 DRAW_MODE_DURATION = {2: 45, 4: 35}
 
 
@@ -915,10 +987,12 @@ class DrawingBattleManager:
             profile_banned=bool(await db.get_active_ban(u,"profile"))
             out[u] = {
                 "username": u,
-                "display_name": prof.get("display_name") or u,
+                "public_username": prof.get("public_username") or u,
+                "display_name": prof.get("display_name") or prof.get("public_username") or u,
                 "avatar": "" if profile_banned else (prof.get("avatar") or ""),
                 "wins": int(prof.get("wins") or 0),
                 "points": int(prof.get("points") or 0),
+                "league": prof.get("league") or await db.league_for_trophies(prof.get("wins") or 0),
             }
         return out
 
@@ -1109,11 +1183,13 @@ class DrawingBattleManager:
             game["scores"][username]+=pts
             await db.update_stats(username, correct_guesses=1)
             await self._to_user(game, username, {"type":"correct","points":pts})
+            await self._to_user(game, game["drawer"], {"type":"guess_notice","username":username,"word":word,"correct":True,"message":f"@{username} حدس زد: {word} ✅"})
             needed=max(1,len(game["active"])-1)
             if len(game["guesses"]) >= needed: await self._end_round(gid, True)
         else:
             await db.update_stats(username, wrong_guesses=1)
             await self._to_user(game, username, {"type":"guess_wrong","word":word,"final":True})
+            await self._to_user(game, game["drawer"], {"type":"guess_notice","username":username,"word":word,"correct":False,"message":f"@{username} حدس اشتباه زد: {word} ❌"})
 
     async def _end_round(self, gid, correct):
         game=self.games.get(gid)
@@ -1146,10 +1222,10 @@ class DrawingBattleManager:
         ranked=sorted(game["players"], key=lambda u:game["scores"].get(u,0), reverse=True)
         winner=ranked[0] if ranked and len([x for x in ranked if game["scores"].get(x,0)==game["scores"].get(ranked[0],0)])==1 else None
         if winner:
-            await db.update_stats(winner,wins=5,points=game["scores"].get(winner,0))
-            for u in ranked[1:]: await db.update_stats(u,losses=1,points=game["scores"].get(u,0))
+            await db.update_stats(winner,wins=5)
+            for u in ranked[1:]: await db.update_stats(u,losses=1)
         else:
-            for u in ranked: await db.update_stats(u,draws=1,points=game["scores"].get(u,0))
+            for u in ranked: await db.update_stats(u,draws=1)
         await self._broadcast(game,{"type":"game_over","winner":winner,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"]})
         for u in game["players"]: self.player_game.pop(u,None)
 
