@@ -464,7 +464,7 @@ async def get_pinned_messages(room, limit=20):
         cur=await db.execute("""SELECT p.*,m.sender,m.content,m.created_at AS message_created_at,COALESCE(u.avatar,'🎮') avatar
                               FROM pinned_messages p JOIN messages m ON m.id=p.message_id
                               LEFT JOIN users u ON u.username=m.sender
-                              WHERE p.room=? ORDER BY p.id DESC LIMIT ?""", (room,limit))
+                              WHERE p.room=? ORDER BY p.created_at DESC, p.message_id DESC LIMIT ?""", (room,limit))
         return [dict(r) for r in await cur.fetchall()]
 
 async def add_support_tag(username, tag):
