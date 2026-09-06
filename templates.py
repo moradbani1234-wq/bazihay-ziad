@@ -876,6 +876,36 @@ box-shadow:inset 0 0 70px rgba(0,0,0,.3),0 15px 45px rgba(0,0,0,.3)}
 .profile-card{background:linear-gradient(150deg,#171b3c,#0c1024);border:1px solid #413a79;border-radius:25px;padding:20px;box-shadow:0 15px 45px rgba(0,0,0,.35),0 0 25px rgba(91,69,255,.12)}
 .profile-head{display:flex;align-items:center;gap:14px}.profile-head>div:first-child{width:92px;height:92px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:#11152d;border:2px solid #ff5ccf}.profile-head>div:first-child img{max-width:100%;max-height:100%}.profile-head h1{font-size:24px;margin:3px 0}.profile-age{font-size:12px;color:#b8bdd5;margin-top:3px}.profile-bio{margin:18px 0;padding:13px;border-radius:15px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);color:#d9dcef;word-break:break-word}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.stat-box{background:#11162e;border:1px solid #2d3561;border-radius:13px;padding:9px 3px;text-align:center;font-size:10px;color:#929ab9}.stat-box b{font-size:15px;color:#fff}.profile-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.profile-actions form{margin:0}.verified-support{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:999px;background:rgba(0,216,255,.1);color:#63e6ff;font-size:10px}.support-mini-card{display:flex;flex-direction:column;margin-top:10px;padding:13px;border-radius:15px;text-decoration:none;color:#fff;background:#151a35;border:1px solid #343d72}.support-mini-card span{font-size:11px;color:#9ba3c2;margin-top:2px}
+.profile-hero-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-bottom:14px}
+.profile-side-box{background:linear-gradient(145deg,#e0264d,#a5102f);border-radius:16px;padding:10px 6px;text-align:center;color:#fff;box-shadow:0 8px 20px rgba(180,20,50,.3);position:relative;overflow:hidden}
+.profile-side-box:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 10px,transparent 10px 20px)}
+.profile-side-box b{position:relative;display:block;font-size:19px;font-weight:1000;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.profile-side-box span{position:relative;display:block;font-size:11px;font-weight:800;margin-top:2px;opacity:.95}
+.profile-hero-center{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+.profile-hero-center .profile-head{flex-direction:column;gap:4px}
+.profile-hero-center .profile-head>div:first-child{width:104px;height:104px}
+.profile-mini-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-bottom:14px}
+.profile-status-row{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:14px}
+.profile-status-label{color:#9a9ec2;font-size:12px;font-weight:700}
+.circle-action-lg{width:52px;height:52px;padding:0!important;border-radius:50%!important;display:inline-flex!important;align-items:center;justify-content:center;font-size:24px;font-weight:1000;background:linear-gradient(150deg,#5fe06a,#2fae3f)!important;color:#fff!important;border:0!important;box-shadow:0 6px 0 rgba(0,90,20,.35),0 8px 18px rgba(30,180,60,.25)}
+.circle-action-lg:hover{filter:brightness(1.08);transform:translateY(-2px)}
+.circle-action-lg:disabled{opacity:.6;cursor:default;filter:grayscale(.3)}
+.circle-action-lg.report-circle{background:linear-gradient(150deg,#ff8a3d,#e2531a)!important;box-shadow:0 6px 0 rgba(140,50,0,.35),0 8px 18px rgba(226,83,26,.25)}
+.circle-action-lg.block-circle{background:linear-gradient(150deg,#767c9e,#4c516e)!important;box-shadow:0 6px 0 rgba(20,20,35,.35),0 8px 18px rgba(70,75,100,.25)}
+.history-card{margin-top:16px;padding:14px;border-radius:18px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)}
+.history-card>b{display:block;margin-bottom:10px;font-size:14px;color:#fff}
+.history-list{display:flex;flex-direction:column;gap:7px;max-height:340px;overflow-y:auto}
+.history-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:13px;background:#11162e;border:1px solid #262c50}
+.history-item .h-badge{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 34px}
+.history-item.h-win .h-badge{background:rgba(60,210,120,.16);color:#4ee08a}
+.history-item.h-loss .h-badge{background:rgba(230,70,70,.16);color:#ff6a6a}
+.history-item.h-draw .h-badge{background:rgba(220,190,60,.16);color:#f0d060}
+.history-item .h-info{flex:1;min-width:0}
+.history-item .h-title{font-size:12px;font-weight:800;color:#eceffb}
+.history-item .h-sub{font-size:10.5px;color:#8d92b5;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-item .h-points{font-size:12px;font-weight:900;color:#ffd75b;white-space:nowrap}
+.history-empty{text-align:center;color:#8d92b5;font-size:12px;padding:10px 0}
+@media(max-width:600px){.profile-side-box b{font-size:16px}.profile-hero-center .profile-head>div:first-child{width:86px;height:86px}.circle-action-lg{width:46px;height:46px;font-size:20px}}
 
 .settings-screen{min-height:calc(100vh - 28px);padding-bottom:25px}.settings-header{display:flex;align-items:center;gap:12px;padding:6px 3px 16px}.settings-header h1{margin:0;font-size:27px}.settings-gear{margin-right:auto;width:45px;height:45px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(135deg,#ff43c8,#704bff);box-shadow:0 0 20px rgba(255,67,200,.25)}.settings-close{width:45px;height:45px;border-radius:50%;display:grid;place-items:center;text-decoration:none;background:#e9ebf2;color:#252a3d;font-size:30px}
 .settings-card{background:linear-gradient(150deg,#171b3c,#0d1025);border:1px solid #343b67;border-radius:23px;padding:18px;margin-bottom:12px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
@@ -1023,6 +1053,28 @@ BASE_CSS += """
 """
 
 
+def _history_html(history):
+    history = history or []
+    if not history:
+        return '<div class="history-card"><b>🕹️ تاریخچه بازی‌ها</b><div class="history-empty">هنوز بازی‌ای ثبت نشده است.</div></div>'
+    labels = {"win": ("🏆", "برد", "h-win"), "loss": ("❌", "باخت", "h-loss"), "draw": ("🤝", "مساوی", "h-draw")}
+    items = []
+    for g in history:
+        icon, text, cls = labels.get(g.get("result"), ("🎮", "نامشخص", "h-draw"))
+        mode = int(g.get("mode") or 2)
+        mode_text = "۴ نفره" if mode == 4 else "۲ نفره"
+        opponents = html.escape(str(g.get("opponents") or "").replace(",", "، ")) or "—"
+        ts = int(g.get("created_at") or 0)
+        date_text = time.strftime('%Y/%m/%d %H:%M', time.localtime(ts)) if ts else ""
+        pts = int(g.get("points") or 0)
+        items.append(
+            f'<div class="history-item {cls}"><div class="h-badge">{icon}</div>'
+            f'<div class="h-info"><div class="h-title">{text} • {mode_text}</div>'
+            f'<div class="h-sub">حریف‌ها: {opponents} • {date_text}</div></div>'
+            f'<div class="h-points">+{pts}</div></div>'
+        )
+    return f'<div class="history-card"><b>🕹️ تاریخچه بازی‌ها</b><div class="history-list">{"".join(items)}</div></div>'
+
 def _league_data(prof):
     return prof.get('league') or {'key':'starter','name':'مبتدی','theme':'league-starter','min':0}
 
@@ -1077,16 +1129,16 @@ def profile_page(username, prof):
     if prof['username']!=username:
         target_js=html.escape(prof['username'],quote=True)
         fs=prof.get('friend_status','none'); blocked=bool(prof.get('blocked_by_me'))
-        if fs=='friends': friend_btn='<button class="circle-action friend-ok" disabled title="دوست هستید">✓</button>'; chat_btn=f'<a class="btn" href="/chat/private/{quote(prof["username"],safe="")}">💬 چت خصوصی</a>'
-        elif fs=='outgoing': friend_btn='<button class="circle-action" disabled title="درخواست ارسال شده">✓</button>'; chat_btn='<button class="btn" onclick="needFriend()">💬 چت خصوصی</button>'
-        elif fs=='incoming': friend_btn='<button class="circle-action" disabled title="درخواست دریافتی">📨</button>'; chat_btn='<button class="btn" onclick="needFriend()">💬 چت خصوصی</button>'
-        else: friend_btn='<button class="circle-action" title="درخواست دوستی" onclick="askFriend()">+</button>'; chat_btn='<button class="btn" onclick="needFriend()">💬 چت خصوصی</button>'
-        report_btn='' if is_support else f'<button class="circle-action report-circle" title="گزارش" onclick="openReportModal(\'{target_js}\',\'پروفایل کاربر\',\'profile\',\'\')">🚩</button>'
-        block_btn='' if is_support else f'<button id="blockBtn" class="circle-action block-circle" title="{"آنبلاک" if blocked else "بلاک"}" onclick="toggleBlock()">{"✓" if blocked else "×"}</button>'
+        if fs=='friends': friend_btn='<button class="circle-action-lg friend-ok" disabled title="دوست هستید">❤️</button>'; chat_btn=f'<a class="btn" href="/chat/private/{quote(prof["username"],safe="")}">💬 چت خصوصی</a>'; status_text='دوست'
+        elif fs=='outgoing': friend_btn='<button class="circle-action-lg" disabled title="درخواست ارسال شده">✓</button>'; chat_btn='<button class="btn" onclick="needFriend()">💬 چت خصوصی</button>'; status_text='درخواست ارسال‌شده'
+        elif fs=='incoming': friend_btn='<button class="circle-action-lg" disabled title="درخواست دریافتی">📨</button>'; chat_btn='<button class="btn" onclick="needFriend()">💬 چت خصوصی</button>'; status_text='درخواست دریافتی'
+        else: friend_btn='<button class="circle-action-lg" title="درخواست دوستی" onclick="askFriend()">❤️</button>'; chat_btn='<button class="btn" onclick="needFriend()">💬 چت خصوصی</button>'; status_text='غریبه'
+        report_btn='' if is_support else f'<button class="circle-action-lg report-circle" title="گزارش" onclick="openReportModal(\'{target_js}\',\'پروفایل کاربر\',\'profile\',\'\')">❗</button>'
+        block_btn='' if is_support else f'<button id="blockBtn" class="circle-action-lg block-circle" title="{"آنبلاک" if blocked else "بلاک"}" onclick="toggleBlock()">{"✓" if blocked else "×"}</button>'
         support_tools=''
         if username=='morad':
             support_tools=f'''<div class="support-profile-tools"><b>🛡️ مدیریت محدودیت</b><div class="support-profile-row"><input value="{target_js}" readonly><select id="profileBanHours"><option value="1">۱ ساعت</option><option value="6">۶ ساعت</option><option value="24">۲۴ ساعت</option><option value="72">۳ روز</option><option value="168">۷ روز</option></select><button class="btn" onclick="banProfile()">🚫 محدودیت پروفایل</button></div><div class="support-profile-row"><select id="bioBanHours"><option value="1">۱ ساعت</option><option value="6">۶ ساعت</option><option value="24">۲۴ ساعت</option><option value="72">۳ روز</option><option value="168">۷ روز</option></select><button class="btn" onclick="banBio()">📝 محدودیت بیو</button></div></div>'''
-        actions=f'<div class="profile-actions"><div class="profile-action-row">{friend_btn}{report_btn}{block_btn}</div>{chat_btn}</div>{support_tools}'
+        actions=f'<div class="profile-actions"><div class="profile-status-row">{report_btn}{friend_btn}<span class="profile-status-label">{status_text}</span></div><div class="profile-action-row">{block_btn}</div>{chat_btn}</div>{support_tools}'
         scripts=f'''<script>
         function askFriend(){{if(document.getElementById('friendConfirm'))return;const m=document.createElement('div');m.id='friendConfirm';m.className='confirm-overlay';m.innerHTML='<div class="confirm-card"><b>👥 درخواست دوستی</b><p>آیا از ارسال درخواست دوستی به @{html.escape(public_id)} مطمئن هستید؟</p><div><button onclick="confirmFriend(true)">بله</button><button class="btn" onclick="confirmFriend(false)">خیر</button></div></div>';document.body.appendChild(m)}}
         async function confirmFriend(ok){{const m=document.getElementById('friendConfirm');if(m)m.remove();if(!ok)return;const r=await fetch('/friends/request',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{target:'{target_js}'}})}});const d=await r.json();if(d.ok)location.reload();else alert(d.status==='already_sent'?'این درخواست قبلاً ارسال شده است.':'❌ درخواست ارسال نشد.')}}
@@ -1100,7 +1152,8 @@ def profile_page(username, prof):
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
     bio='<div class="moderation-hidden">این بخش موقتاً محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get('chat_notice') else ''
-    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    history_html=_history_html(prof.get('game_history'))
+    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-hero-row"><div class="profile-side-box"><b>🏆 {int(prof.get('wins',0) or 0)}</b><span>جام</span></div><div class="profile-hero-center"><div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div></div><div class="profile-side-box"><b>⭐ {int(prof.get('points',0) or 0)}</b><span>امتیاز کل</span></div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="profile-mini-stats"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div></div>{actions}{history_html}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 

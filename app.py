@@ -548,6 +548,7 @@ async def profile_query_page(request: Request, u: str = ""):
     prof["blocked_by_me"] = await db.block_status(username, prof["username"])
     prof["blocked_me"] = await db.block_status(prof["username"], username)
     prof["chat_notice"] = "برای شروع چت خصوصی، اول باید درخواست دوستی ارسال و توسط این کاربر پذیرفته شود." if request.query_params.get("chat")=="friend_required" else ""
+    prof["game_history"] = await db.game_history(prof["username"], 15)
     return tpl.profile_page(username, prof)
 
 
@@ -566,6 +567,7 @@ async def profile_page(request: Request, target: str):
     prof["friend_status"] = await db.friend_status(username, prof["username"])
     prof["blocked_by_me"] = await db.block_status(username, prof["username"])
     prof["blocked_me"] = await db.block_status(prof["username"], username)
+    prof["game_history"] = await db.game_history(prof["username"], 15)
     return tpl.profile_page(username, prof)
 
 @app.post("/friends/request")
@@ -1295,6 +1297,13 @@ class DrawingBattleManager:
             for u in ranked[1:]: await db.update_stats(u,losses=1)
         else:
             for u in ranked: await db.update_stats(u,draws=1)
+        ts=int(time.time())
+        history_rows=[]
+        for u in game["players"]:
+            result = "win" if (winner and u==winner) else ("draw" if not winner else "loss")
+            opponents = ",".join(game["profiles"].get(o,{}).get("public_username",o) for o in game["players"] if o!=u)
+            history_rows.append({"username":u,"result":result,"points":game["scores"].get(u,0),"opponents":opponents,"mode":self.mode,"created_at":ts})
+        await db.log_game_history(history_rows)
         await self._broadcast(game,{"type":"game_over","winner":winner,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"]})
         for u in game["players"]: self.player_game.pop(u,None)
 

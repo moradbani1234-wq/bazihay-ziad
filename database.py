@@ -129,6 +129,11 @@ async def init_db():
         await db.execute("""CREATE TABLE IF NOT EXISTS pinned_messages (
             message_id INTEGER PRIMARY KEY, room TEXT NOT NULL, pinned_by TEXT NOT NULL, created_at INTEGER NOT NULL)""")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_pinned_room ON pinned_messages(room,created_at)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS game_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, result TEXT NOT NULL,
+            points INTEGER NOT NULL DEFAULT 0, opponents TEXT NOT NULL DEFAULT '',
+            mode INTEGER NOT NULL DEFAULT 2, created_at INTEGER NOT NULL)""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_game_history_user ON game_history(username,id)")
         await db.execute("""CREATE TABLE IF NOT EXISTS support_tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, tag TEXT NOT NULL,
             created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
@@ -209,6 +214,29 @@ async def update_stats(username, *, wins=0, losses=0, draws=0, points=0, correct
         await db.execute("""UPDATE stats SET wins=wins+?, losses=losses+?, draws=draws+?, points=points+?, correct_guesses=correct_guesses+?, wrong_guesses=wrong_guesses+?
                             WHERE username=?""",(wins,losses,draws,points,correct_guesses,wrong_guesses,username))
         await db.commit()
+
+async def log_game_history(rows):
+    # rows: list of dicts with username, result ('win'/'loss'/'draw'), points, opponents (str), mode, created_at
+    if not rows:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.executemany(
+            """INSERT INTO game_history(username,result,points,opponents,mode,created_at)
+               VALUES(?,?,?,?,?,?)""",
+            [(r["username"], r["result"], int(r.get("points", 0) or 0), str(r.get("opponents", "") or "")[:300],
+              int(r.get("mode", 2) or 2), int(r.get("created_at") or time.time())) for r in rows])
+        await db.commit()
+
+async def game_history(username, limit=15):
+    username = str(username or '').strip()
+    if not username:
+        return []
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            """SELECT result,points,opponents,mode,created_at FROM game_history
+               WHERE username=? ORDER BY id DESC LIMIT ?""", (username, int(limit)))
+        return [dict(r) for r in await cur.fetchall()]
 
 async def league_for_trophies(trophies):
     t=int(trophies or 0)
