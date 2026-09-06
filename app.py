@@ -695,7 +695,7 @@ async def lobby(request: Request):
 async def shop_page(request: Request):
     username=_require_login(request)
     if not username: return RedirectResponse("/login")
-    return tpl.shop_page(username, await db.wallet_for(username))
+    return tpl.shop_page(username, await db.wallet_for(username), await db.owned_items_for(username))
 
 @app.get("/games", response_class=HTMLResponse)
 async def games_page(request: Request):

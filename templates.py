@@ -396,25 +396,6 @@ def banned_page(username: str, scope: str, remaining: int, reason: str) -> str:
     </div>"""
     return page_shell("محرومیت موقت", body, username)
 
-def leaderboard_page(username: str, rows: list[dict], by: str = "wins") -> str:
-    podium=[]; rest=[]
-    value_key = "points" if by == "points" else "wins"
-    value_label = "امتیاز" if by == "points" else "جام"
-    value_icon = "💎" if by == "points" else "🏆"
-    for i,r in enumerate(rows,1):
-        raw_avatar=str(r.get('avatar') or '')
-        avatar=(f'<img class="leader-avatar" src="{html.escape(raw_avatar,quote=True)}" alt="">' if raw_avatar.startswith('data:image/') else '<div class="leader-avatar leader-avatar-fallback">●</div>')
-        name=html.escape(r['username']); age=int(r.get('age') or 18)
-        value=r.get(value_key) or 0
-        if i<=3:
-            podium.append(f'''<a class="leader-podium-card rank-{i}" href="/profile?u={quote(r['username'],safe='')}"><div class="leader-rank">{['🥇','🥈','🥉'][i-1]}</div>{avatar}<div class="leader-name">@{name}</div><div class="leader-age">🎂 {age} سال</div><div class="leader-score">{value_icon} {value} {value_label}</div></a>''')
-        else:
-            cls=' me' if r['username']==username else ''
-            rest.append(f'''<a class="leader-row{cls}" href="/profile?u={quote(r['username'],safe='')}"><div class="rank-medal">{i}</div><div class="leader-list-avatar">{avatar}</div><div><b>@{name}</b><div class="report-meta">🎂 {age} سال</div></div><div><b>{value}</b><small> {value_label}</small></div></a>''')
-    tabs=f'''<div class="leader-tabs"><a class="leader-tab{" active" if by=="wins" else ""}" href="/leaderboard?by=wins">🏆 بیشترین جام</a><a class="leader-tab{" active" if by=="points" else ""}" href="/leaderboard?by=points">💎 بیشترین امتیاز</a></div>'''
-    body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter">{tabs}<p>سه نفر اول با پروفایل نئونی ویژه نمایش داده می‌شوند؛ روی پروفایل هر بازیکن بزن.</p><div class="leader-podium">{''.join(podium) or '<p>هنوز آماری ثبت نشده.</p>'}</div><div class="leader-list">{''.join(rest)}</div></div>'''
-    return page_shell('رتبه‌بندی',body,username)
-
 def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None, receipts: list[dict] | None = None) -> str:
     active_bans=active_bans or []; tickets=tickets or []; receipts=receipts or []
     labels={'all':'همه امکانات','games':'بازی‌ها','chat':'چت','drawing':'نقاشی','profile':'پروفایل','bio':'بیوگرافی','username':'آیدی'}
@@ -1045,15 +1026,32 @@ def lobby_page(username, prof=None, wallet=None):
     return page_shell('منوی اصلی',body,username)
 
 
+def _leader_avatar(r, cls="leader-avatar"):
+    if r.get('profile_banned'):
+        return f'<div class="{cls} leader-avatar-fallback">●</div>'
+    raw = r.get('avatar') or ''
+    return _avatar_html(raw, cls=cls) if raw else f'<div class="{cls} leader-avatar-fallback">●</div>'
+
 def leaderboard_page(username, rows, by='wins'):
     value_key='points' if by=='points' else 'wins'; value_label='امتیاز' if by=='points' else 'جام'; value_icon='💎' if by=='points' else '🏆'
-    cards=[]
+    podium=[]; rest=[]
     for i,r in enumerate(rows,1):
-        league=_league_data(r); av=_avatar_html(r.get('avatar') or '',cls='leader-avatar') if r.get('avatar') else '<div class="leader-avatar leader-avatar-fallback">●</div>'
-        public_id=str(r.get('public_username') or r.get('username')); cls=' me' if r.get('username')==username else ''
-        cards.append(f'<a class="leader-row{cls} {league["theme"]}" href="/profile?u={quote(str(r.get("username")),safe="")}"><div class="rank-medal">{i}</div><div>{av}</div><div><b>@{html.escape(public_id)}</b><div class="report-meta">🏆 لیگ {html.escape(league["name"])}</div></div><div><b>{int(r.get(value_key) or 0)}</b><small> {value_label}</small></div></a>')
+        league=_league_data(r)
+        public_id=str(r.get('public_username') or r.get('username'))
+        value=int(r.get(value_key) or 0)
+        href=f'/profile?u={quote(str(r.get("username")),safe="")}'
+        if i<=3:
+            av=_leader_avatar(r)
+            medal=['🥇','🥈','🥉'][i-1]
+            podium.append(f'<a class="leader-podium-card rank-{i} {league["theme"]}" href="{href}"><div class="leader-rank">{medal}</div>{av}<div class="leader-name">@{html.escape(public_id)}</div><div class="leader-score">{value_icon} {value} {value_label}</div><div class="report-meta">🏆 {html.escape(league["name"])}</div></a>')
+        else:
+            av=_leader_avatar(r)
+            cls=' me' if r.get('username')==username else ''
+            rest.append(f'<a class="leader-row{cls} {league["theme"]}" href="{href}"><div class="rank-medal">{i}</div><div class="leader-list-avatar">{av}</div><div><b>@{html.escape(public_id)}</b><div class="report-meta">🏆 لیگ {html.escape(league["name"])}</div></div><div><b>{value}</b><small> {value_label}</small></div></a>')
     tabs=f'<div class="leader-tabs"><a class="leader-tab{" active" if by=="wins" else ""}" href="/leaderboard?by=wins">🏆 بیشترین جام</a><a class="leader-tab{" active" if by=="points" else ""}" href="/leaderboard?by=points">💎 بیشترین امتیاز</a></div>'
-    body=f'<div class="page-heading"><div><div class="sub">RANKING • LEAGUES</div><h1>🏆 رتبه‌بندی و لیگ‌ها</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter">{tabs}<p>لیگ بر اساس جام‌ها: برنزی از ۲۵۰، داوینچی از ۷۵۰ و پیکاسو از ۱۵۰۰ جام.</p><div class="leader-list">{"".join(cards) or "<p>هنوز آماری ثبت نشده.</p>"}</div></div>'
+    podium_html=f'<div class="leader-podium">{"".join(podium)}</div>' if podium else ''
+    rest_html=f'<div class="leader-list">{"".join(rest)}</div>' if rest else ('' if podium else '<p>هنوز آماری ثبت نشده.</p>')
+    body=f'<div class="page-heading"><div><div class="sub">RANKING • LEAGUES</div><h1>🏆 رتبه‌بندی و لیگ‌ها</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter">{tabs}<p>سه نفر اول با قاب دایره‌ای ویژه نمایش داده می‌شوند؛ لیگ بر اساس جام‌ها: برنزی از ۲۵۰، داوینچی از ۷۵۰ و پیکاسو از ۱۵۰۰ جام.</p>{podium_html}{rest_html}</div>'
     return page_shell('رتبه‌بندی',body,username)
 
 def settings_page(username, prof):
@@ -1177,8 +1175,9 @@ BASE_CSS += """
 """
 
 # ===== V4.2 FINAL OVERRIDES =====
-def shop_page(username, wallet=None):
+def shop_page(username, wallet=None, owned=None):
     w = wallet or {'coins': 500, 'diamonds': 5, 'streak': 0}
+    owned = set(owned or [])
     items = [
         ('neon_pen','✏️','قلم نئونی','هاله درخشان قلم در بازی','250','custom'),
         ('profile_frame','🖼️','قاب درخشان','قاب ویژه آواتار','400','custom'),
@@ -1198,7 +1197,11 @@ def shop_page(username, wallet=None):
         for key,ic,name,desc,cost,k in items:
             if k != kind: continue
             css='store-league' if k=='league' else 'store-custom'
-            out.append(f'<div class="store-item {css}" data-item="{key}"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div></div><span class="price">{cost} 🪙</span><button class="store-buy" onclick="buyItem(\'{key}\')">خرید</button></div>')
+            is_owned = key in owned
+            purchased_cls = ' purchased' if is_owned else ''
+            btn_html = '<button class="store-buy" disabled>✓ فعال</button>' if is_owned else f'<button class="store-buy" onclick="buyItem(\'{key}\')">خرید</button>'
+            badge_html = '<span class="shop-active-badge">✨ فعال</span>' if is_owned else ''
+            out.append(f'<div class="store-item {css}{purchased_cls}" data-item="{key}"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div>{badge_html}</div><span class="price">{cost} 🪙</span>{btn_html}</div>')
         return ''.join(out)
     body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • CUSTOMIZE</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div>
     <div class="card hero store-wallet"><div class="coin-bar"><span class="coin-pill">🪙 <b id="coinBalance">{int(w.get('coins',500) or 0):,}</b> سکه</span><span class="coin-pill">💎 {int(w.get('diamonds',5) or 0)} الماس</span><span class="coin-pill">🔥 {int(w.get('streak',0) or 0)} روز</span></div></div>
@@ -1206,7 +1209,7 @@ def shop_page(username, wallet=None):
     <div class="card"><h2>🎨 شخصی‌سازی</h2><p class="store-section-note">خریدها با سکه انجام می‌شوند و روی حسابت باقی می‌مانند.</p>{cards('custom')}</div>
     <div class="card"><h2>🏆 آیتم‌های مخصوص لیگ</h2><p class="store-section-note">برای خرید باید حداقل جام همان لیگ را داشته باشی.</p>{cards('league')}</div>
     <div id="shopToast" class="shop-toast"></div><script>
-    async function buyItem(key){{const card=document.querySelector('[data-item="'+CSS.escape(key)+'"]'),btn=card?.querySelector('.store-buy');if(btn)btn.disabled=true;try{{const r=await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{document.getElementById('coinBalance').textContent=Number(d.wallet.coins||0).toLocaleString('fa-IR');if(card){{card.classList.add('purchased');if(btn){{btn.textContent='✓ خریداری شد';btn.disabled=true}}}}toast('✨ آیتم خریداری شد و فعال است');}}else if(d.status==='owned')toast('این آیتم را قبلاً داری.');else if(d.status==='league_locked')toast('🏆 این آیتم برای لیگ تو باز نشده.');else if(d.status==='not_enough')toast('🪙 سکه کافی نیست.');else toast('❌ خرید انجام نشد.')}}catch(e){{toast('❌ خطای ارتباط با فروشگاه.')}}finally{{if(btn&&!card?.classList.contains('purchased'))btn.disabled=false}}}}
+    async function buyItem(key){{const card=document.querySelector('[data-item="'+CSS.escape(key)+'"]'),btn=card?.querySelector('.store-buy');if(btn)btn.disabled=true;try{{const r=await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{document.getElementById('coinBalance').textContent=Number(d.wallet.coins||0).toLocaleString('fa-IR');if(card){{card.classList.add('purchased','activate-burst');if(btn){{btn.outerHTML='<button class="store-buy" disabled>✓ فعال</button>'}}const badgeHost=card.querySelector('.grow');if(badgeHost&&!badgeHost.querySelector('.shop-active-badge')){{const b=document.createElement('span');b.className='shop-active-badge';b.textContent='✨ فعال';badgeHost.appendChild(b)}}setTimeout(()=>card.classList.remove('activate-burst'),900)}}toast('✨ آیتم خریداری شد و فعال است');}}else if(d.status==='owned')toast('این آیتم را قبلاً داری.');else if(d.status==='league_locked')toast('🏆 این آیتم برای لیگ تو باز نشده.');else if(d.status==='not_enough')toast('🪙 سکه کافی نیست.');else toast('❌ خرید انجام نشد.')}}catch(e){{toast('❌ خطای ارتباط با فروشگاه.')}}finally{{if(btn&&!card?.classList.contains('purchased'))btn.disabled=false}}}}
     function toast(t){{const x=document.getElementById('shopToast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2200)}}
     </script>'''
     return page_shell('فروشگاه',body,username)
@@ -1234,4 +1237,26 @@ BASE_CSS += """
 
 BASE_CSS += """
 .victory-owned{animation:victoryPulse .8s ease-in-out infinite alternate!important;border-color:#ffd75a!important;box-shadow:0 0 30px rgba(255,215,90,.28),0 0 70px rgba(255,72,203,.12)!important}@keyframes victoryPulse{from{transform:scale(1)}to{transform:scale(1.012)}}
+"""
+
+BASE_CSS += """
+/* V5 — leaderboard avatar fix (top-3 circular, rest rounded-square) + shop activation polish */
+.leader-avatar-fallback{display:flex!important;align-items:center;justify-content:center;background:linear-gradient(145deg,#2b2052,#14102d);color:#7d70b8;font-size:16px}
+.leader-podium-card .leader-avatar,.leader-podium-card .leader-avatar-fallback{width:82px;height:82px;margin:auto;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 0 18px rgba(255,255,255,.22);display:flex}
+.leader-podium-card.rank-1 .leader-avatar,.leader-podium-card.rank-1 .leader-avatar-fallback{width:104px;height:104px;border-color:#ff8be5;box-shadow:0 0 25px rgba(255,79,216,.55);font-size:22px}
+.leader-list-avatar{width:34px;height:34px;flex:0 0 34px}
+.leader-list-avatar .leader-avatar,.leader-list-avatar .leader-avatar-fallback{width:34px;height:34px;border-radius:10px!important;object-fit:cover;border:1px solid #6c55b0;display:flex}
+.leader-row{overflow:hidden}
+.leader-podium-card.league-bronze{border-color:#cd7f32}.leader-podium-card.league-davinci{border-color:#32d9d0}.leader-podium-card.league-picasso{border-color:#ff4a4a}
+@media(max-width:600px){.leader-list-avatar,.leader-list-avatar .leader-avatar,.leader-list-avatar .leader-avatar-fallback{width:30px;height:30px;flex-basis:30px}}
+.store-item{position:relative;overflow:hidden}
+.store-item .grow{position:relative;z-index:1}
+.shop-active-badge{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999px;background:linear-gradient(135deg,#27d8ad,#19b8ff);color:#04231c;font-size:9px;font-weight:1000;animation:shopActivePulse 1.6s ease-in-out infinite}
+@keyframes shopActivePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.75;transform:scale(1.05)}}
+.store-item.purchased{border:1px solid transparent;background:linear-gradient(145deg,#17102f,#0d0a20) padding-box,conic-gradient(from 0deg,#27d8ad,#19b8ff,#ff52d2,#ffd75a,#27d8ad) border-box;animation:shopFrameSpin 4s linear infinite}
+.store-item.purchased .store-item-icon{background:linear-gradient(145deg,#0f3d33,#0d0a20);box-shadow:0 0 14px rgba(39,216,173,.35)}
+.store-item.purchased .store-buy{background:linear-gradient(135deg,#27d8ad,#19b8ff)!important;opacity:1!important;cursor:default}
+@keyframes shopFrameSpin{to{filter:hue-rotate(360deg)}}
+.store-item.activate-burst{animation:shopFrameSpin 4s linear infinite,shopBurst .7s ease-out}
+@keyframes shopBurst{0%{box-shadow:0 0 0 0 rgba(39,216,173,.55),0 0 0 0 rgba(25,184,255,.35);transform:scale(1)}40%{transform:scale(1.035)}100%{box-shadow:0 0 0 18px rgba(39,216,173,0),0 0 0 30px rgba(25,184,255,0);transform:scale(1)}}
 """
