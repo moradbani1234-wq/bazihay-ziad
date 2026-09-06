@@ -988,13 +988,18 @@ def _frame_overlay_html(owned):
     # قاب تصویری فروشگاه: عکس مستقیم به‌صورت base64 داخل صفحه embed می‌شود (نه فایل جدا)
     # تا روی هر هاستی بدون درخواست شبکه‌ی اضافه و بدون شکستن تصویر نمایش داده شود.
     # استایل به‌صورت inline نوشته شده تا وابسته به بارگذاری شیت CSS جداگانه نباشد.
+    # هیچ متنی (طلایی/یخی) نوشته نمی‌شود؛ فقط جلوه‌ی بصری (ذرات ریز CSS، بدون تصویر اضافه => بدون لگ).
     _st = ("position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"
            "pointer-events:none;z-index:5;object-fit:contain;border-radius:0;"
            "max-width:none;max-height:none;display:block;")
     if 'gold_frame' in owned:
-        return f'<img class="avatar-frame-img frame-img-gold" alt="" style="{_st}width:172%;height:172%" src="data:image/webp;base64,{GOLD_FRAME_OVERLAY_B64}">'
+        img = f'<img class="avatar-frame-img frame-img-gold" alt="" style="{_st}width:172%;height:172%" src="data:image/webp;base64,{GOLD_FRAME_OVERLAY_B64}">'
+        sparks = ''.join(f'<span class="gold-spark gold-spark-{i}"></span>' for i in (1,2,3,4))
+        return img + sparks
     if 'ice_frame' in owned:
-        return f'<img class="avatar-frame-img frame-img-ice" alt="" style="{_st}width:163%;height:163%" src="data:image/webp;base64,{ICE_FRAME_OVERLAY_B64}">'
+        img = f'<img class="avatar-frame-img frame-img-ice" alt="" style="{_st}width:163%;height:163%" src="data:image/webp;base64,{ICE_FRAME_OVERLAY_B64}">'
+        shards = ''.join(f'<span class="ice-shard ice-shard-{i}"></span>' for i in (1,2,3,4))
+        return img + shards
     return ''
 
 
@@ -1016,8 +1021,6 @@ def profile_page(username, prof):
     if 'bronze_badge' in owned: badge += '<div class="shop-badge bronze-owned">🥉 برنزی</div>'
     if 'davinci_frame' in owned or 'davinci_effect' in owned: badge += '<div class="shop-badge davinci-owned">🔷 داوینچی</div>'
     if 'picasso_frame' in owned or 'picasso_effect' in owned: badge += '<div class="shop-badge picasso-owned">🎨 پیکاسو</div>'
-    if 'gold_frame' in owned: badge += '<div class="shop-badge gold-owned">👑 طلایی</div>'
-    if 'ice_frame' in owned: badge += '<div class="shop-badge ice-owned">❄️ یخی</div>'
     tags=''.join(f'<span class="support-tag">🏷️ {html.escape(str(t.get("tag") or ""))}</span>' for t in (prof.get('support_tags') or []))
     tag_box=f'<div class="support-tags">{tags}</div>' if tags else ''
     league_html=f'<div class="league-badge">🏆 لیگ {html.escape(league["name"])} • {int(league.get("min",0))} جام+</div>'
@@ -1322,6 +1325,19 @@ BASE_CSS += """
 .shop-badge.gold-owned{background:linear-gradient(135deg,#ffe58a,#ffb02e);color:#3a2400}
 .shop-badge.ice-owned{background:linear-gradient(135deg,#bdf3ff,#4fc7ff);color:#04283b}
 @media(max-width:600px){.avatar-frame-img{filter:none}}
+.gold-spark{position:absolute;width:5px;height:5px;border-radius:50%;background:radial-gradient(circle,#fff8e0,#ffd75a 55%,transparent 75%);opacity:0;pointer-events:none;z-index:6;animation:goldSparkTwinkle 2.2s ease-in-out infinite}
+.gold-spark-1{top:6%;left:20%;animation-delay:0s}
+.gold-spark-2{top:12%;left:76%;animation-delay:.6s}
+.gold-spark-3{top:80%;left:14%;animation-delay:1.2s}
+.gold-spark-4{top:84%;left:82%;animation-delay:1.7s}
+@keyframes goldSparkTwinkle{0%,100%{opacity:0;transform:scale(.3) translateY(0)}45%{opacity:1;transform:scale(1.3) translateY(-2px)}70%{opacity:.5;transform:scale(.8) translateY(0)}}
+.ice-shard{position:absolute;width:3px;height:9px;background:linear-gradient(180deg,#eafcff,#4fd1ff);border-radius:2px;opacity:0;pointer-events:none;z-index:6;animation:iceShardFall 2.8s ease-in infinite;box-shadow:0 0 4px rgba(120,220,255,.8)}
+.ice-shard-1{top:4%;left:16%;animation-delay:.1s}
+.ice-shard-2{top:2%;left:80%;animation-delay:1s}
+.ice-shard-3{top:88%;left:30%;animation-delay:1.8s}
+.ice-shard-4{top:90%;left:68%;animation-delay:2.3s}
+@keyframes iceShardFall{0%{opacity:0;transform:translateY(-4px) scale(.6) rotate(0deg)}18%{opacity:1}65%{opacity:.7}100%{opacity:0;transform:translateY(16px) scale(.85) rotate(12deg)}}
+@media(prefers-reduced-motion:reduce){.gold-spark,.ice-shard{animation:none;opacity:0}}
 .effect-davinci{position:relative;box-shadow:0 0 30px rgba(50,217,208,.35),inset 0 0 35px rgba(50,217,208,.06)!important}
 .effect-picasso{position:relative;box-shadow:0 0 30px rgba(255,74,74,.32),0 0 65px rgba(255,82,210,.16),inset 0 0 35px rgba(255,74,74,.06)!important}
 .effect-davinci::after,.effect-picasso::after{content:"";position:absolute;inset:6px;border-radius:inherit;pointer-events:none;opacity:.55;animation:itemAura 1.5s ease-in-out infinite alternate}
