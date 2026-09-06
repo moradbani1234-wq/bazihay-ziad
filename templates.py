@@ -1131,7 +1131,7 @@ def profile_page(username, prof):
     bio='<div class="moderation-hidden">این بخش موقتاً محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get('chat_notice') else ''
     history_html=_history_html(prof.get('game_history'))
-    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-hero-row"><div class="profile-side-box"><b>🏆 {int(prof.get('wins',0) or 0)}</b><span>جام</span></div><div class="profile-hero-center"><div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div></div><div class="profile-side-box"><b>⭐ {int(prof.get('points',0) or 0)}</b><span>امتیاز کل</span></div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="profile-mini-stats"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div></div>{actions}{history_html}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f'''<div class="profile-card hero page-enter {theme} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-hero-row"><div class="profile-side-box"><b>🏆 {int(prof.get('wins',0) or 0)}</b><span>جام</span></div><div class="profile-hero-center"><div class="profile-head"><div class="{avatar_wrap_cls} {frame_class}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div></div><div class="profile-side-box"><b>⭐ {int(prof.get('points',0) or 0)}</b><span>امتیاز کل</span></div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="profile-mini-stats"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div></div>{actions}{history_html}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 
@@ -1147,7 +1147,7 @@ def lobby_page(username, prof=None, wallet=None):
     avatar_wrap_style = ' style="position:relative;overflow:visible"' if img_frame else ''
     public_id=_public_id(prof); wins=int(prof.get('wins') or 0); points=int(prof.get('points') or 0); coins=int((wallet or {}).get('coins') or 0); age=int(prof.get('age') or 18)
     support_link='<a href="/support">🛡️ <b>پنل پشتیبانی</b><small>مدیریت گزارش‌ها</small></a>' if username=='morad' else ''
-    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {frame_class} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar{avatar_wrap_cls}"{avatar_wrap_style}>{avatar}{img_frame}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
+    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar{avatar_wrap_cls} {frame_class}"{avatar_wrap_style}>{avatar}{img_frame}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
     return page_shell('منوی اصلی',body,username)
 
 
@@ -1620,3 +1620,101 @@ BASE_CSS += """
 .frame-effect-layer{z-index:10!important}
 .frame-effect-layer .avatar-frame-img{z-index:10!important}
 """
+
+# V9 — FIXED: auras are ONLY around the circular avatar, never around cards/page.
+# Lightweight: one pseudo-element, no rotating rings, no filters, no particle effects.
+BASE_CSS += r'''
+
+/* Kill the old V5/V7 frame pseudo-elements that could escape their avatar and create giant rings. */
+.frame-premium::before,.frame-premium::after,
+.frame-bronze::before,.frame-bronze::after,
+.frame-davinci::before,.frame-davinci::after,
+.frame-picasso::before,.frame-picasso::after,
+.frame-gold::before,.frame-gold::after,
+.frame-ice::before,.frame-ice::after,
+.frame-angel::before,.frame-angel::after,
+.frame-fire::before,.frame-fire::after,
+.frame-lightning::before,.frame-lightning::after,
+.frame-purple::before,.frame-purple::after,
+.frame-king::before,.frame-king::after{content:none!important;animation:none!important}
+
+/* The lobby/profile cards themselves must never carry an aura. */
+.lobby-profile[class*="frame-"],.profile-card[class*="frame-"]{
+  overflow:hidden!important;
+  isolation:auto!important;
+  position:relative!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.24),0 0 20px rgba(100,74,255,.10)!important;
+}
+
+/* Avatar containers are circular and are the ONLY place where an aura is painted. */
+.lobby-profile-avatar,
+.profile-head>div:first-child,
+.chat-avatar,
+.draw-avatar,
+.leader-avatar-wrap{
+  position:relative!important;
+  border-radius:50%!important;
+  overflow:visible!important;
+  isolation:isolate;
+}
+.lobby-profile-avatar{width:62px;height:62px;flex:0 0 62px;background:#11152d;border:2px solid rgba(255,255,255,.14);}
+.lobby-profile-avatar>img,.lobby-profile-avatar .profile-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%!important;position:relative;z-index:2}
+.profile-head>div:first-child{overflow:visible!important}
+.profile-head>div:first-child img{border-radius:50%!important;position:relative;z-index:2}
+
+/* Shared lightweight aura ring. */
+.lobby-profile[class*="frame-"] .lobby-profile-avatar::before,
+.profile-card[class*="frame-"] .profile-head>div:first-child::before,
+.chat-avatar[class*="frame-"]::before,
+.draw-avatar[class*="frame-"]::before,
+.leader-avatar-wrap[class*="frame-"]::before{
+  content:""!important;
+  position:absolute!important;
+  left:50%!important;top:50%!important;
+  width:calc(100% + 8px)!important;height:calc(100% + 8px)!important;
+  transform:translate(-50%,-50%) scale(1)!important;
+  border-radius:50%!important;
+  pointer-events:none!important;
+  z-index:0!important;
+  opacity:.88;
+  will-change:transform,opacity;
+  animation:auraSoftPulse 2.1s ease-in-out infinite;
+}
+
+/* Each named aura has its own identity, while remaining a simple circular glow. */
+.lobby-profile.frame-premium .lobby-profile-avatar::before,.profile-card.frame-premium .profile-head>div:first-child::before,.chat-avatar.frame-premium::before,.draw-avatar.frame-premium::before,.leader-avatar-wrap.frame-premium::before{border:2px solid #8c7bff!important;box-shadow:0 0 8px rgba(124,77,255,.72),0 0 18px rgba(0,214,255,.30)}
+.lobby-profile.frame-bronze .lobby-profile-avatar::before,.profile-card.frame-bronze .profile-head>div:first-child::before,.chat-avatar.frame-bronze::before,.draw-avatar.frame-bronze::before,.leader-avatar-wrap.frame-bronze::before{border:2px solid #d28a55!important;box-shadow:0 0 8px rgba(210,138,85,.72),0 0 16px rgba(166,82,35,.28)}
+.lobby-profile.frame-davinci .lobby-profile-avatar::before,.profile-card.frame-davinci .profile-head>div:first-child::before,.chat-avatar.frame-davinci::before,.draw-avatar.frame-davinci::before,.leader-avatar-wrap.frame-davinci::before{border:2px solid #42e5df!important;box-shadow:0 0 8px rgba(50,217,208,.72),0 0 17px rgba(45,174,255,.30)}
+.lobby-profile.frame-picasso .lobby-profile-avatar::before,.profile-card.frame-picasso .profile-head>div:first-child::before,.chat-avatar.frame-picasso::before,.draw-avatar.frame-picasso::before,.leader-avatar-wrap.frame-picasso::before{border:2px solid #ff5b9f!important;box-shadow:0 0 8px rgba(255,74,148,.70),0 0 17px rgba(255,74,74,.28)}
+.lobby-profile.frame-gold .lobby-profile-avatar::before,.profile-card.frame-gold .profile-head>div:first-child::before,.chat-avatar.frame-gold::before,.draw-avatar.frame-gold::before,.leader-avatar-wrap.frame-gold::before{border:2px solid #ffd75a!important;box-shadow:0 0 9px rgba(255,215,90,.76),0 0 19px rgba(255,166,0,.30)}
+.lobby-profile.frame-ice .lobby-profile-avatar::before,.profile-card.frame-ice .profile-head>div:first-child::before,.chat-avatar.frame-ice::before,.draw-avatar.frame-ice::before,.leader-avatar-wrap.frame-ice::before{border:2px solid #9df5ff!important;box-shadow:0 0 9px rgba(82,214,255,.76),0 0 18px rgba(57,201,255,.30)}
+.lobby-profile.frame-angel .lobby-profile-avatar::before,.profile-card.frame-angel .profile-head>div:first-child::before,.chat-avatar.frame-angel::before,.draw-avatar.frame-angel::before,.leader-avatar-wrap.frame-angel::before{border:2px solid #fff4c7!important;box-shadow:0 0 9px rgba(255,255,255,.74),0 0 19px rgba(255,218,120,.30)}
+.lobby-profile.frame-fire .lobby-profile-avatar::before,.profile-card.frame-fire .profile-head>div:first-child::before,.chat-avatar.frame-fire::before,.draw-avatar.frame-fire::before,.leader-avatar-wrap.frame-fire::before{border:2px solid #ff7518!important;box-shadow:0 0 9px rgba(255,81,0,.78),0 0 19px rgba(255,145,0,.30)}
+.lobby-profile.frame-lightning .lobby-profile-avatar::before,.profile-card.frame-lightning .profile-head>div:first-child::before,.chat-avatar.frame-lightning::before,.draw-avatar.frame-lightning::before,.leader-avatar-wrap.frame-lightning::before{border:2px solid #6be9ff!important;box-shadow:0 0 9px rgba(75,220,255,.78),0 0 19px rgba(92,93,255,.30)}
+.lobby-profile.frame-purple .lobby-profile-avatar::before,.profile-card.frame-purple .profile-head>div:first-child::before,.chat-avatar.frame-purple::before,.draw-avatar.frame-purple::before,.leader-avatar-wrap.frame-purple::before{border:2px solid #c65aff!important;box-shadow:0 0 9px rgba(193,50,255,.78),0 0 19px rgba(128,42,255,.30)}
+.lobby-profile.frame-king .lobby-profile-avatar::before,.profile-card.frame-king .profile-head>div:first-child::before,.chat-avatar.frame-king::before,.draw-avatar.frame-king::before,.leader-avatar-wrap.frame-king::before{border:2px solid #ffd45a!important;box-shadow:0 0 9px rgba(255,195,54,.78),0 0 20px rgba(255,156,0,.30)}
+
+/* The outer frame class is kept only as a selector; no visual effect on the card. */
+.lobby-profile.frame-premium,.lobby-profile.frame-bronze,.lobby-profile.frame-davinci,.lobby-profile.frame-picasso,.lobby-profile.frame-gold,.lobby-profile.frame-ice,.lobby-profile.frame-angel,.lobby-profile.frame-fire,.lobby-profile.frame-lightning,.lobby-profile.frame-purple,.lobby-profile.frame-king,
+.profile-card.frame-premium,.profile-card.frame-bronze,.profile-card.frame-davinci,.profile-card.frame-picasso,.profile-card.frame-gold,.profile-card.frame-ice,.profile-card.frame-angel,.profile-card.frame-fire,.profile-card.frame-lightning,.profile-card.frame-purple,.profile-card.frame-king{border-color:inherit!important}
+
+@keyframes auraSoftPulse{0%,100%{opacity:.72;transform:translate(-50%,-50%) scale(.98)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.035)}}
+@media(prefers-reduced-motion:reduce){
+ .lobby-profile[class*="frame-"] .lobby-profile-avatar::before,.profile-card[class*="frame-"] .profile-head>div:first-child::before,.chat-avatar[class*="frame-"]::before,.draw-avatar[class*="frame-"]::before,.leader-avatar-wrap[class*="frame-"]::before{animation:none!important}
+}
+'''
+
+# V10 — keep the active aura from changing the avatar/card itself.
+BASE_CSS += r'''
+.lobby-profile-avatar.frame-premium,.lobby-profile-avatar.frame-bronze,.lobby-profile-avatar.frame-davinci,.lobby-profile-avatar.frame-picasso,.lobby-profile-avatar.frame-gold,.lobby-profile-avatar.frame-ice,.lobby-profile-avatar.frame-angel,.lobby-profile-avatar.frame-fire,.lobby-profile-avatar.frame-lightning,.lobby-profile-avatar.frame-purple,.lobby-profile-avatar.frame-king,
+.profile-head>div:first-child.frame-premium,.profile-head>div:first-child.frame-bronze,.profile-head>div:first-child.frame-davinci,.profile-head>div:first-child.frame-picasso,.profile-head>div:first-child.frame-gold,.profile-head>div:first-child.frame-ice,.profile-head>div:first-child.frame-angel,.profile-head>div:first-child.frame-fire,.profile-head>div:first-child.frame-lightning,.profile-head>div:first-child.frame-purple,.profile-head>div:first-child.frame-king,
+.chat-avatar.frame-premium,.chat-avatar.frame-bronze,.chat-avatar.frame-davinci,.chat-avatar.frame-picasso,.chat-avatar.frame-gold,.chat-avatar.frame-ice,.chat-avatar.frame-angel,.chat-avatar.frame-fire,.chat-avatar.frame-lightning,.chat-avatar.frame-purple,.chat-avatar.frame-king,
+.draw-avatar.frame-premium,.draw-avatar.frame-bronze,.draw-avatar.frame-davinci,.draw-avatar.frame-picasso,.draw-avatar.frame-gold,.draw-avatar.frame-ice,.draw-avatar.frame-angel,.draw-avatar.frame-fire,.draw-avatar.frame-lightning,.draw-avatar.frame-purple,.draw-avatar.frame-king,
+.leader-avatar-wrap.frame-premium,.leader-avatar-wrap.frame-bronze,.leader-avatar-wrap.frame-davinci,.leader-avatar-wrap.frame-picasso,.leader-avatar-wrap.frame-gold,.leader-avatar-wrap.frame-ice,.leader-avatar-wrap.frame-angel,.leader-avatar-wrap.frame-fire,.leader-avatar-wrap.frame-lightning,.leader-avatar-wrap.frame-purple,.leader-avatar-wrap.frame-king{
+  border:2px solid transparent!important;
+  background:#11152d!important;
+  box-shadow:none!important;
+  animation:none!important;
+  filter:none!important;
+}
+'''
