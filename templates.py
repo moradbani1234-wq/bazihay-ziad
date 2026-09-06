@@ -3,7 +3,32 @@
 import html
 import time
 from urllib.parse import quote
-from frame_assets import GOLD_FRAME_OVERLAY_B64, ICE_FRAME_OVERLAY_B64, GOLD_FRAME_ICON_B64, ICE_FRAME_ICON_B64
+from frame_assets import GOLD_FRAME_OVERLAY_B64, ICE_FRAME_OVERLAY_B64, GOLD_FRAME_ICON_B64, ICE_FRAME_ICON_B64, ANGEL_FRAME_OVERLAY_B64, FIRE_FRAME_OVERLAY_B64, LIGHTNING_FRAME_OVERLAY_B64, PURPLE_FRAME_OVERLAY_B64, KING_FRAME_OVERLAY_B64
+
+FRAME_KEYS = {"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame"}
+
+FRAME_CLASS = {
+    "profile_frame":"frame-premium", "bronze_frame":"frame-bronze", "davinci_frame":"frame-davinci", "picasso_frame":"frame-picasso",
+    "gold_frame":"frame-gold", "ice_frame":"frame-ice", "angel_frame":"frame-angel", "fire_frame":"frame-fire",
+    "lightning_frame":"frame-lightning", "purple_frame":"frame-purple", "king_frame":"frame-king"
+}
+
+FRAME_B64 = {
+    "gold_frame": GOLD_FRAME_OVERLAY_B64, "ice_frame": ICE_FRAME_OVERLAY_B64, "angel_frame": ANGEL_FRAME_OVERLAY_B64,
+    "fire_frame": FIRE_FRAME_OVERLAY_B64, "lightning_frame": LIGHTNING_FRAME_OVERLAY_B64, "purple_frame": PURPLE_FRAME_OVERLAY_B64,
+    "king_frame": KING_FRAME_OVERLAY_B64
+}
+
+def _active_frame(prof):
+    key=str((prof or {}).get("active_frame") or "").strip()
+    return key if key in FRAME_KEYS else ""
+
+def _frame_class(active_frame):
+    return FRAME_CLASS.get(active_frame or "", "")
+
+def _frame_data_uri(active_frame):
+    b64=FRAME_B64.get(active_frame or "")
+    return f"data:image/webp;base64,{b64}" if b64 else ""
 
 BASE_CSS = """
 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
@@ -448,6 +473,22 @@ def support_page(username: str, reports: list[dict], active_bans: list[dict] | N
     </script>'''
     return page_shell('پنل پشتیبانی',body,username)
 
+def _frame_asset_css(selector):
+    # هر صفحه فقط یک نسخه از هر asset را embed می‌کند؛ پیام/بازیکن جدید فقط کلاس می‌گیرد.
+    rules=[]
+    for key,b64 in FRAME_B64.items():
+        cls=FRAME_CLASS.get(key,'')
+        if cls:
+            rules.append(f'.{selector}.{cls}::after{{background-image:url(data:image/webp;base64,{b64});}}')
+    return '<style>'+''.join(rules)+'</style>'
+
+def _chat_frame_css():
+    return _frame_asset_css('chat-avatar')
+
+def _draw_frame_css():
+    return _frame_asset_css('draw-avatar')
+
+
 def _render_messages(messages: list[dict], username: str, support=False) -> str:
     if not messages: return '<div class="chat-empty">هنوز پیامی نیست...</div>'
     out=[]
@@ -455,19 +496,25 @@ def _render_messages(messages: list[dict], username: str, support=False) -> str:
         owned = set(str(m.get("owned_items") or "").split(",")) if m.get("owned_items") else set()
         bubble = " chat-bubble-owned" if "chat_bubble" in owned else ""
         namefx = " name-effect-owned" if "name_effect" in owned else ""
+        active=str(m.get('active_frame') or '')
+        fcls=_frame_class(active)
         cls=("msg me" if m["sender"]==username else "msg")+bubble
         sender=html.escape(str(m.get("public_username") or m["sender"])); content=html.escape(m["content"])
+        av=str(m.get('avatar') or '')
+        avhtml=_avatar_html(av, cls='chat-avatar-img') if av else '<span class="chat-avatar-fallback">●</span>'
+        avatar=f'<span class="chat-avatar {fcls}">{avhtml}</span>'
         actions=''
         if m['sender']!=username: actions+=f'<button class="report-btn" onclick="openReportModal({m["sender"]!r},{m["content"]!r},\'chat\',\'\')">🚩 گزارش</button>'
         if support: actions+=f'<button class="pin-btn" onclick="pinMessage({int(m["id"])})">📌 پین</button>'
-        out.append(f'<div class="{cls}" data-id="{int(m["id"])}"><span class="sender{namefx}">{sender}</span><span class="content">{content}</span>{actions}</div>')
+        out.append(f'<div class="{cls}" data-id="{int(m["id"])}">{avatar}<span class="chat-message-body"><span class="sender{namefx}">{sender}</span><span class="content">{content}</span></span>{actions}</div>')
     return ''.join(out)
+
 
 def chat_public_page(username: str, messages: list[dict], pinned: list[dict] | None = None) -> str:
     pinned=pinned or []; support=username=='morad'
     pinned_html=''.join(f'<div class="pinned-item" data-id="{p["message_id"]}">📌 <b>@{html.escape(p["sender"])}</b> — {html.escape(p["content"])}</div>' for p in pinned) or '<div class="pinned-empty">پیام سنجاق‌شده‌ای نیست.</div>'
     pin_js="const pb=document.createElement('button');pb.className='pin-btn';pb.textContent='📌 پین';pb.onclick=()=>pinMessage(d.id);div.append(pb);" if support else ''
-    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 چت عمومی</div><a class="btn" href="/lobby">خانه</a></div><div id="pinnedBox" class="pinned-box">{pinned_html}</div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username,support)}</div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/public'),box=document.getElementById('chatBox'),me={username!r};function addMsg(d){{const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'')+((d.owned_items||[]).includes('chat_bubble')?' chat-bubble-owned':'');div.dataset.id=d.id;const s=document.createElement('span');s.className='sender';s.textContent=d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(s,c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}{pin_js}box.appendChild(div);box.scrollTop=box.scrollHeight}}function renderPinned(arr){{document.getElementById('pinnedBox').innerHTML=(arr||[]).map(p=>`<div class="pinned-item">📌 <b>@${{p.sender}}</b> — ${{p.content}}</div>`).join('')||'<div class="pinned-empty">پیام سنجاق‌شده‌ای نیست.</div>'}}ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='pinned_messages'){{renderPinned(d.messages);return}}if(d.content!==undefined)addMsg(d)}};async function pinMessage(id){{const r=await fetch('/support/pin',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{message_id:id,room:'public'}})}});const d=await r.json();if(d.ok)renderPinned(d.messages)}}function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;</script>'''
+    body=f'''{_chat_frame_css()}<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 چت عمومی</div><a class="btn" href="/lobby">خانه</a></div><div id="pinnedBox" class="pinned-box">{pinned_html}</div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username,support)}</div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/public'),box=document.getElementById('chatBox'),me={username!r};function addMsg(d){{const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'')+((d.owned_items||[]).includes('chat_bubble')?' chat-bubble-owned':'');div.dataset.id=d.id;const av=document.createElement('span');av.className='chat-avatar '+frameClass(d.active_frame);if(d.avatar){{const im=document.createElement('img');im.className='chat-avatar-img';im.src=d.avatar;av.appendChild(im)}}else av.textContent='●';const body=document.createElement('span');body.className='chat-message-body';const ss=document.createElement('span');ss.className='sender';ss.textContent=d.public_username||d.sender;const cc=document.createElement('span');cc.className='content';cc.textContent=d.content;body.append(ss,cc);div.append(av,body);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}{pin_js}box.appendChild(div);box.scrollTop=box.scrollHeight}}function frameClass(k){{const m={{profile_frame:'frame-premium',bronze_frame:'frame-bronze',davinci_frame:'frame-davinci',picasso_frame:'frame-picasso',gold_frame:'frame-gold',ice_frame:'frame-ice',angel_frame:'frame-angel',fire_frame:'frame-fire',lightning_frame:'frame-lightning',purple_frame:'frame-purple',king_frame:'frame-king'}};return m[k]||''}}function renderPinned(arr){{document.getElementById('pinnedBox').innerHTML=(arr||[]).map(p=>`<div class="pinned-item">📌 <b>@${{p.sender}}</b> — ${{p.content}}</div>`).join('')||'<div class="pinned-empty">پیام سنجاق‌شده‌ای نیست.</div>'}}ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='pinned_messages'){{renderPinned(d.messages);return}}if(d.content!==undefined)addMsg(d)}};async function pinMessage(id){{const r=await fetch('/support/pin',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{message_id:id,room:'public'}})}});const d=await r.json();if(d.ok)renderPinned(d.messages)}}function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;</script>'''
     return page_shell('چت عمومی',body,username)
 
 def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
@@ -984,36 +1031,39 @@ def _public_id(prof):
     return str(prof.get('public_username') or prof.get('username') or '')
 
 
-def _frame_overlay_html(owned):
-    # قاب تصویری فروشگاه: عکس مستقیم به‌صورت base64 داخل صفحه embed می‌شود (نه فایل جدا)
-    # تا روی هر هاستی بدون درخواست شبکه‌ی اضافه و بدون شکستن تصویر نمایش داده شود.
-    # استایل به‌صورت inline نوشته شده تا وابسته به بارگذاری شیت CSS جداگانه نباشد.
-    # هیچ متنی (طلایی/یخی) نوشته نمی‌شود؛ فقط جلوه‌ی بصری (ذرات ریز CSS، بدون تصویر اضافه => بدون لگ).
-    _st = ("position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"
-           "pointer-events:none;z-index:5;object-fit:contain;border-radius:0;"
-           "max-width:none;max-height:none;display:block;")
-    if 'gold_frame' in owned:
-        img = f'<img class="avatar-frame-img frame-img-gold" alt="" style="{_st}width:172%;height:172%" src="data:image/webp;base64,{GOLD_FRAME_OVERLAY_B64}">'
-        sparks = ''.join(f'<span class="gold-spark gold-spark-{i}"></span>' for i in (1,2,3,4))
-        return img + sparks
-    if 'ice_frame' in owned:
-        img = f'<img class="avatar-frame-img frame-img-ice" alt="" style="{_st}width:163%;height:163%" src="data:image/webp;base64,{ICE_FRAME_OVERLAY_B64}">'
-        shards = ''.join(f'<span class="ice-shard ice-shard-{i}"></span>' for i in (1,2,3,4))
-        return img + shards
-    return ''
+def _frame_overlay_html(owned, active_frame=None):
+    # فقط قاب فعال نمایش داده می‌شود؛ مالکیت با فعال‌بودن فرق دارد.
+    key = active_frame if active_frame in FRAME_KEYS else ""
+    if key in ("profile_frame","bronze_frame","davinci_frame","picasso_frame"):
+        return ""
+    b64=FRAME_B64.get(key)
+    if not b64: return ''
+    cls=FRAME_CLASS[key]
+    size={"gold_frame":"172%","ice_frame":"163%","angel_frame":"174%","fire_frame":"172%","lightning_frame":"174%","purple_frame":"174%","king_frame":"174%"}.get(key,"170%")
+    img=f'<img class="avatar-frame-img {cls}" alt="" src="data:image/webp;base64,{b64}">'
+    particles={
+        "gold_frame":''.join(f'<span class="gold-spark gold-spark-{i}"></span>' for i in (1,2,3,4)),
+        "ice_frame":''.join(f'<span class="ice-shard ice-shard-{i}"></span>' for i in (1,2,3,4)),
+        "angel_frame":''.join(f'<span class="angel-feather angel-feather-{i}"></span>' for i in (1,2,3,4)),
+        "fire_frame":''.join(f'<span class="fire-ember fire-ember-{i}"></span>' for i in (1,2,3,4,5,6)),
+        "lightning_frame":''.join(f'<span class="lightning-flash lightning-flash-{i}"></span>' for i in (1,2,3,4)),
+        "purple_frame":'<span class="purple-orbit purple-orbit-a"></span><span class="purple-orbit purple-orbit-b"></span>',
+        "king_frame":''.join(f'<span class="king-spark king-spark-{i}"></span>' for i in (1,2,3,4,5)),
+    }.get(key,'')
+    return f'<div class="frame-effect-layer {cls}" data-frame="{key}" style="--frame-size:{size}">{img}{particles}</div>'
 
 
 def profile_page(username, prof):
     prof=prof or {'username':username,'public_username':username,'bio':'','avatar':'','age':18,'wins':0,'losses':0,'draws':0,'points':0,'correct_guesses':0,'wrong_guesses':0,'support_tags':[]}
-    league=_league_data(prof); theme=league['theme']; public_id=_public_id(prof); owned=set(prof.get('owned_items') or [])
-    frame_class = 'frame-picasso' if 'picasso_frame' in owned else ('frame-gold' if 'gold_frame' in owned else ('frame-ice' if 'ice_frame' in owned else ('frame-davinci' if 'davinci_frame' in owned else ('frame-bronze' if 'bronze_frame' in owned else ('frame-premium' if 'profile_frame' in owned else '')))))
+    league=_league_data(prof); theme=league['theme']; public_id=_public_id(prof); owned=set(prof.get('owned_items') or []); active_frame=_active_frame(prof)
+    frame_class = _frame_class(active_frame)
     effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
     total=int(prof.get('correct_guesses',0) or 0)+int(prof.get('wrong_guesses',0) or 0)
     correct=round(int(prof.get('correct_guesses',0) or 0)*100/total,1) if total else 0
     wrong=round(int(prof.get('wrong_guesses',0) or 0)*100/total,1) if total else 0
     avatar_banned=bool(prof.get('profile_banned')); bio_banned=bool(prof.get('bio_banned'))
     avatar_html='<div class="avatar-hidden">●</div>' if avatar_banned else _avatar_html(prof.get('avatar') or '')
-    img_frame='' if avatar_banned else _frame_overlay_html(owned)
+    img_frame='' if avatar_banned else _frame_overlay_html(owned, active_frame)
     avatar_wrap_cls=' has-img-frame' if img_frame else ''
     avatar_wrap_style=' style="position:relative;overflow:visible"' if img_frame else ''
     is_support=prof['username'].lower()=='morad'; badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else '';
@@ -1050,23 +1100,23 @@ def profile_page(username, prof):
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
     bio='<div class="moderation-hidden">این بخش موقتاً محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get('chat_notice') else ''
-    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 
 def lobby_page(username, prof=None, wallet=None):
     prof=prof or {'username':username,'public_username':username,'bio':'','avatar':'','age':18,'wins':0,'points':0,'league':{'name':'مبتدی','theme':'league-starter'}}
-    league=_league_data(prof); theme=league['theme']; owned=set(prof.get('owned_items') or []); avatar='<div class="avatar-hidden">●</div>' if prof.get('profile_banned') else _avatar_html(prof.get('avatar') or '')
-    frame_class = 'frame-picasso' if 'picasso_frame' in owned else ('frame-gold' if 'gold_frame' in owned else ('frame-ice' if 'ice_frame' in owned else ('frame-davinci' if 'davinci_frame' in owned else ('frame-bronze' if 'bronze_frame' in owned else ('frame-premium' if 'profile_frame' in owned else '')))))
+    league=_league_data(prof); theme=league['theme']; owned=set(prof.get('owned_items') or []); active_frame=_active_frame(prof); avatar='<div class="avatar-hidden">●</div>' if prof.get('profile_banned') else _avatar_html(prof.get('avatar') or '')
+    frame_class = _frame_class(active_frame)
     effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
     name_class = 'name-glow' if 'name_effect' in owned else ''
     crown = '👑 ' if 'crown_badge' in owned else ''
-    img_frame = '' if prof.get('profile_banned') else _frame_overlay_html(owned)
+    img_frame = '' if prof.get('profile_banned') else _frame_overlay_html(owned, active_frame)
     avatar_wrap_cls = ' has-img-frame' if img_frame else ''
     avatar_wrap_style = ' style="position:relative;overflow:visible"' if img_frame else ''
     public_id=_public_id(prof); wins=int(prof.get('wins') or 0); points=int(prof.get('points') or 0); coins=int((wallet or {}).get('coins') or 0); age=int(prof.get('age') or 18)
     support_link='<a href="/support">🛡️ <b>پنل پشتیبانی</b><small>مدیریت گزارش‌ها</small></a>' if username=='morad' else ''
-    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {frame_class} {effect_class} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar{avatar_wrap_cls}"{avatar_wrap_style}>{avatar}{img_frame}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
+    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {frame_class} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar{avatar_wrap_cls}"{avatar_wrap_style}>{avatar}{img_frame}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
     return page_shell('منوی اصلی',body,username)
 
 
@@ -1074,7 +1124,12 @@ def _leader_avatar(r, cls="leader-avatar"):
     if r.get('profile_banned'):
         return f'<div class="{cls} leader-avatar-fallback">●</div>'
     raw = r.get('avatar') or ''
-    return _avatar_html(raw, cls=cls) if raw else f'<div class="{cls} leader-avatar-fallback">●</div>'
+    base = _avatar_html(raw, cls=cls) if raw else f'<div class="{cls} leader-avatar-fallback">●</div>'
+    active=_active_frame(r)
+    overlay=_frame_overlay_html(r.get('owned_items') or [], active)
+    if overlay and raw:
+        return f'<div class="leader-avatar-wrap has-img-frame">{base}{overlay}</div>'
+    return base
 
 def leaderboard_page(username, rows, by='wins'):
     value_key='points' if by=='points' else 'wins'; value_label='امتیاز' if by=='points' else 'جام'; value_icon='💎' if by=='points' else '🏆'
@@ -1172,11 +1227,11 @@ def support_page(username, reports, active_bans=None, tickets=None, receipts=Non
 
 def _drawing_battle_page(username: str, mode: int) -> str:
     title='🎨 حدس نقاشی دو نفره' if mode==2 else '🎨 نقاشی ۴ نفره'; path='/ws/drawing' if mode==2 else '/ws/drawing-multi/4'; total_rounds=6 if mode==2 else 4; duration=45 if mode==2 else 35
-    body=f'''<div class="draw-battle page-enter"><div class="draw-hero"><div><div class="draw-kicker">DRAW BATTLE • LIVE</div><h1>{title}</h1><div id="status" class="draw-status">🔌 در حال اتصال...</div></div><div class="draw-mode-badge">{mode} بازیکن</div></div><div id="queueBox" class="queue-widget"><div class="queue-spinner"></div><div class="queue-text">🔌 در حال پیدا کردن بازیکن‌ها...</div></div><div id="playersRow" class="draw-players-grid"></div><div id="roundInfo" class="draw-round-info"><span id="roundLabel">دور ۱ از {total_rounds}</span><span id="timerLabel" class="draw-timer">⏱ --</span></div><div id="previewPanel" class="draw-preview" style="display:none"><div class="preview-orb">🎨</div><div class="preview-title">آماده شو!</div><div id="previewText">موضوع برای نقاش آماده می‌شود...</div><div id="previewTimer" class="preview-count">5</div></div><div id="boardFrame" class="draw-board-frame" style="display:none"><div class="draw-board-top"><span>LIVE</span><span id="drawerLabel"></span></div><div class="draw-canvas-wrap"><canvas id="board" width="900" height="400"></canvas></div></div><div id="palette" class="draw-palette" style="display:none"></div><div id="tools" class="draw-tools" style="display:none"><button class="draw-tool active" id="penTool">✏️ قلم</button><button class="draw-tool" id="eraserTool">🧽 پاک‌کن</button><div class="draw-size-slider-wrap"><span class="draw-size-label">ضخامت</span><input type="range" id="sizeSlider" min="1" max="30" value="5"><span id="sizeValue" class="draw-size-value">5</span></div><button class="draw-tool" id="clearBtn">🧹 پاک‌کردن</button></div><div id="drawerWordBox" class="draw-word-box" style="display:none"></div><div id="drawerNotice" class="draw-notice" style="display:none"></div><button id="drawingReportBtn" class="drawing-report-btn" onclick="openDrawingReport()">🚩 گزارش نقاشی</button><div id="optionsGrid" class="draw-options" style="display:none"></div><div id="resultPanel" class="draw-result" style="display:none"></div></div><script>
+    body=f'''{_draw_frame_css()}<div class="draw-battle page-enter"><div class="draw-hero"><div><div class="draw-kicker">DRAW BATTLE • LIVE</div><h1>{title}</h1><div id="status" class="draw-status">🔌 در حال اتصال...</div></div><div class="draw-mode-badge">{mode} بازیکن</div></div><div id="queueBox" class="queue-widget"><div class="queue-spinner"></div><div class="queue-text">🔌 در حال پیدا کردن بازیکن‌ها...</div></div><div id="playersRow" class="draw-players-grid"></div><div id="roundInfo" class="draw-round-info"><span id="roundLabel">دور ۱ از {total_rounds}</span><span id="timerLabel" class="draw-timer">⏱ --</span></div><div id="previewPanel" class="draw-preview" style="display:none"><div class="preview-orb">🎨</div><div class="preview-title">آماده شو!</div><div id="previewText">موضوع برای نقاش آماده می‌شود...</div><div id="previewTimer" class="preview-count">5</div></div><div id="boardFrame" class="draw-board-frame" style="display:none"><div class="draw-board-top"><span>LIVE</span><span id="drawerLabel"></span></div><div class="draw-canvas-wrap"><canvas id="board" width="900" height="400"></canvas></div></div><div id="palette" class="draw-palette" style="display:none"></div><div id="tools" class="draw-tools" style="display:none"><button class="draw-tool active" id="penTool">✏️ قلم</button><button class="draw-tool" id="eraserTool">🧽 پاک‌کن</button><div class="draw-size-slider-wrap"><span class="draw-size-label">ضخامت</span><input type="range" id="sizeSlider" min="1" max="30" value="5"><span id="sizeValue" class="draw-size-value">5</span></div><button class="draw-tool" id="clearBtn">🧹 پاک‌کردن</button></div><div id="drawerWordBox" class="draw-word-box" style="display:none"></div><div id="drawerNotice" class="draw-notice" style="display:none"></div><button id="drawingReportBtn" class="drawing-report-btn" onclick="openDrawingReport()">🚩 گزارش نقاشی</button><div id="optionsGrid" class="draw-options" style="display:none"></div><div id="resultPanel" class="draw-result" style="display:none"></div></div><script>
     const me={username!r},MODE={mode},TOTAL_ROUNDS={total_rounds},DURATION={duration},WS_PATH={path!r},proto=location.protocol==='https:'?'wss:':'ws:';let ws=null,recon=null,intentionallyLeaving=false,timerInt=null,previewInt=null,role=null,currentColor='#111111',currentSize=5,tool='pen',drawing=false,last=null,pending=[],mediaRecorder=null,mediaChunks=[],drawingBlob=null,lastRoundVideoBlob=null,currentStrokes=[];
     const $=id=>document.getElementById(id),status=$('status'),queue=$('queueBox'),players=$('playersRow'),roundInfo=$('roundInfo'),roundLabel=$('roundLabel'),timer=$('timerLabel'),preview=$('previewPanel'),previewText=$('previewText'),previewTimer=$('previewTimer'),boardFrame=$('boardFrame'),drawerLabel=$('drawerLabel'),canvas=$('board'),ctx=canvas.getContext('2d'),palette=$('palette'),tools=$('tools'),wordBox=$('drawerWordBox'),opts=$('optionsGrid'),result=$('resultPanel'),reportBtn=$('drawingReportBtn'),drawerNotice=$('drawerNotice');
     function clearBoard(){{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);currentStrokes=[]}}clearBoard();
-    function avatarNode(p){{const w=document.createElement('div');w.className='draw-avatar';const a=p?.avatar||'';if(a.startsWith('data:image/')){{const i=document.createElement('img');i.src=a;w.appendChild(i)}}else w.textContent='●';return w}}
+    function avatarNode(p){{const w=document.createElement('div');w.className='draw-avatar '+frameClass(p?.active_frame);const a=p?.avatar||'';if(a.startsWith('data:image/')){{const i=document.createElement('img');i.src=a;w.appendChild(i)}}else w.textContent='●';return w}}function frameClass(k){{const m={{profile_frame:'frame-premium',bronze_frame:'frame-bronze',davinci_frame:'frame-davinci',picasso_frame:'frame-picasso',gold_frame:'frame-gold',ice_frame:'frame-ice',angel_frame:'frame-angel',fire_frame:'frame-fire',lightning_frame:'frame-lightning',purple_frame:'frame-purple',king_frame:'frame-king'}};return m[k]||''}}
     function renderPlayers(scores,active,drawerName,profiles){{players.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,sc])=>{{const p=(profiles||{{}})[u]||{{username:u,display_name:u,avatar:''}};const card=document.createElement('div');card.className='draw-player-card'+(u===me?' me':'')+(u===drawerName?' turn':'')+((active||[]).includes(u)?'':' out');const info=document.createElement('div');info.className='draw-player-info';const n=document.createElement('b');n.textContent=(p.owned_items||[]).includes('crown_badge')?'👑 '+(p.display_name||u):(p.display_name||u);if((p.owned_items||[]).includes('name_effect'))n.classList.add('name-effect-owned');const h=document.createElement('span');h.textContent='@'+(p.public_username||u);const score=document.createElement('strong');score.textContent='⭐ '+sc;info.append(n,h,score);card.append(avatarNode(p),info);if(p.league){{const lg=document.createElement('small');lg.className='league-mini '+p.league.theme;lg.textContent='🏆 '+p.league.name;card.append(lg)}}const rr=document.createElement('div');rr.className='draw-role';rr.textContent=u===drawerName?'✏️ نقاش':'🔎 حدس‌زن';card.append(rr);players.appendChild(card)}})}}
     function queueUI(n,needed){{queue.style.display='flex';queue.innerHTML='<div class="queue-spinner"></div><div class="queue-text">'+n+' از '+needed+' نفر آماده‌اند</div><div class="queue-sub">به‌محض تکمیل ظرفیت، رقابت شروع می‌شود ✨</div>'}}
     function countdown(sec,fn){{if(timerInt)clearInterval(timerInt);let left=Math.max(0,Math.ceil(sec));fn(left);timerInt=setInterval(()=>{{left--;fn(Math.max(0,left));if(left<=0)clearInterval(timerInt)}},1000)}}
@@ -1207,7 +1262,7 @@ def chat_private_page(username, other, messages, other_display=None):
     receipt_ui=''
     if str(other).lower()=='morad' and username.lower()!='morad':
         receipt_ui='''<div class="receipt-chat-upload"><label class="receipt-btn" for="receiptFile">🧾 ارسال رسید پرداخت</label><input id="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden><span id="receiptStatus" class="report-meta">حداکثر ۸ مگابایت</span></div>'''
-    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 @{html.escape(title_id)}</div><a class="btn" href="/messages">پیام‌ها</a></div></div><div class="chat-box" id="chatBox">{initial}</div>{receipt_ui}<div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{html.escape(other)}'),box=document.getElementById('chatBox'),me={username!r};function addMsg(d){{if(d.content===undefined)return;const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'');const s=document.createElement('span');s.className='sender';s.textContent=d.public_username||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(s,c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}box.appendChild(div);box.scrollTop=box.scrollHeight}}ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='friend_required'){{alert('💬 اول باید درخواست دوستی ارسال و پذیرفته شود.');location.href='/profile?u='+encodeURIComponent('{html.escape(other)}');return}}if(d.type==='blocked'){{alert(d.message||'این گفت‌وگو مسدود است.');return}}if(d.content!==undefined)addMsg(d)}};function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});const rf=document.getElementById('receiptFile');if(rf)rf.addEventListener('change',async()=>{{const f=rf.files[0];if(!f)return;const st=document.getElementById('receiptStatus');if(f.size>8*1024*1024){{st.textContent='❌ فایل بیشتر از ۸ مگابایت است.';rf.value='';return}}st.textContent='⏳ در حال ارسال رسید...';const fd=new FormData();fd.append('receipt',f);try{{const r=await fetch('/support/receipt',{{method:'POST',body:fd}}),d=await r.json();st.textContent=d.ok?'✅ رسید برای پشتیبانی ارسال شد.':('❌ '+(d.message||'ارسال نشد.'));if(d.ok)rf.value=''}}catch(e){{st.textContent='❌ خطا در ارسال رسید.'}}}});box.scrollTop=box.scrollHeight;</script>'''
+    body=f'''{_chat_frame_css()}<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 @{html.escape(title_id)}</div><a class="btn" href="/messages">پیام‌ها</a></div></div><div class="chat-box" id="chatBox">{initial}</div>{receipt_ui}<div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{html.escape(other)}'),box=document.getElementById('chatBox'),me={username!r};function addMsg(d){{if(d.content===undefined)return;const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'');const s=document.createElement('span');s.className='sender';s.textContent=d.public_username||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(s,c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}box.appendChild(div);box.scrollTop=box.scrollHeight}}ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='friend_required'){{alert('💬 اول باید درخواست دوستی ارسال و پذیرفته شود.');location.href='/profile?u='+encodeURIComponent('{html.escape(other)}');return}}if(d.type==='blocked'){{alert(d.message||'این گفت‌وگو مسدود است.');return}}if(d.content!==undefined)addMsg(d)}};function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});const rf=document.getElementById('receiptFile');if(rf)rf.addEventListener('change',async()=>{{const f=rf.files[0];if(!f)return;const st=document.getElementById('receiptStatus');if(f.size>8*1024*1024){{st.textContent='❌ فایل بیشتر از ۸ مگابایت است.';rf.value='';return}}st.textContent='⏳ در حال ارسال رسید...';const fd=new FormData();fd.append('receipt',f);try{{const r=await fetch('/support/receipt',{{method:'POST',body:fd}}),d=await r.json();st.textContent=d.ok?'✅ رسید برای پشتیبانی ارسال شد.':('❌ '+(d.message||'ارسال نشد.'));if(d.ok)rf.value=''}}catch(e){{st.textContent='❌ خطا در ارسال رسید.'}}}});box.scrollTop=box.scrollHeight;</script>'''
     return page_shell(f'چت با {title_id}',body,username)
 
 BASE_CSS += """
@@ -1219,43 +1274,71 @@ BASE_CSS += """
 """
 
 # ===== V4.2 FINAL OVERRIDES =====
-def shop_page(username, wallet=None, owned=None):
+def shop_page(username, wallet=None, owned=None, active_frame=''):
     w = wallet or {'coins': 500, 'diamonds': 5, 'streak': 0}
     owned = set(owned or [])
-    items = [
-        ('neon_pen','✏️','قلم نئونی','هاله درخشان قلم در بازی','250','custom'),
+    active_frame = active_frame if active_frame in FRAME_KEYS else ''
+    frame_items = [
         ('profile_frame','🖼️','قاب درخشان','قاب ویژه آواتار','400','custom'),
+        ('bronze_frame','🥉','قاب برنزی','ویژه لیگ برنزی • ۲۵۰ جام','550','league'),
+        ('davinci_frame','🔷','قاب داوینچی','ویژه لیگ داوینچی • ۷۵۰ جام','1100','league'),
+        ('picasso_frame','🔴','قاب پیکاسو','ویژه لیگ پیکاسو • ۱۵۰۰ جام','1800','league'),
+        ('gold_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{GOLD_FRAME_ICON_B64}">','قاب طلایی افسانه‌ای','تاج، ستاره و ذرات طلایی متحرک','1300','custom'),
+        ('ice_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{ICE_FRAME_ICON_B64}">','قاب یخی الماسی','کریستال‌های یخی و ذرات سرد متحرک','1300','custom'),
+        ('angel_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{ANGEL_FRAME_OVERLAY_B64}">','قاب فرشته','بال‌های نورانی با پرهای ریز در حال ریزش','1600','custom'),
+        ('fire_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{FIRE_FRAME_OVERLAY_B64}">','قاب آتشین','شعله‌های زنده و اخگرهای سبک','1800','custom'),
+        ('lightning_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{LIGHTNING_FRAME_OVERLAY_B64}">','قاب رعدوبرقی','رعد و برق‌های متحرک دور قاب','2000','custom'),
+        ('purple_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{PURPLE_FRAME_OVERLAY_B64}">','قاب سایه بنفش','هاله‌های بنفش چرخان و انرژی شیطانی','2200','custom'),
+        ('king_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{KING_FRAME_OVERLAY_B64}">','قاب پادشاهی','تاج سلطنتی با درخشش و ذرات طلایی','2500','custom'),
+    ]
+    other_items = [
+        ('neon_pen','✏️','قلم نئونی','هاله درخشان قلم در بازی','250','custom'),
         ('victory_fx','✨','افکت پیروزی','افکت ویژه نتیجه برد','650','custom'),
         ('crown_badge','👑','نشان تاج','تاج کنار نام کاربری','900','custom'),
         ('chat_bubble','💬','حباب چت','حباب ویژه پیام‌ها','300','custom'),
         ('name_effect','🌟','افکت نام','درخشش متحرک نام','500','custom'),
         ('draw_glow','🖌️','قلم نورانی','هاله ویژه تخته','450','custom'),
-        ('bronze_frame','🥉','قاب برنزی','ویژه لیگ برنزی • ۲۵۰ جام','550','league'),
         ('bronze_badge','🏅','نشان برنزی','ویژه لیگ برنزی','350','league'),
-        ('davinci_frame','🔷','قاب داوینچی','ویژه لیگ داوینچی • ۷۵۰ جام','1100','league'),
         ('davinci_effect','💠','افکت داوینچی','ویژه لیگ داوینچی','900','league'),
-        ('picasso_frame','🔴','قاب پیکاسو','ویژه لیگ پیکاسو • ۱۵۰۰ جام','1800','league'),
         ('picasso_effect','🎨','افکت پیکاسو','ویژه لیگ پیکاسو','1500','league'),
-        ('gold_frame',f'<img alt="" style="width:100%;height:100%;object-fit:contain;display:block" src="data:image/webp;base64,{GOLD_FRAME_ICON_B64}">','قاب طلایی افسانه‌ای','قاب اختصاصی دور آواتار با تاج و ستاره طلایی','1300','custom'),
-        ('ice_frame',f'<img alt="" style="width:100%;height:100%;object-fit:contain;display:block" src="data:image/webp;base64,{ICE_FRAME_ICON_B64}">','قاب یخی الماسی','قاب اختصاصی دور آواتار با کریستال‌های یخی درخشان','1300','custom')]
-    def cards(kind):
-        out=[]
-        for key,ic,name,desc,cost,k in items:
-            if k != kind: continue
-            css='store-league' if k=='league' else 'store-custom'
-            is_owned = key in owned
-            purchased_cls = ' purchased' if is_owned else ''
-            btn_html = '<button class="store-buy" disabled>✓ فعال</button>' if is_owned else f'<button class="store-buy" onclick="buyItem(\'{key}\')">خرید</button>'
-            badge_html = '<span class="shop-active-badge">✨ فعال</span>' if is_owned else ''
-            out.append(f'<div class="store-item {css}{purchased_cls}" data-item="{key}"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div>{badge_html}</div><span class="price">{cost} 🪙</span>{btn_html}</div>')
-        return ''.join(out)
+    ]
+    def item_card(item):
+        key,ic,name,desc,cost,k=item
+        is_frame=key in FRAME_KEYS
+        is_owned=key in owned
+        is_active=is_frame and active_frame==key
+        css='store-league' if k=='league' else 'store-custom'
+        purchased_cls=' purchased' if is_owned else ''
+        if is_frame and is_owned:
+            btn_label='غیرفعال' if is_active else 'فعال'
+            active_cls='is-active' if is_active else ''
+            badge_cls='is-active-badge' if is_active else 'is-owned-badge'
+            badge_text='✨ فعال' if is_active else '✓ خریداری شده'
+            btn=f'<button class="store-buy frame-toggle-btn {active_cls}" data-frame-key="{key}" onclick="toggleFrame(&quot;{key}&quot;)">{btn_label}</button>'
+            status=f'<span class="shop-active-badge {badge_cls}">{badge_text}</span>'
+            price=f'<span class="price">{cost} 🪙</span>'
+        elif is_owned:
+            btn='<button class="store-buy" disabled>✓ خریداری شده</button>'
+            status='<span class="shop-active-badge is-owned-badge">✓ خریداری شده</span>'
+            price=f'<span class="price">{cost} 🪙</span>'
+        else:
+            btn=f'<button class="store-buy" onclick="buyItem(&quot;{key}&quot;)">خرید</button>'
+            status=''
+            price=f'<span class="price">{cost} 🪙</span>'
+        frame_cls='frame-store-item' if is_frame else ''
+        return f'<div class="store-item {css}{purchased_cls} {frame_cls}" data-item="{key}"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div>{status}</div>{price}{btn}</div>'
+    def cards(kind, frames=False):
+        src=frame_items if frames else other_items
+        return ''.join(item_card(x) for x in src if x[5]==kind)
     body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • CUSTOMIZE</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div>
     <div class="card hero store-wallet"><div class="coin-bar"><span class="coin-pill">🪙 <b id="coinBalance">{int(w.get('coins',500) or 0):,}</b> سکه</span><span class="coin-pill">💎 {int(w.get('diamonds',5) or 0)} الماس</span><span class="coin-pill">🔥 {int(w.get('streak',0) or 0)} روز</span></div></div>
     <div class="card coin-pack-card"><div class="coin-pack-icon">🪙</div><h2>۱۰۰۰ سکه</h2><p>۱۰۰٬۰۰۰ تومان</p><div class="coin-pack-cardnum">💳 ۶۲۱۹۸۶۱۸۵۱۱۶۰۰۶۸</div><p>بعد از واریز، رسید را برای پشتیبانی ارسال کن.</p><a class="glow-btn receipt-shop-btn" href="/chat/private/morad">🧾 ارسال رسید</a></div>
-    <div class="card"><h2>🎨 شخصی‌سازی</h2><p class="store-section-note">خریدها با سکه انجام می‌شوند و روی حسابت باقی می‌مانند.</p>{cards('custom')}</div>
-    <div class="card"><h2>🏆 آیتم‌های مخصوص لیگ</h2><p class="store-section-note">برای خرید باید حداقل جام همان لیگ را داشته باشی.</p>{cards('league')}</div>
+    <div class="card"><h2>🖼️ قاب‌های آواتار</h2><p class="store-section-note">هر قاب فقط یک‌بار خریداری می‌شود و همیشه روی حسابت می‌ماند. فقط یک قاب می‌تواند فعال باشد؛ قاب فعال را هر زمان خواستی غیرفعال کن یا قاب دیگری را فعال کن.</p>{cards('custom',True)}</div>
+    <div class="card"><h2>🎨 شخصی‌سازی</h2><p class="store-section-note">آیتم‌های خریداری‌شده روی حساب تو باقی می‌مانند.</p>{cards('custom',False)}</div>
+    <div class="card"><h2>🏆 آیتم‌های مخصوص لیگ</h2><p class="store-section-note">برای خرید باید حداقل جام همان لیگ را داشته باشی.</p>{cards('league',False)}{cards('league',True)}</div>
     <div id="shopToast" class="shop-toast"></div><script>
-    async function buyItem(key){{const card=document.querySelector('[data-item="'+CSS.escape(key)+'"]'),btn=card?.querySelector('.store-buy');if(btn)btn.disabled=true;try{{const r=await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{document.getElementById('coinBalance').textContent=Number(d.wallet.coins||0).toLocaleString('fa-IR');if(card){{card.classList.add('purchased','activate-burst');if(btn){{btn.outerHTML='<button class="store-buy" disabled>✓ فعال</button>'}}const badgeHost=card.querySelector('.grow');if(badgeHost&&!badgeHost.querySelector('.shop-active-badge')){{const b=document.createElement('span');b.className='shop-active-badge';b.textContent='✨ فعال';badgeHost.appendChild(b)}}setTimeout(()=>card.classList.remove('activate-burst'),900)}}toast('✨ آیتم خریداری شد و فعال است');}}else if(d.status==='owned')toast('این آیتم را قبلاً داری.');else if(d.status==='league_locked')toast('🏆 این آیتم برای لیگ تو باز نشده.');else if(d.status==='not_enough')toast('🪙 سکه کافی نیست.');else toast('❌ خرید انجام نشد.')}}catch(e){{toast('❌ خطای ارتباط با فروشگاه.')}}finally{{if(btn&&!card?.classList.contains('purchased'))btn.disabled=false}}}}
+    async function buyItem(key){{const card=document.querySelector('[data-item="'+CSS.escape(key)+'"]'),btn=card?.querySelector('.store-buy');if(btn)btn.disabled=true;let d={{}};try{{const r=await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});d=await r.json();if(d.ok){{document.getElementById('coinBalance').textContent=Number(d.wallet.coins||0).toLocaleString('fa-IR');toast('✨ خرید موفق بود');setTimeout(()=>location.reload(),350)}}else if(d.status==='owned')toast('این آیتم را قبلاً داری.');else if(d.status==='league_locked')toast('🏆 این آیتم برای لیگ تو باز نشده.');else if(d.status==='not_enough')toast('🪙 سکه کافی نیست.');else toast('❌ خرید انجام نشد.')}}catch(e){{toast('❌ خطای ارتباط با فروشگاه.')}}finally{{if(btn&&!d.ok)btn.disabled=false}}}}
+    async function toggleFrame(key){{const r=await fetch('/shop/frame/toggle',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{toast(d.active_frame?'✨ قاب فعال شد':'قاب غیرفعال شد');setTimeout(()=>location.reload(),250)}}else if(d.status==='not_owned')toast('اول قاب را خریداری کن.');else toast('❌ تغییر قاب انجام نشد.')}}
     function toast(t){{const x=document.getElementById('shopToast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2200)}}
     </script>'''
     return page_shell('فروشگاه',body,username)
@@ -1267,9 +1350,9 @@ def chat_private_page(username, other, messages, other_display=None):
     receipt=''
     if str(other).lower()=='morad' and username.lower()!='morad':
         receipt='''<div class="receipt-chat-upload"><label class="receipt-btn" for="receiptFile">🧾 ارسال رسید پرداخت</label><input id="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden><span id="receiptStatus" class="report-meta">تصویر یا PDF • حداکثر ۸ مگابایت</span></div>'''
-    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 @{html.escape(title_id)} <span id="presenceDot" style="font-size:10px;color:#888">● بررسی...</span></div><a class="btn" href="/messages">پیام‌ها</a></div></div><div class="chat-box" id="chatBox">{initial}</div>{receipt}<div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنوی..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>
+    body=f'''{_chat_frame_css()}<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 @{html.escape(title_id)} <span id="presenceDot" style="font-size:10px;color:#888">● بررسی...</span></div><a class="btn" href="/messages">پیام‌ها</a></div></div><div class="chat-box" id="chatBox">{initial}</div>{receipt}<div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنوی..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>
     const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{quote(other,safe="")}'),box=document.getElementById('chatBox'),me={username!r},dot=document.getElementById('presenceDot');
-    function addMsg(d){{if(d.content===undefined)return;const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'')+((d.owned_items||[]).includes('chat_bubble')?' chat-bubble-owned':'');const s=document.createElement('span');s.className='sender';s.textContent=d.public_username||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(s,c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}box.appendChild(div);box.scrollTop=box.scrollHeight}}
+    function addMsg(d){{if(d.content===undefined)return;const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'')+((d.owned_items||[]).includes('chat_bubble')?' chat-bubble-owned':'');const av=document.createElement('span');av.className='chat-avatar '+frameClass(d.active_frame);if(d.avatar){{const im=document.createElement('img');im.className='chat-avatar-img';im.src=d.avatar;av.appendChild(im)}}else av.textContent='●';const body=document.createElement('span');body.className='chat-message-body';const s=document.createElement('span');s.className='sender';s.textContent=d.public_username||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;body.append(s,c);div.append(av,body);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}box.appendChild(div);box.scrollTop=box.scrollHeight}}function frameClass(k){{const m={{profile_frame:'frame-premium',bronze_frame:'frame-bronze',davinci_frame:'frame-davinci',picasso_frame:'frame-picasso',gold_frame:'frame-gold',ice_frame:'frame-ice',angel_frame:'frame-angel',fire_frame:'frame-fire',lightning_frame:'frame-lightning',purple_frame:'frame-purple',king_frame:'frame-king'}};return m[k]||''}}
     ws.onopen=()=>{{dot.textContent='● آنلاین';dot.style.color='#35df7a'}};ws.onclose=()=>{{dot.textContent='● اتصال قطع شد';dot.style.color='#ff6b8b'}};ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='blocked'||d.type==='friend_required'){{alert(d.message||'ابتدا درخواست دوستی را قبول کنید.');return}}if(d.content!==undefined)addMsg(d)}};
     function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v)return;if(ws.readyState!==1){{alert('⏳ اتصال چت برقرار نیست.');return}}ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});
     async function presence(){{try{{const d=await (await fetch('/presence/'+encodeURIComponent({other!r}))).json();dot.textContent=d.online?'● آنلاین':'● آفلاین';dot.style.color=d.online?'#35df7a':'#888'}}catch(e){{}}}}presence();setInterval(presence,5000);box.scrollTop=box.scrollHeight;
@@ -1357,4 +1440,66 @@ BASE_CSS += """
 @keyframes picassoPulse{from{box-shadow:0 0 14px rgba(255,74,74,.22)}to{box-shadow:0 0 34px rgba(255,74,74,.52)}}
 @keyframes itemAura{from{transform:scale(.985);opacity:.25}to{transform:scale(1);opacity:.8}}
 @keyframes crownBounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-2px) rotate(2deg)}}
+"""
+
+
+BASE_CSS += """
+/* V7 — persistent single active frame + lightweight visual effects */
+.frame-effect-layer{position:absolute!important;inset:0!important;overflow:visible!important;pointer-events:none!important;z-index:5!important}
+.frame-effect-layer .avatar-frame-img{position:absolute!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:var(--frame-size)!important;height:var(--frame-size)!important;max-width:none!important;max-height:none!important;object-fit:contain!important;border:0!important;border-radius:0!important;pointer-events:none!important;z-index:5!important}
+.frame-effect-layer.frame-fire .avatar-frame-img{animation:frameFireBreath 1.15s ease-in-out infinite alternate;transform-origin:center}
+.frame-effect-layer.frame-ice .avatar-frame-img{animation:frameIcePulse 2s ease-in-out infinite alternate}
+.frame-effect-layer.frame-lightning .avatar-frame-img{animation:frameLightningPulse 1.35s ease-in-out infinite}
+.frame-effect-layer.frame-purple .avatar-frame-img{animation:framePurplePulse 1.8s ease-in-out infinite alternate}
+.frame-effect-layer.frame-angel .avatar-frame-img{animation:frameAngelPulse 2.2s ease-in-out infinite alternate}
+.frame-effect-layer.frame-king .avatar-frame-img{animation:frameKingPulse 1.9s ease-in-out infinite alternate}
+@keyframes frameFireBreath{from{transform:translate(-50%,-50%) scale(.995);filter:brightness(1) drop-shadow(0 0 5px rgba(255,78,0,.45))}to{transform:translate(-50%,-50%) scale(1.018);filter:brightness(1.14) drop-shadow(0 0 13px rgba(255,120,0,.7))}}
+@keyframes frameIcePulse{from{filter:brightness(1) drop-shadow(0 0 5px rgba(72,205,255,.35))}to{filter:brightness(1.08) drop-shadow(0 0 14px rgba(92,225,255,.72))}}
+@keyframes frameLightningPulse{0%,100%{filter:brightness(1) drop-shadow(0 0 6px rgba(65,155,255,.45))}48%{filter:brightness(1.18) drop-shadow(0 0 17px rgba(83,211,255,.95))}52%{filter:brightness(.92) drop-shadow(0 0 5px rgba(150,78,255,.4))}}
+@keyframes framePurplePulse{from{filter:brightness(1) drop-shadow(0 0 6px rgba(180,45,255,.45))}to{filter:brightness(1.12) drop-shadow(0 0 16px rgba(235,55,255,.82))}}
+@keyframes frameAngelPulse{from{filter:brightness(1) drop-shadow(0 0 5px rgba(255,245,210,.38))}to{filter:brightness(1.1) drop-shadow(0 0 16px rgba(255,232,151,.72))}}
+@keyframes frameKingPulse{from{filter:brightness(1) drop-shadow(0 0 6px rgba(255,185,40,.42))}to{filter:brightness(1.1) drop-shadow(0 0 17px rgba(255,211,79,.78))}}
+.frame-effect-layer .fire-ember,.frame-effect-layer .gold-spark,.frame-effect-layer .ice-shard,.frame-effect-layer .lightning-flash,.frame-effect-layer .angel-feather,.frame-effect-layer .king-spark,.frame-effect-layer .purple-orbit,.frame-effect-layer .ice-mist{position:absolute;display:block;pointer-events:none;z-index:7}
+.fire-ember{width:4px;height:7px;border-radius:60% 40% 60% 40%;background:linear-gradient(180deg,#fff4a8,#ff7b16,#e42d0c);box-shadow:0 0 7px rgba(255,83,20,.8);animation:fireEmber 1.8s ease-out infinite}
+.fire-ember-1{left:12%;top:68%}.fire-ember-2{left:83%;top:52%;animation-delay:.25s}.fire-ember-3{left:22%;top:16%;animation-delay:.5s}.fire-ember-4{left:77%;top:18%;animation-delay:.8s}.fire-ember-5{left:34%;top:91%;animation-delay:1.05s}.fire-ember-6{left:66%;top:89%;animation-delay:1.35s}
+@keyframes fireEmber{0%{opacity:0;transform:translateY(5px) scale(.4) rotate(0)}20%{opacity:1}100%{opacity:0;transform:translateY(-20px) translateX(7px) scale(1) rotate(35deg)}}
+.ice-mist{width:22%;height:8%;border-radius:50%;background:radial-gradient(ellipse,rgba(213,249,255,.28),transparent 72%);filter:blur(2px);opacity:.2;animation:iceMist 2.8s ease-in-out infinite}
+.ice-mist-a{left:6%;top:25%}.ice-mist-b{right:5%;top:62%;animation-delay:1.4s}
+@keyframes iceMist{0%,100%{opacity:.05;transform:translateY(3px) scale(.8)}50%{opacity:.5;transform:translateY(-9px) scale(1.15)}}
+.ice-shard{width:3px;height:10px;border-radius:2px;background:linear-gradient(180deg,#f3ffff,#58d9ff);box-shadow:0 0 5px rgba(112,224,255,.8);animation:iceShard2 2.7s ease-in infinite}
+.ice-shard-1{left:15%;top:12%}.ice-shard-2{left:82%;top:10%;animation-delay:.7s}.ice-shard-3{left:27%;top:86%;animation-delay:1.4s}.ice-shard-4{left:70%;top:88%;animation-delay:2s}
+@keyframes iceShard2{0%{opacity:0;transform:translateY(-2px) rotate(0)}20%{opacity:1}100%{opacity:0;transform:translateY(20px) rotate(18deg)}}
+.lightning-flash{width:2px;height:18px;background:linear-gradient(#fff,#6deaff,#8d54ff);box-shadow:0 0 8px rgba(75,210,255,.9);opacity:0;animation:boltFlash 1.55s steps(2,end) infinite}
+.lightning-flash-1{left:18%;top:20%}.lightning-flash-2{right:14%;top:35%;animation-delay:.45s}.lightning-flash-3{left:34%;bottom:8%;animation-delay:.8s}.lightning-flash-4{right:31%;bottom:13%;animation-delay:1.15s}
+@keyframes boltFlash{0%,72%,100%{opacity:0;transform:scaleY(.6)}76%{opacity:1;transform:scaleY(1.2)}79%{opacity:.15}82%{opacity:1;transform:scaleY(1)}}
+.angel-feather{width:7px;height:14px;border-radius:90% 15% 90% 15%;background:linear-gradient(135deg,#fff,#dbeeff);box-shadow:0 0 5px rgba(255,255,255,.55);opacity:0;transform:rotate(35deg)}
+.angel-feather-1{left:20%;top:30%;animation:angelFeather 3.4s linear infinite}.angel-feather-2{left:75%;top:20%;animation:angelFeather 3.4s linear .8s infinite}.angel-feather-3{left:31%;top:75%;animation:angelFeather 3.4s linear 1.6s infinite}.angel-feather-4{left:67%;top:68%;animation:angelFeather 3.4s linear 2.4s infinite}
+@keyframes angelFeather{0%{opacity:0;transform:translateY(-4px) rotate(25deg) scale(.65)}18%{opacity:.95}100%{opacity:0;transform:translateY(28px) translateX(12px) rotate(105deg) scale(.85)}}
+.purple-orbit{inset:10%;border:1px solid rgba(219,79,255,.38);border-left-color:transparent;border-right-color:transparent;border-radius:50%;animation:purpleOrbit 3.8s linear infinite;box-shadow:0 0 12px rgba(193,51,255,.22)}
+.purple-orbit-b{inset:18%;animation-duration:5.5s;animation-direction:reverse;border-color:rgba(255,65,180,.26);border-top-color:transparent}
+@keyframes purpleOrbit{to{transform:rotate(360deg)}}
+.king-spark{width:4px;height:4px;border-radius:50%;background:#fff4b0;box-shadow:0 0 7px #ffd45a;opacity:0;animation:kingSpark 2s ease-in-out infinite}
+.king-spark-1{left:16%;top:19%}.king-spark-2{left:81%;top:24%;animation-delay:.45s}.king-spark-3{left:23%;top:80%;animation-delay:.9s}.king-spark-4{left:76%;top:79%;animation-delay:1.35s}.king-spark-5{left:50%;top:8%;animation-delay:1.7s}
+@keyframes kingSpark{0%,100%{opacity:0;transform:scale(.4)}45%{opacity:1;transform:scale(1.4)}70%{opacity:.2;transform:scale(.7)}}
+
+.leader-avatar-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:visible}.leader-avatar-wrap .frame-effect-layer{inset:0!important}.leader-avatar-wrap .leader-avatar{position:relative;z-index:1}
+.chat-avatar{position:relative;width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:grid;place-items:center;background:#11152d;border:2px solid #7650ff;overflow:visible;font-size:14px}
+.chat-avatar::after,.draw-avatar::after{content:"";position:absolute;inset:-34%;background-repeat:no-repeat;background-position:center;background-size:contain;pointer-events:none;z-index:3}
+.chat-avatar-img,.draw-avatar img{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.chat-avatar.frame-premium,.draw-avatar.frame-premium{border-color:#7c4dff;box-shadow:0 0 10px rgba(124,77,255,.45)}
+.chat-avatar.frame-bronze,.draw-avatar.frame-bronze{border-color:#cd7f32;box-shadow:0 0 10px rgba(205,127,50,.42)}
+.chat-avatar.frame-davinci,.draw-avatar.frame-davinci{border-color:#32d9d0;box-shadow:0 0 10px rgba(50,217,208,.42)}
+.chat-avatar.frame-picasso,.draw-avatar.frame-picasso{border-color:#ff4a4a;box-shadow:0 0 10px rgba(255,74,74,.42)}
+.chat-avatar.frame-gold,.draw-avatar.frame-gold{border-color:#ffd75a;box-shadow:0 0 12px rgba(255,215,90,.5)}
+.chat-avatar.frame-ice,.draw-avatar.frame-ice{border-color:#52d6ff;box-shadow:0 0 12px rgba(82,214,255,.55)}
+.chat-avatar.frame-angel,.draw-avatar.frame-angel{border-color:#fff;box-shadow:0 0 13px rgba(255,238,177,.55)}
+.chat-avatar.frame-fire,.draw-avatar.frame-fire{border-color:#ff6a19;box-shadow:0 0 14px rgba(255,82,20,.62)}
+.chat-avatar.frame-lightning,.draw-avatar.frame-lightning{border-color:#4adfff;box-shadow:0 0 15px rgba(65,185,255,.7)}
+.chat-avatar.frame-purple,.draw-avatar.frame-purple{border-color:#d04cff;box-shadow:0 0 15px rgba(193,50,255,.65)}
+.chat-avatar.frame-king,.draw-avatar.frame-king{border-color:#ffd45a;box-shadow:0 0 15px rgba(255,195,54,.62)}
+.chat-message-body{min-width:0;display:flex;flex-direction:column}.msg{display:flex;align-items:flex-start;gap:7px}.msg .chat-message-body{max-width:calc(100% - 42px)}.msg .sender{margin-bottom:1px}.chat-avatar-fallback{opacity:.7}
+.draw-avatar{position:relative;overflow:visible!important;z-index:1}
+.frame-store-item.purchased{border-color:rgba(39,216,173,.5)}.frame-toggle-btn{min-width:66px}.frame-toggle-btn.is-active{background:linear-gradient(135deg,#ff4fca,#754cff)!important;box-shadow:0 0 14px rgba(255,79,202,.32)}.frame-store-item .is-owned-badge{opacity:.65}.frame-store-item .is-active-badge{background:linear-gradient(135deg,#27d8ad,#19b8ff);color:#04231c;box-shadow:0 0 13px rgba(39,216,173,.28)}
+@media(max-width:600px){.chat-avatar{width:30px;height:30px;flex-basis:30px}.chat-avatar::after{inset:-43%}.msg .chat-message-body{max-width:calc(100% - 38px)}}
+@media(prefers-reduced-motion:reduce){.frame-effect-layer .avatar-frame-img,.fire-ember,.ice-mist,.ice-shard,.lightning-flash,.angel-feather,.purple-orbit,.king-spark{animation:none!important}.lightning-flash,.angel-feather,.fire-ember,.king-spark{opacity:.7!important}}
 """

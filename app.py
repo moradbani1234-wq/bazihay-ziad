@@ -269,6 +269,11 @@ SHOP_CATALOG = {
     "picasso_effect": {"cost":1500, "type":"league", "min_trophies":1500},
     "gold_frame": {"cost":1300, "type":"custom"},
     "ice_frame": {"cost":1300, "type":"custom"},
+    "angel_frame": {"cost":1600, "type":"custom"},
+    "fire_frame": {"cost":1800, "type":"custom"},
+    "lightning_frame": {"cost":2000, "type":"custom"},
+    "purple_frame": {"cost":2200, "type":"custom"},
+    "king_frame": {"cost":2500, "type":"custom"},
 }
 
 @app.post("/shop/buy")
@@ -287,6 +292,23 @@ async def shop_buy(request: Request):
             return {"ok":False,"status":"league_locked","message":"این آیتم مخصوص لیگ بالاتر است."}
     ok,status,w=await db.buy_item(username,key,cost)
     return {"ok":ok,"status":status,"wallet":w}
+
+@app.post("/shop/frame/toggle")
+async def shop_frame_toggle(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); key=str(data.get("item_key") or "").strip()
+    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame"}
+    if key not in frame_keys: return {"ok":False,"status":"invalid_item"}
+    prof=await db.profile(username) or {}
+    owned=set(prof.get("owned_items") or [])
+    if key not in owned: return {"ok":False,"status":"not_owned"}
+    if (prof.get("active_frame") or "") == key:
+        ok,status=await db.set_active_frame(username,"")
+    else:
+        ok,status=await db.set_active_frame(username,key)
+    prof=await db.profile(username) or {}
+    return {"ok":ok,"status":status,"active_frame":prof.get("active_frame") or ""}
 
 @app.get("/notifications")
 async def notifications(request: Request):
@@ -366,7 +388,8 @@ async def support_adjust(request: Request):
     username=_require_login(request)
     if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
     data=await request.json(); target=await db.resolve_username(str(data.get("target") or "").strip()[:64])
-    if not target or target.lower()=="morad" or not await db.get_user(target): return {"ok":False,"error":"invalid"}
+    if not target or not await db.get_user(target): return {"ok":False,"error":"invalid"}
+    if target.lower()=="morad" and username.lower()!="morad": return {"ok":False,"error":"invalid"}
     try: coins=int(data.get("coins") or 0); trophies=int(data.get("trophies") or 0)
     except Exception: return {"ok":False,"error":"invalid"}
     if abs(coins)>100000000 or abs(trophies)>100000: return {"ok":False,"error":"too_large"}
@@ -703,7 +726,8 @@ async def lobby(request: Request):
 async def shop_page(request: Request):
     username=_require_login(request)
     if not username: return RedirectResponse("/login")
-    return tpl.shop_page(username, await db.wallet_for(username), await db.owned_items_for(username))
+    prof=await db.profile(username) or {}
+    return tpl.shop_page(username, await db.wallet_for(username), await db.owned_items_for(username), prof.get("active_frame") or "")
 
 @app.get("/games", response_class=HTMLResponse)
 async def games_page(request: Request):
@@ -767,7 +791,7 @@ class ChatManager:
     async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message("public", sender, content, reply_to_id)
         prof = await db.profile(sender)
-        payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
+        payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender), "active_frame": (prof or {}).get("active_frame", ""), "owned_items": list((prof or {}).get("owned_items") or [])}
         dead = []
         for ws in self.public_conns:
             try:
@@ -800,7 +824,7 @@ class ChatManager:
         except Exception:
             pass
         prof = await db.profile(sender)
-        payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
+        payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender), "active_frame": (prof or {}).get("active_frame", ""), "owned_items": list((prof or {}).get("owned_items") or [])}
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -1037,6 +1061,7 @@ class DrawingBattleManager:
                 "points": int(prof.get("points") or 0),
                 "league": prof.get("league") or await db.league_for_trophies(prof.get("wins") or 0),
                 "owned_items": list(prof.get("owned_items") or []),
+                "active_frame": prof.get("active_frame") or "",
             }
         return out
 
