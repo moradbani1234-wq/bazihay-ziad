@@ -126,7 +126,16 @@ async def init_db():
             created_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'new'
         )""")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_support_receipts_status ON support_receipts(status,id)")
-        await db.execute("CREATE TABLE IF NOT EXISTS report_media (report_id INTEGER PRIMARY KEY, mime_type TEXT NOT NULL, filename TEXT NOT NULL DEFAULT '', blob BLOB NOT NULL, created_at INTEGER NOT NULL)")
+        cur=await db.execute("PRAGMA table_info(report_media)")
+        media_cols=[r[1] for r in await cur.fetchall()]
+        if media_cols and 'id' not in media_cols:
+            await db.execute("ALTER TABLE report_media RENAME TO report_media_legacy")
+            await db.execute("CREATE TABLE report_media (id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER NOT NULL, mime_type TEXT NOT NULL, filename TEXT NOT NULL DEFAULT '', blob BLOB NOT NULL, created_at INTEGER NOT NULL)")
+            await db.execute("INSERT INTO report_media(report_id,mime_type,filename,blob,created_at) SELECT report_id,mime_type,filename,blob,created_at FROM report_media_legacy")
+            await db.execute("DROP TABLE report_media_legacy")
+        else:
+            await db.execute("CREATE TABLE IF NOT EXISTS report_media (id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER NOT NULL, mime_type TEXT NOT NULL, filename TEXT NOT NULL DEFAULT '', blob BLOB NOT NULL, created_at INTEGER NOT NULL)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_report_media_report ON report_media(report_id,created_at)")
         await db.commit()
 
 async def create_user(username, password_hash, salt, is_support=False):
@@ -171,7 +180,8 @@ async def get_recent_messages(room,limit=50):
         db.row_factory=aiosqlite.Row
         cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,
                                 CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=m.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
-                                m.sender display_name,COALESCE(u.public_username,u.username) public_username
+                                m.sender display_name,COALESCE(u.public_username,u.username) public_username,
+                                (SELECT group_concat(oi.item_key, ',') FROM owned_items oi WHERE oi.username=m.sender) AS owned_items
                              FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? ORDER BY m.id DESC LIMIT ?""", (int(time.time()),room,limit))
         return [dict(r) for r in reversed(await cur.fetchall())]
 
@@ -218,22 +228,27 @@ async def create_report(reporter,target,context,content,attachment=None,category
 
 async def save_report_media(report_id, mime_type, filename, blob):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("INSERT OR REPLACE INTO report_media(report_id,mime_type,filename,blob,created_at) VALUES(?,?,?,?,?)",(int(report_id),str(mime_type)[:100],str(filename or '')[:180],blob,int(time.time())))
+        await db.execute("INSERT INTO report_media(report_id,mime_type,filename,blob,created_at) VALUES(?,?,?,?,?)",(int(report_id),str(mime_type)[:100],str(filename or '')[:180],blob,int(time.time())))
         await db.commit()
 
-async def get_report_media(report_id):
+async def get_report_media(report_id, mime_type=None):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("SELECT * FROM report_media WHERE report_id=?",(int(report_id),))
+        if mime_type:
+            cur=await db.execute("SELECT * FROM report_media WHERE report_id=? AND mime_type=? ORDER BY created_at DESC LIMIT 1",(int(report_id),str(mime_type)))
+        else:
+            cur=await db.execute("SELECT * FROM report_media WHERE report_id=? ORDER BY CASE WHEN mime_type LIKE 'video/%' THEN 0 ELSE 1 END, created_at DESC LIMIT 1",(int(report_id),))
         r=await cur.fetchone()
         return dict(r) if r else None
 
 async def get_reports(limit=100):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT r.*, rm.mime_type AS media_mime, rm.filename AS media_filename
-                              FROM reports r LEFT JOIN report_media rm ON rm.report_id=r.id
-                              ORDER BY r.id DESC LIMIT ?""",(limit,))
+        cur=await db.execute("""SELECT r.*,
+                               (SELECT rm.mime_type FROM report_media rm WHERE rm.report_id=r.id AND rm.mime_type LIKE 'video/%' ORDER BY rm.created_at DESC LIMIT 1) AS media_mime,
+                               (SELECT rm.filename FROM report_media rm WHERE rm.report_id=r.id AND rm.mime_type LIKE 'video/%' ORDER BY rm.created_at DESC LIMIT 1) AS media_filename,
+                               (SELECT rm.mime_type FROM report_media rm WHERE rm.report_id=r.id AND rm.mime_type='application/json' ORDER BY rm.created_at DESC LIMIT 1) AS replay_mime
+                              FROM reports r ORDER BY r.id DESC LIMIT ?""",(limit,))
         return [dict(r) for r in await cur.fetchall()]
 
 async def delete_report(report_id):
@@ -363,6 +378,8 @@ async def profile(username):
         if not r: return None
         out=dict(r)
         out["league"]=await league_for_trophies(out.get("wins",0))
+        cur2=await db.execute("SELECT item_key FROM owned_items WHERE username=? ORDER BY purchased_at DESC", (out["username"],))
+        out["owned_items"]=[row[0] for row in await cur2.fetchall()]
         return out
 
 
@@ -371,7 +388,8 @@ async def get_messages_after(room, after_id=0, limit=100):
         db.row_factory=aiosqlite.Row
         cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,
                               CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=m.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
-                              m.sender display_name,COALESCE(u.public_username,u.username) public_username
+                              m.sender display_name,COALESCE(u.public_username,u.username) public_username,
+                              (SELECT group_concat(oi.item_key, ',') FROM owned_items oi WHERE oi.username=m.sender) AS owned_items
                               FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? AND m.id>? ORDER BY m.id ASC LIMIT ?""", (int(time.time()),room, int(after_id), limit))
         return [dict(r) for r in await cur.fetchall()]
 

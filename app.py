@@ -189,14 +189,22 @@ async def report_drawing(request: Request):
     if media and hasattr(media,"read"):
         blob=await media.read()
         mime=str(getattr(media,"content_type","") or "video/webm")
-        if blob and len(blob)<=8*1024*1024:
+        if blob and len(blob)<=16*1024*1024:
             await db.save_report_media(rid,mime,getattr(media,"filename","") or "drawing.webm",blob)
             saved_video=True
     drawing_data=str(form.get("drawing_data") or "")
-    if not saved_video and drawing_data and len(drawing_data)<=250000:
+    if drawing_data and len(drawing_data)<=350000:
         await db.save_report_media(rid,"application/json","drawing-replay.json",drawing_data.encode("utf-8"))
     await db.create_notification("morad","report","🚩 گزارش نقاشی جدید",f"@{username} نقاشی @{target} را گزارش کرده است.",str(rid))
     return {"ok":True,"report_id":rid}
+
+@app.get("/support/report/{report_id}/replay")
+async def support_report_replay(request: Request, report_id:int):
+    username=_require_login(request)
+    if not username or not _is_support(username): return Response(status_code=403)
+    media=await db.get_report_media(report_id, mime_type="application/json")
+    if not media: return Response(status_code=404)
+    return Response(content=media["blob"], media_type="application/json", headers={"Cache-Control":"no-store"})
 
 @app.get("/support/report/{report_id}/media")
 async def support_report_media(request: Request, report_id:int):
@@ -503,8 +511,6 @@ async def profile_query_page(request: Request, u: str = ""):
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
-    if prof["profile_banned"] and target.lower() != "morad":
-        return tpl.restricted_profile_page(username, prof["username"])
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     prof["support_tags"] = await db.tags_for(prof["username"])
     prof["friend_status"] = await db.friend_status(username, prof["username"])
@@ -524,8 +530,6 @@ async def profile_page(request: Request, target: str):
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
-    if prof["profile_banned"] and target.lower() != "morad":
-        return tpl.restricted_profile_page(username, prof["username"])
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     prof["support_tags"] = await db.tags_for(prof["username"])
     prof["friend_status"] = await db.friend_status(username, prof["username"])
@@ -930,7 +934,8 @@ async def chat_private(request: Request, other: str):
     if blocked: return blocked
     other = await db.resolve_username(other) or other
     if not await db.get_user(other): return HTMLResponse("کاربر پیدا نشد.", status_code=404)
-    if not _is_support(username):
+    is_support_chat=(username.lower()=='morad' or other.lower()=='morad')
+    if not is_support_chat and not _is_support(username):
         if await db.any_block(username, other):
             return HTMLResponse("این کاربر را بلاک کرده‌ای یا او شما را بلاک کرده است.", status_code=403)
         if await db.friend_status(username, other) != "friends":
@@ -953,7 +958,8 @@ async def ws_chat_private(websocket: WebSocket, other: str):
     if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return
-    if not _is_support(username):
+    is_support_chat=(username.lower()=='morad' or other.lower()=='morad')
+    if not is_support_chat and not _is_support(username):
         if await db.any_block(username, other) or await db.friend_status(username, other) != "friends":
             await websocket.close(code=4003)
             return
@@ -970,10 +976,10 @@ async def ws_chat_private(websocket: WebSocket, other: str):
                 if not _is_support(username) and await _ban_for(username, "chat"):
                     await websocket.send_json({"type":"banned","message":"دسترسی چت شما موقتاً محدود است."})
                     continue
-                if not _is_support(username) and await db.any_block(username, other):
+                if not is_support_chat and not _is_support(username) and await db.any_block(username, other):
                     await websocket.send_json({"type":"blocked","message":"این گفت‌وگو به‌دلیل بلاک بودن یکی از طرفین در دسترس نیست."})
                     continue
-                if not _is_support(username) and await db.friend_status(username, other) != "friends":
+                if not is_support_chat and not _is_support(username) and await db.friend_status(username, other) != "friends":
                     await websocket.send_json({"type":"friend_required","message":"برای پیام دادن اول باید دوست باشید."})
                     continue
                 await chat_manager.broadcast_private(room, username, content[:500], data.get("reply_to_id"))
@@ -1022,6 +1028,7 @@ class DrawingBattleManager:
                 "wins": int(prof.get("wins") or 0),
                 "points": int(prof.get("points") or 0),
                 "league": prof.get("league") or await db.league_for_trophies(prof.get("wins") or 0),
+                "owned_items": list(prof.get("owned_items") or []),
             }
         return out
 
