@@ -288,8 +288,11 @@ async def shop_buy(request: Request):
     if item.get("type")=="league":
         prof=await db.profile(username) or {}
         trophies=int(prof.get("wins",0) or 0)
-        if trophies < int(item.get("min_trophies",0)):
-            return {"ok":False,"status":"league_locked","message":"این آیتم مخصوص لیگ بالاتر است."}
+        league=await db.league_for_trophies(trophies)
+        league_key=str(league.get("key") or "")
+        required={250:"bronze",750:"davinci",1500:"picasso"}.get(int(item.get("min_trophies",0)))
+        if trophies < int(item.get("min_trophies",0)) or (required and league_key != required):
+            return {"ok":False,"status":"league_locked","message":"این آیتم فقط برای همان لیگ قابل استفاده است."}
     ok,status,w=await db.buy_item(username,key,cost)
     return {"ok":ok,"status":status,"wallet":w}
 
@@ -303,6 +306,11 @@ async def shop_frame_toggle(request: Request):
     prof=await db.profile(username) or {}
     owned=set(prof.get("owned_items") or [])
     if key not in owned: return {"ok":False,"status":"not_owned"}
+    league_required={"bronze_frame":"bronze","davinci_frame":"davinci","picasso_frame":"picasso"}.get(key)
+    if league_required:
+        league=await db.league_for_trophies(int(prof.get("wins",0) or 0))
+        if str(league.get("key") or "") != league_required:
+            return {"ok":False,"status":"league_locked","message":"هاله این لیگ فقط در همان لیگ قابل فعال‌سازی است."}
     if (prof.get("active_frame") or "") == key:
         ok,status=await db.set_active_frame(username,"")
     else:
