@@ -345,15 +345,20 @@ def lobby_page(username: str, prof=None, wallet=None) -> str:
     wins = int(prof.get("wins") or 0)
     points = int(prof.get("points") or 0)
     coins = int((wallet or {}).get("coins", 0) or 0)
+    owned=set(prof.get("owned_items") or [])
+    frame_class = 'frame-davinci' if 'davinci_frame' in owned else ('frame-picasso' if 'picasso_frame' in owned else ('frame-bronze' if 'bronze_frame' in owned else ('frame-premium' if 'profile_frame' in owned else '')))
+    effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
+    name_class = 'name-glow' if 'name_effect' in owned else ''
+    crown = '👑 ' if 'crown_badge' in owned else ''
     body=f"""<div class="lobby-bg page-enter">
       <div class="lobby-topbar">
         <div><div class="lobby-kicker">DRAW BATTLE</div><div class="lobby-title">تخته گچی ⚡</div></div>
         <div style="display:flex;gap:7px;align-items:center"><a class="lobby-settings" href="/settings" aria-label="تنظیمات">⚙️</a>{("<a class=\"lobby-settings\" href=\"/support\" aria-label=\"پنل پشتیبانی\">🛡️</a>" if username == "morad" else "")}</div>
       </div>
-      <a class="lobby-profile hero" href="/profile?u={quote(username,safe='')}">
+      <a class="lobby-profile hero {frame_class} {effect_class}" href="/profile?u={quote(username,safe='')}">
         <div class="lobby-profile-avatar">{avatar_html}</div>
         <div class="lobby-profile-info">
-          <div class="lobby-profile-name">@{html.escape(username)}</div>
+          <div class="lobby-profile-name {name_class}">{crown}@{html.escape(username)}</div>
           <div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div>
         </div>
         <div class="lobby-profile-arrow">‹</div>
@@ -446,11 +451,15 @@ def _render_messages(messages: list[dict], username: str, support=False) -> str:
     if not messages: return '<div class="chat-empty">هنوز پیامی نیست...</div>'
     out=[]
     for m in messages:
-        cls="msg me" if m["sender"]==username else "msg"; sender=html.escape(str(m.get("public_username") or m["sender"])); content=html.escape(m["content"])
+        owned = set(str(m.get("owned_items") or "").split(",")) if m.get("owned_items") else set()
+        bubble = " chat-bubble-owned" if "chat_bubble" in owned else ""
+        namefx = " name-effect-owned" if "name_effect" in owned else ""
+        cls=("msg me" if m["sender"]==username else "msg")+bubble
+        sender=html.escape(str(m.get("public_username") or m["sender"])); content=html.escape(m["content"])
         actions=''
         if m['sender']!=username: actions+=f'<button class="report-btn" onclick="openReportModal({m["sender"]!r},{m["content"]!r},\'chat\',\'\')">🚩 گزارش</button>'
         if support: actions+=f'<button class="pin-btn" onclick="pinMessage({int(m["id"])})">📌 پین</button>'
-        out.append(f'<div class="{cls}" data-id="{int(m["id"])}"><span class="sender">{sender}</span><span class="content">{content}</span>{actions}</div>')
+        out.append(f'<div class="{cls}" data-id="{int(m["id"])}"><span class="sender{namefx}">{sender}</span><span class="content">{content}</span>{actions}</div>')
     return ''.join(out)
 
 def chat_public_page(username: str, messages: list[dict], pinned: list[dict] | None = None) -> str:
@@ -492,7 +501,7 @@ def _drawing_battle_page(username: str, mode: int) -> str:
     function queueUI(n,needed){{queue.style.display='flex';let dots='';for(let i=0;i<needed;i++)dots+='<i class="queue-dot'+(i<n?' filled':'')+'"></i>';queue.innerHTML='<div class="queue-spinner"></div><div class="queue-dots">'+dots+'</div><div class="queue-text">'+n+' از '+needed+' نفر آماده‌اند</div><div class="queue-sub">به‌محض تکمیل ظرفیت، رقابت شروع می‌شود ✨</div>'}}
     function countdown(sec,fn,clearOld=true){{if(clearOld&&timerInt)clearInterval(timerInt);let left=Math.max(0,Math.ceil(sec));fn(left);timerInt=setInterval(()=>{{left--;fn(Math.max(0,left));if(left<=0)clearInterval(timerInt)}},1000)}}
     function previewCountdown(sec){{if(previewInt)clearInterval(previewInt);let left=Math.max(0,Math.ceil(sec));previewTimer.textContent=left;previewInt=setInterval(()=>{{left--;previewTimer.textContent=Math.max(0,left);if(left<=0)clearInterval(previewInt)}},1000)}}
-    function paint(x0,y0,x1,y1,color,size){{ctx.strokeStyle=color||'#20163a';ctx.lineWidth=Math.max(1,Math.min(30,Number(size)||5));ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0*canvas.width,y0*canvas.height);ctx.lineTo(x1*canvas.width,y1*canvas.height);ctx.stroke()}}
+    function paint(x0,y0,x1,y1,color,size){{const neon=((window.__profiles?.[me]?.owned_items||[]).includes('neon_pen'));ctx.save();ctx.strokeStyle=color||'#20163a';ctx.lineWidth=Math.max(1,Math.min(30,Number(size)||5));ctx.lineCap='round';ctx.shadowBlur=neon?12:0;ctx.shadowColor=neon?(color||'#00e5ff'):'transparent';ctx.beginPath();ctx.moveTo(x0*canvas.width,y0*canvas.height);ctx.lineTo(x1*canvas.width,y1*canvas.height);ctx.stroke();ctx.restore()}}
     function pos(e){{const r=canvas.getBoundingClientRect();return {{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}}}}
     function sendPending(){{if(pending.length&&ws?.readyState===1){{ws.send(JSON.stringify({{type:'draw_batch',segments:pending}}));pending=[]}}}}
     canvas.addEventListener('pointerdown',e=>{{if(role!=='drawer')return;drawing=true;canvas.setPointerCapture(e.pointerId);last=pos(e)}});canvas.addEventListener('pointermove',e=>{{if(role!=='drawer'||!drawing)return;const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ce of evs){{const p=pos(ce);const color=tool==='eraser'?'#fff':currentColor;paint(last.x,last.y,p.x,p.y,color,currentSize);pending.push({{x0:last.x,y0:last.y,x1:p.x,y1:p.y,color,size:currentSize}});last=p}}if(pending.length>=8)sendPending()}});window.addEventListener('pointerup',()=>{{drawing=false;sendPending()}});
@@ -977,13 +986,18 @@ def _public_id(prof):
 def profile_page(username, prof):
     prof=prof or {'username':username,'public_username':username,'bio':'','avatar':'','age':18,'wins':0,'losses':0,'draws':0,'points':0,'correct_guesses':0,'wrong_guesses':0,'support_tags':[]}
     league=_league_data(prof); theme=league['theme']; public_id=_public_id(prof); owned=set(prof.get('owned_items') or [])
+    frame_class = 'frame-davinci' if 'davinci_frame' in owned else ('frame-picasso' if 'picasso_frame' in owned else ('frame-bronze' if 'bronze_frame' in owned else ('frame-premium' if 'profile_frame' in owned else '')))
+    effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
     total=int(prof.get('correct_guesses',0) or 0)+int(prof.get('wrong_guesses',0) or 0)
     correct=round(int(prof.get('correct_guesses',0) or 0)*100/total,1) if total else 0
     wrong=round(int(prof.get('wrong_guesses',0) or 0)*100/total,1) if total else 0
     avatar_banned=bool(prof.get('profile_banned')); bio_banned=bool(prof.get('bio_banned'))
     avatar_html='<div class="avatar-hidden">●</div>' if avatar_banned else _avatar_html(prof.get('avatar') or '')
     is_support=prof['username'].lower()=='morad'; badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else '';
-    if 'crown_badge' in owned and not is_support: badge += '<div class="shop-badge">👑 ویژه</div>'
+    if 'crown_badge' in owned and not is_support: badge += '<div class="shop-badge crown-owned">👑 ویژه</div>'
+    if 'bronze_badge' in owned: badge += '<div class="shop-badge bronze-owned">🥉 برنزی</div>'
+    if 'davinci_frame' in owned or 'davinci_effect' in owned: badge += '<div class="shop-badge davinci-owned">🔷 داوینچی</div>'
+    if 'picasso_frame' in owned or 'picasso_effect' in owned: badge += '<div class="shop-badge picasso-owned">🎨 پیکاسو</div>'
     tags=''.join(f'<span class="support-tag">🏷️ {html.escape(str(t.get("tag") or ""))}</span>' for t in (prof.get('support_tags') or []))
     tag_box=f'<div class="support-tags">{tags}</div>' if tags else ''
     league_html=f'<div class="league-badge">🏆 لیگ {html.escape(league["name"])} • {int(league.get("min",0))} جام+</div>'
@@ -1013,16 +1027,20 @@ def profile_page(username, prof):
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
     bio='<div class="moderation-hidden">این بخش موقتاً محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get('chat_notice') else ''
-    body=f'''<div class="profile-card hero page-enter {theme} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div>{avatar_html}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div>{avatar_html}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 
 def lobby_page(username, prof=None, wallet=None):
     prof=prof or {'username':username,'public_username':username,'bio':'','avatar':'','age':18,'wins':0,'points':0,'league':{'name':'مبتدی','theme':'league-starter'}}
     league=_league_data(prof); theme=league['theme']; owned=set(prof.get('owned_items') or []); avatar='<div class="avatar-hidden">●</div>' if prof.get('profile_banned') else _avatar_html(prof.get('avatar') or '')
+    frame_class = 'frame-davinci' if 'davinci_frame' in owned else ('frame-picasso' if 'picasso_frame' in owned else ('frame-bronze' if 'bronze_frame' in owned else ('frame-premium' if 'profile_frame' in owned else '')))
+    effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
+    name_class = 'name-glow' if 'name_effect' in owned else ''
+    crown = '👑 ' if 'crown_badge' in owned else ''
     public_id=_public_id(prof); wins=int(prof.get('wins') or 0); points=int(prof.get('points') or 0); coins=int((wallet or {}).get('coins') or 0); age=int(prof.get('age') or 18)
     support_link='<a href="/support">🛡️ <b>پنل پشتیبانی</b><small>مدیریت گزارش‌ها</small></a>' if username=='morad' else ''
-    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar">{avatar}</div><div class="lobby-profile-info"><div class="lobby-profile-name">@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
+    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {frame_class} {effect_class} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar">{avatar}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
     return page_shell('منوی اصلی',body,username)
 
 
@@ -1259,4 +1277,31 @@ BASE_CSS += """
 @keyframes shopFrameSpin{to{filter:hue-rotate(360deg)}}
 .store-item.activate-burst{animation:shopFrameSpin 4s linear infinite,shopBurst .7s ease-out}
 @keyframes shopBurst{0%{box-shadow:0 0 0 0 rgba(39,216,173,.55),0 0 0 0 rgba(25,184,255,.35);transform:scale(1)}40%{transform:scale(1.035)}100%{box-shadow:0 0 0 18px rgba(39,216,173,0),0 0 0 30px rgba(25,184,255,0);transform:scale(1)}}
+"""
+
+BASE_CSS += """
+/* V6 — real shop item activation */
+.frame-premium{border:2px solid transparent!important;background:linear-gradient(var(--surface),var(--surface)) padding-box,conic-gradient(from 0deg,#00e5ff,#7c4dff,#ff4fd8,#ffd54a,#00e5ff) border-box!important;box-shadow:0 0 22px rgba(124,77,255,.28),inset 0 0 22px rgba(0,229,255,.06)!important;animation:premiumFrameSpin 5s linear infinite}
+.frame-bronze{border:2px solid #cd7f32!important;box-shadow:0 0 22px rgba(205,127,50,.38),inset 0 0 20px rgba(205,127,50,.08)!important}
+.frame-davinci{border:2px solid #32d9d0!important;box-shadow:0 0 25px rgba(50,217,208,.48),inset 0 0 24px rgba(50,217,208,.09)!important;animation:davinciPulse 1.8s ease-in-out infinite alternate}
+.frame-picasso{border:2px solid #ff4a4a!important;box-shadow:0 0 25px rgba(255,74,74,.45),0 0 50px rgba(255,82,210,.12)!important;animation:picassoPulse 1.6s ease-in-out infinite alternate}
+.effect-davinci{position:relative;box-shadow:0 0 30px rgba(50,217,208,.35),inset 0 0 35px rgba(50,217,208,.06)!important}
+.effect-picasso{position:relative;box-shadow:0 0 30px rgba(255,74,74,.32),0 0 65px rgba(255,82,210,.16),inset 0 0 35px rgba(255,74,74,.06)!important}
+.effect-davinci::after,.effect-picasso::after{content:"";position:absolute;inset:6px;border-radius:inherit;pointer-events:none;opacity:.55;animation:itemAura 1.5s ease-in-out infinite alternate}
+.effect-davinci::after{border:1px solid rgba(50,217,208,.55)}
+.effect-picasso::after{border:1px solid rgba(255,74,74,.55)}
+.crown-owned{animation:crownBounce 1.4s ease-in-out infinite alternate}
+.bronze-owned{background:linear-gradient(135deg,#cd7f32,#7a3f17)!important;color:#fff!important}
+.davinci-owned{background:linear-gradient(135deg,#32d9d0,#157f8b)!important;color:#041b20!important}
+.picasso-owned{background:linear-gradient(135deg,#ff5a5a,#a51e63)!important;color:#fff!important}
+.neon-pen-store{box-shadow:0 0 18px rgba(0,229,255,.35)!important}
+.store-item[data-item="neon_pen"] .store-item-icon{filter:drop-shadow(0 0 7px rgba(0,229,255,.65))}
+.store-item[data-item="davinci_frame"] .store-item-icon,.store-item[data-item="davinci_effect"] .store-item-icon{filter:drop-shadow(0 0 8px rgba(50,217,208,.75))}
+.store-item[data-item="picasso_frame"] .store-item-icon,.store-item[data-item="picasso_effect"] .store-item-icon{filter:drop-shadow(0 0 8px rgba(255,74,74,.75))}
+.store-item[data-item="victory_fx"] .store-item-icon{animation:crownBounce 1s ease-in-out infinite alternate}
+@keyframes premiumFrameSpin{to{filter:hue-rotate(360deg)}}
+@keyframes davinciPulse{from{box-shadow:0 0 14px rgba(50,217,208,.25)}to{box-shadow:0 0 34px rgba(50,217,208,.58)}}
+@keyframes picassoPulse{from{box-shadow:0 0 14px rgba(255,74,74,.22)}to{box-shadow:0 0 34px rgba(255,74,74,.52)}}
+@keyframes itemAura{from{transform:scale(.985);opacity:.25}to{transform:scale(1);opacity:.8}}
+@keyframes crownBounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-2px) rotate(2deg)}}
 """

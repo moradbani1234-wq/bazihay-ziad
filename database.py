@@ -592,12 +592,16 @@ async def claim_daily(username):
 async def buy_item(username,item_key,cost):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
         await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)",(username,))
-        cur=await db.execute("SELECT coins FROM wallet WHERE username=?",(username,)); r=await cur.fetchone()
-        if not r or r[0] < cost: return False,"not_enough",None
-        cur=await db.execute("SELECT 1 FROM owned_items WHERE username=? AND item_key=?",(username,item_key));
-        if await cur.fetchone(): return False,"owned",None
-        await db.execute("UPDATE wallet SET coins=coins-? WHERE username=?",(cost,username))
+        cur=await db.execute("SELECT 1 FROM owned_items WHERE username=? AND item_key=?",(username,item_key))
+        if await cur.fetchone():
+            await db.rollback()
+            return False,"owned",None
+        cur=await db.execute("UPDATE wallet SET coins=coins-? WHERE username=? AND coins>=?",(cost,username,cost))
+        if cur.rowcount != 1:
+            await db.rollback()
+            return False,"not_enough",None
         await db.execute("INSERT INTO owned_items(username,item_key,purchased_at) VALUES(?,?,?)",(username,item_key,int(time.time())))
         await db.commit()
         cur=await db.execute("SELECT * FROM wallet WHERE username=?",(username,)); w=dict(await cur.fetchone())
