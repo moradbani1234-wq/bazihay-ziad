@@ -19,7 +19,8 @@ import aiosqlite
 app = FastAPI()
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.environ.get("SESSION_SECRET", "change-this-secret-in-production"),
+    # مقدار واقعی را در Railway/AppMint در SESSION_SECRET قرار بده؛ fallback فقط برای اجرای محلی است.
+    secret_key=os.environ.get("SESSION_SECRET") or secrets.token_urlsafe(48),
 )
 
 
@@ -151,7 +152,7 @@ async def report_content(request: Request):
     content = str(data.get("content") or "").strip()[:500]
     context = str(data.get("context") or "chat")[:32]
     category = str(data.get("category") or "other").strip()[:32]
-    allowed_categories = {"collusion","profile","username","spam","chat","bio","other"}
+    allowed_categories = {"collusion","profile","username","spam","chat","drawing","bio","other"}
     if category not in allowed_categories:
         return {"ok": False, "error": "bad_category"}
     attachment = str(data.get("attachment") or "")
@@ -159,6 +160,8 @@ async def report_content(request: Request):
         attachment = ""
     if not target or target == username or not content:
         return {"ok": False, "error": "invalid"}
+    if target.lower() == "morad":
+        return {"ok": False, "error": "support_protected"}
     if not await db.get_user(target):
         return {"ok": False, "error": "user_not_found"}
     await db.create_report(username, target, context, content, attachment or None, category)
@@ -349,7 +352,12 @@ async def support_receipt_status(request: Request):
     r=await db.get_support_receipt(rid)
     if not r: return {"ok":False,"error":"not_found"}
     already_accepted=r.get("status")=="accepted"
-    await db.mark_support_receipt(rid,status)
+    already_rejected=r.get("status")=="rejected"
+    if status != r.get("status") and (already_accepted or already_rejected):
+        return {"ok":False,"error":"finalized","message":"این رسید قبلاً نهایی شده است."}
+    ok_mark, mark_status = await db.mark_support_receipt(rid,status)
+    if not ok_mark:
+        return {"ok":False,"error":mark_status}
     if status=="accepted" and not already_accepted:
         await db.adjust_wallet(r["username"],1000,0)
         await db.create_notification(r["username"],"support_receipt","💰 خرید تأیید شد","رسید شما تأیید شد و ۱۰۰۰ سکه به حساب اضافه شد.")
@@ -373,6 +381,8 @@ async def support_ban(request: Request):
     if not target or target == "morad" or scope not in allowed or hours <= 0 or hours > 168:
         return {"ok": False, "error": "invalid"}
     until = await db.ban_user(target, scope, hours, reason)
+    if target.lower() == "morad" or until == 0:
+        return {"ok": False, "error": "support_protected", "message": "حساب پشتیبانی قابل محروم‌سازی نیست."}
     if data.get("report_id"):
         await db.resolve_report(int(data["report_id"]))
     mins=max(1, int(hours*60))
@@ -407,6 +417,8 @@ async def profile_query_page(request: Request, u: str = ""):
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
+    if prof["profile_banned"] and target.lower() != "morad":
+        return tpl.restricted_profile_page(username, prof["username"])
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     prof["support_tags"] = await db.tags_for(prof["username"])
     prof["friend_status"] = await db.friend_status(username, prof["username"])
@@ -425,6 +437,8 @@ async def profile_page(request: Request, target: str):
     if not prof:
         return HTMLResponse("کاربر پیدا نشد.", status_code=404)
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
+    if prof["profile_banned"] and target.lower() != "morad":
+        return tpl.restricted_profile_page(username, prof["username"])
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     prof["support_tags"] = await db.tags_for(prof["username"])
     prof["friend_status"] = await db.friend_status(username, prof["username"])
@@ -469,6 +483,8 @@ async def users_block(request: Request):
     if not username: return {"ok":False,"error":"login_required"}
     data=await request.json(); target=str(data.get("target") or "").strip()
     if not target or target==username: return {"ok":False,"error":"invalid"}
+    if target.lower() == "morad" or username.lower() == "morad":
+        return {"ok":False,"error":"support_protected","message":"حساب پشتیبانی قابل بلاک نیست."}
     ok,status=await db.toggle_block(username,target)
     return {"ok":ok,"status":status}
 
@@ -532,11 +548,15 @@ async def settings_profile(request: Request):
     if avatar_changed and not avatar.startswith("data:image/"):
         return {"ok": False, "error": "avatar_must_be_image"}
     if not _is_support(username):
-        if await db.get_active_ban(username, "profile"):
-            current = await db.profile(username) or {}
-            avatar = current.get("avatar") or "🎮"
-        if await db.get_active_ban(username, "bio"):
-            current = await db.profile(username) or {}
+        profile_ban = await db.get_active_ban(username, "profile")
+        bio_ban = await db.get_active_ban(username, "bio")
+        if profile_ban and avatar_changed:
+            return {"ok": False, "error": "profile_banned", "message": "پروفایل شما موقتاً محدود است."}
+        if bio_ban and bio != (current.get("bio") or ""):
+            return {"ok": False, "error": "bio_banned", "message": "بیوگرافی شما موقتاً محدود است."}
+        if profile_ban:
+            avatar = current.get("avatar") or ""
+        if bio_ban:
             bio = current.get("bio") or ""
     await db.update_profile(username, bio, avatar, age)
     return {"ok": True}
@@ -620,6 +640,15 @@ class ChatManager:
     def __init__(self):
         self.public_conns: set[WebSocket] = set()
         self.private_conns: dict[str, set[WebSocket]] = {}
+        self.presence: dict[str,int] = {}
+    def mark_online(self, username):
+        self.presence[username] = self.presence.get(username, 0) + 1
+    def mark_offline(self, username):
+        n=self.presence.get(username,0)-1
+        if n<=0: self.presence.pop(username,None)
+        else: self.presence[username]=n
+    def is_online(self, username):
+        return self.presence.get(username,0)>0
 
     async def connect_public(self, ws: WebSocket):
         await ws.accept()
@@ -631,7 +660,7 @@ class ChatManager:
     async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
         mid = await db.save_message("public", sender, content, reply_to_id)
         prof = await db.profile(sender)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", "🎮"), "display_name": (prof or {}).get("display_name", sender)}
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
         dead = []
         for ws in self.public_conns:
             try:
@@ -664,7 +693,7 @@ class ChatManager:
         except Exception:
             pass
         prof = await db.profile(sender)
-        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", "🎮"), "display_name": (prof or {}).get("display_name", sender)}
+        payload = {"id": mid, "sender": sender, "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender)}
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -692,6 +721,7 @@ async def ws_chat_public(websocket: WebSocket):
         await websocket.close(code=4003)
         return
     await chat_manager.connect_public(websocket)
+    chat_manager.mark_online(username)
     websocket._drawbattle_username = username
     music_manager.add(websocket)
     current_music = await db.get_room_music("public")
@@ -710,6 +740,7 @@ async def ws_chat_public(websocket: WebSocket):
                 await chat_manager.broadcast_public(username, content[:500], data.get("reply_to_id"))
     except WebSocketDisconnect:
         chat_manager.disconnect_public(websocket)
+        chat_manager.mark_offline(username)
         music_manager.remove(websocket)
 
 
@@ -827,6 +858,7 @@ async def ws_chat_private(websocket: WebSocket, other: str):
             return
     room = ":".join(sorted([username, other]))
     await chat_manager.connect_private(room, websocket)
+    chat_manager.mark_online(username)
     try:
         while True:
             data = await websocket.receive_json()
@@ -846,6 +878,14 @@ async def ws_chat_private(websocket: WebSocket, other: str):
                 await chat_manager.broadcast_private(room, username, content[:500], data.get("reply_to_id"))
     except WebSocketDisconnect:
         chat_manager.disconnect_private(room, websocket)
+        chat_manager.mark_offline(username)
+
+
+@app.get("/presence/{target}")
+async def presence(request: Request, target: str):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    return {"ok":True,"online":chat_manager.is_online(target)}
 
 
 # ============================================================
@@ -855,7 +895,7 @@ async def ws_chat_private(websocket: WebSocket, other: str):
 DRAW_PREVIEW_SECONDS = 5
 DRAW_BREAK_SECONDS = 10
 DRAW_TOTAL_ROUNDS = 6
-DRAW_OPTIONS_COUNT = 16
+DRAW_OPTIONS_COUNT = 18
 DRAW_MODE_DURATION = {2: 45, 4: 35}
 
 
@@ -1067,7 +1107,7 @@ class DrawingBattleManager:
             pts=max(10, round(max(0,game["deadline"]-now)/self.duration*100))
             game["round_points"][username]=pts
             game["scores"][username]+=pts
-            await db.update_stats(username, correct_guesses=1, points=pts)
+            await db.update_stats(username, correct_guesses=1)
             await self._to_user(game, username, {"type":"correct","points":pts})
             needed=max(1,len(game["active"])-1)
             if len(game["guesses"]) >= needed: await self._end_round(gid, True)
@@ -1083,7 +1123,6 @@ class DrawingBattleManager:
         if correct:
             points_drawer=50
             game["scores"][game["drawer"]]+=points_drawer
-            await db.update_stats(game["drawer"], points=points_drawer)
         points_map=game.get("round_points",{})
         points_guesser=sum(points_map.values()) if game["mode"]==4 else next(iter(points_map.values()),0)
         total_rounds=self.mode if self.mode==4 else DRAW_TOTAL_ROUNDS
@@ -1123,9 +1162,24 @@ class DrawingBattleManager:
         if len(game["active"])<=1: await self._finish_game(gid)
         else: await self._broadcast(game,{"type":"player_left","username":username,"active":game["active"]})
 
-    async def disconnect(self,username):
-        gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
-        if game: game["sockets"].pop(username,None)
+    async def disconnect(self,username,ws=None):
+        # قطع اتصال باید هم صف و هم بازی را تمیز کند تا بازیکن شبحی وارد Match بعدی نشود.
+        async with self.lock:
+            self.waiting=[(u,s) for u,s in self.waiting if not (u==username and (ws is None or s is ws))]
+            gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
+            if not game:
+                return
+            current=game["sockets"].get(username)
+            if ws is not None and current is not ws:
+                return
+            game["sockets"].pop(username,None)
+            if username in game["active"]:
+                game["active"].remove(username)
+            self.player_game.pop(username,None)
+            if len(game["active"])<=1:
+                await self._finish_game(gid)
+            else:
+                await self._broadcast(game,{"type":"player_left","username":username,"active":game["active"]})
 
 
 two_player_drawing_manager=DrawingBattleManager(2)
@@ -1142,7 +1196,7 @@ async def ws_drawing_multi(websocket: WebSocket, mode: int):
             data=await websocket.receive_json(); typ=data.get("type")
             if typ in ("draw","draw_batch","clear"): await four_player_drawing_manager.draw(username,data)
             elif typ=="guess": await four_player_drawing_manager.guess(username,data.get("word"))
-    except WebSocketDisconnect: await four_player_drawing_manager.disconnect(username)
+    except WebSocketDisconnect: await four_player_drawing_manager.disconnect(username, websocket)
 
 @app.websocket("/ws/drawing")
 async def ws_drawing(websocket: WebSocket):
@@ -1155,7 +1209,7 @@ async def ws_drawing(websocket: WebSocket):
             data=await websocket.receive_json(); typ=data.get("type")
             if typ in ("draw","draw_batch","clear"): await two_player_drawing_manager.draw(username,data)
             elif typ=="guess": await two_player_drawing_manager.guess(username,data.get("word"))
-    except WebSocketDisconnect: await two_player_drawing_manager.disconnect(username)
+    except WebSocketDisconnect: await two_player_drawing_manager.disconnect(username, websocket)
 
 
 @app.get("/game/drawing4", response_class=HTMLResponse)

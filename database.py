@@ -191,10 +191,12 @@ async def leaderboard(limit=50, by="wins"):
         db.row_factory=aiosqlite.Row
         cur=await db.execute(f"""SELECT s.username,s.wins,s.losses,s.draws,s.points,
                                 CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=s.username AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END AS avatar,
+                                CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=s.username AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN 1 ELSE 0 END AS profile_banned,
                                 COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio
                                 FROM stats s
                                 LEFT JOIN users u ON u.username=s.username
-                                ORDER BY {primary} DESC, {secondary} DESC LIMIT ?""",(int(time.time()),limit,))
+                                WHERE NOT EXISTS(SELECT 1 FROM bans b WHERE b.username=s.username AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?)
+                                ORDER BY {primary} DESC, {secondary} DESC LIMIT ?""",(int(time.time()),int(time.time()),int(time.time()),limit))
         return [dict(r) for r in await cur.fetchall()]
 
 async def create_report(reporter,target,context,content,attachment=None,category="other"):
@@ -215,6 +217,9 @@ async def resolve_report(report_id):
         await db.commit()
 
 async def ban_user(username,scope,hours,reason):
+    # حساب پشتیبانی هرگز قابل محروم‌سازی نیست.
+    if str(username or '').strip().lower() == 'morad':
+        return 0
     # نکته: قبلاً اینجا max(1,hours)*3600 بود که هر محرومیت زیر یک ساعت
     # (مثلاً محرومیت‌های چند دقیقه‌ای) را به‌اشتباه به یک ساعت کامل تبدیل می‌کرد.
     # حالا حداقلِ واقعی فقط ۱ ثانیه است تا محرومیت‌های دقیقه‌ای هم درست کار کنند.
@@ -374,12 +379,16 @@ async def respond_friend_request(sender, receiver, accept):
             a,b=sorted([sender,receiver], key=lambda x:x.lower())
             await db.execute("INSERT OR IGNORE INTO friends(user1,user2,created_at) VALUES(?,?,?)",(a,b,now))
         await db.commit()
-        return True
+    if accept:
+        await create_notification(sender, "friend", "درخواست دوستی پذیرفته شد", f"@{receiver} درخواست دوستی شما را پذیرفت. حالا می‌توانید چت خصوصی داشته باشید.")
+    else:
+        await create_notification(sender, "friend", "درخواست دوستی رد شد", f"@{receiver} درخواست دوستی شما را رد کرد.")
+    return True
 
 async def friend_requests_for(username):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("SELECT fr.id,fr.sender,fr.receiver,fr.created_at,fr.sender display_name,COALESCE(u.avatar,'🎮') avatar FROM friend_requests fr LEFT JOIN users u ON u.username=fr.sender WHERE fr.receiver=? AND fr.status='pending' ORDER BY fr.id DESC",(username,))
+        cur=await db.execute("SELECT fr.id,fr.sender,fr.receiver,fr.created_at,fr.sender display_name,COALESCE(u.avatar,'') avatar, CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=fr.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN 1 ELSE 0 END profile_banned FROM friend_requests fr LEFT JOIN users u ON u.username=fr.sender WHERE fr.receiver=? AND fr.status='pending' ORDER BY fr.id DESC",(int(time.time()),username))
         return [dict(r) for r in await cur.fetchall()]
 
 async def friends_for(username):
@@ -388,9 +397,10 @@ async def friends_for(username):
         cur=await db.execute("""SELECT CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END username,
                                CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END display_name,
                                f.created_at,
-                               CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END) AND b.scope='profile' AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar
+                               CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END) AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
+                               CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END) AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN 1 ELSE 0 END profile_banned
                                FROM friends f JOIN users u ON u.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END)
-                               WHERE f.user1=? OR f.user2=? ORDER BY lower(display_name)""",(username,username,username,int(time.time()),username,username,username))
+                               WHERE f.user1=? OR f.user2=? ORDER BY lower(display_name)""",(username,username,username,int(time.time()),username,int(time.time()),username,username,username))
         return [dict(r) for r in await cur.fetchall()]
 
 
@@ -417,6 +427,10 @@ async def block_status(me, other):
         return bool(await cur.fetchone())
 
 async def toggle_block(me, other):
+    me=str(me or '').strip(); other=str(other or '').strip()
+    # هیچ کاربری نمی‌تواند حساب پشتیبانی رسمی را بلاک کند و پشتیبانی هم بلاک نمی‌شود.
+    if me.lower() == 'morad' or other.lower() == 'morad':
+        return False, "support_protected"
     if not me or not other or me == other or not await get_user(other):
         return False, "invalid"
     async with aiosqlite.connect(DB_PATH) as conn:
@@ -433,6 +447,9 @@ async def toggle_block(me, other):
 
 async def any_block(me, other):
     if not me or not other:
+        return False
+    # پشتیبانی رسمی از سیستم بلاک مستثناست؛ هیچ‌کس نمی‌تواند آن را بلاک کند.
+    if str(me).lower() == 'morad' or str(other).lower() == 'morad':
         return False
     return await block_status(me,other) or await block_status(other,me)
 
@@ -526,7 +543,7 @@ async def unpin_message(message_id):
 async def get_pinned_messages(room, limit=20):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT p.*,m.sender,m.content,m.created_at AS message_created_at,COALESCE(u.avatar,'🎮') avatar
+        cur=await db.execute("""SELECT p.*,m.sender,m.content,m.created_at AS message_created_at,COALESCE(u.avatar,'') avatar
                               FROM pinned_messages p JOIN messages m ON m.id=p.message_id
                               LEFT JOIN users u ON u.username=m.sender
                               WHERE p.room=? ORDER BY p.created_at DESC, p.message_id DESC LIMIT ?""", (room,limit))
@@ -584,5 +601,15 @@ async def get_support_receipt(receipt_id):
 
 async def mark_support_receipt(receipt_id,status):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE support_receipts SET status=? WHERE id=?",(status[:30],int(receipt_id)))
+        cur=await db.execute("SELECT status FROM support_receipts WHERE id=?",(int(receipt_id),))
+        row=await cur.fetchone()
+        if not row:
+            return False, "not_found"
+        current=row[0]
+        if current in {"accepted","rejected"} and status != current:
+            return False, "finalized"
+        if status not in {"new","reviewed","accepted","rejected"}:
+            return False, "invalid"
+        await db.execute("UPDATE support_receipts SET status=? WHERE id=?",(status,int(receipt_id)))
         await db.commit()
+        return True, status
