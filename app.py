@@ -184,9 +184,11 @@ async def game_leave(request: Request):
     username = _require_login(request)
     if not username:
         return {"ok": False}
-    # بازگشت به لابی محرومیت ندارد؛ اگر حریف هنوز داخل بازی باشد، همان حریف
-    # برنده اعلام می‌شود و امتیاز برد می‌گیرد.
-    await drawing_manager.leave(username)
+    if not _is_support(username):
+        await db.ban_user(username, "games", 0.05, "خروج از بازی با دکمه بازگشت به لابی")
+        await db.ban_user(username, "chat", 0.05, "خروج از بازی با دکمه بازگشت به لابی")
+    await two_player_drawing_manager.leave(username)
+    await four_player_drawing_manager.leave(username)
     return {"ok": True, "redirect": "/lobby"}
 
 @app.get("/wallet")
@@ -310,7 +312,59 @@ async def support_page(request: Request):
     username = _require_login(request)
     if not username or not _is_support(username):
         return RedirectResponse("/lobby")
-    return tpl.support_page(username, await db.get_reports(), await db.get_active_bans(), await db.get_support_tickets())
+    return tpl.support_page(username, await db.get_reports(), await db.get_active_bans(), await db.get_support_tickets(), await db.get_support_receipts())
+
+@app.post("/support/adjust")
+async def support_adjust(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); target=str(data.get("target") or "").strip()[:64]
+    if not target or target.lower()=="morad" or not await db.get_user(target): return {"ok":False,"error":"invalid"}
+    try: coins=int(data.get("coins") or 0); trophies=int(data.get("trophies") or 0)
+    except Exception: return {"ok":False,"error":"invalid"}
+    if abs(coins)>100000000 or abs(trophies)>100000: return {"ok":False,"error":"too_large"}
+    wallet,prof=await db.adjust_wallet(target,coins,trophies)
+    await db.create_notification(target,"support","تغییر موجودی توسط پشتیبانی",f"پشتیبانی موجودی شما را تغییر داد: {coins:+d} سکه و {trophies:+d} جام.")
+    return {"ok":True,"wallet":wallet,"profile":prof}
+
+@app.post("/support/receipt")
+async def support_receipt(request: Request, receipt: UploadFile = File(...)):
+    username=_require_login(request)
+    if not username or _is_support(username): return {"ok":False,"error":"forbidden"}
+    allowed={"image/jpeg","image/png","image/webp","application/pdf"}
+    mime=(receipt.content_type or "application/octet-stream").lower()
+    if mime not in allowed: return {"ok":False,"error":"type_not_allowed"}
+    blob=await receipt.read()
+    if not blob or len(blob)>8*1024*1024: return {"ok":False,"error":"file_too_large"}
+    rid=await db.create_support_receipt(username,receipt.filename or "receipt",mime,blob,100000)
+    link=f"/support/receipt/{rid}"
+    room=":".join(sorted([username,"morad"]))
+    await chat_manager.broadcast_private(room,username,f"🧾 رسید پرداخت ۱۰۰۰ سکه ارسال شد • مشاهده رسید: {link}")
+    await db.create_notification("morad","support_receipt","🧾 رسید جدید",f"@{username} رسید خرید ۱۰۰۰ سکه را ارسال کرد.",link)
+    return {"ok":True,"receipt_id":rid,"message":"رسید با موفقیت به پیوی پشتیبانی ارسال شد."}
+
+@app.get("/support/receipt/{receipt_id}")
+async def support_receipt_file(request: Request, receipt_id: int):
+    username=_require_login(request)
+    if not username or not _is_support(username): return Response(status_code=403)
+    r=await db.get_support_receipt(receipt_id)
+    if not r: return Response(status_code=404)
+    return Response(content=r["blob"],media_type=r["mime_type"],headers={"Content-Disposition":f'inline; filename="{r["filename"].replace(chr(34),"")}"'})
+
+@app.post("/support/receipt/status")
+async def support_receipt_status(request: Request):
+    username=_require_login(request)
+    if not username or not _is_support(username): return {"ok":False,"error":"forbidden"}
+    data=await request.json(); rid=int(data.get("id") or 0); status=str(data.get("status") or "reviewed")
+    if rid<=0 or status not in {"new","reviewed","accepted","rejected"}: return {"ok":False,"error":"invalid"}
+    r=await db.get_support_receipt(rid)
+    if not r: return {"ok":False,"error":"not_found"}
+    already_accepted=r.get("status")=="accepted"
+    await db.mark_support_receipt(rid,status)
+    if status=="accepted" and not already_accepted:
+        await db.adjust_wallet(r["username"],1000,0)
+        await db.create_notification(r["username"],"support_receipt","💰 خرید تأیید شد","رسید شما تأیید شد و ۱۰۰۰ سکه به حساب اضافه شد.")
+    return {"ok":True}
 
 @app.post("/support/ban")
 async def support_ban(request: Request):
@@ -757,412 +811,312 @@ async def ws_chat_private(websocket: WebSocket, other: str):
 
 
 # ============================================================
-#                 DRAWING GAME (نقاشی حدسی دو نفره)
+#                 DRAWING GAME — 2P / 4P
 # ============================================================
 
-DRAW_ROUND_SECONDS = 30
-DRAW_SCOREBOARD_SECONDS = 5
-DRAW_FINAL_RESULT_SECONDS = 7
+DRAW_PREVIEW_SECONDS = 5
+DRAW_BREAK_SECONDS = 10
 DRAW_TOTAL_ROUNDS = 6
 DRAW_OPTIONS_COUNT = 12
+DRAW_MODE_DURATION = {2: 45, 4: 35}
 
 
-class MultiplayerDrawingManager:
-    def __init__(self):
-        self.waiting={4:[]}; self.games={}; self.player_game={}; self.lock=asyncio.Lock()
-    async def connect(self, username, ws, mode):
+class DrawingBattleManager:
+    def __init__(self, mode: int):
+        self.mode = mode
+        self.duration = DRAW_MODE_DURATION[mode]
+        self.waiting = []
+        self.games = {}
+        self.player_game = {}
+        self.lock = asyncio.Lock()
+
+    async def _profiles(self, players):
+        out = {}
+        for u in players:
+            prof = await db.profile(u) or {}
+            out[u] = {
+                "username": u,
+                "display_name": prof.get("display_name") or u,
+                "avatar": prof.get("avatar") or "🎮",
+                "wins": int(prof.get("wins") or 0),
+                "points": int(prof.get("points") or 0),
+            }
+        return out
+
+    async def connect(self, username, ws):
         await ws.accept()
         async with self.lock:
-            gid=self.player_game.get(username)
-            if gid in self.games and self.games[gid]["mode"]==mode:
-                self.games[gid]["sockets"][username]=ws; await self._send_state(self.games[gid],username); return
-            queue=self.waiting[mode]
-            queue[:]=[(u,s) for u,s in queue if u!=username]
-            queue.append((username,ws))
-            if len(queue)<mode:
-                await ws.send_json({"type":"waiting","needed":mode,"count":len(queue)}); return
-            picked=queue[:mode]; del queue[:mode]
-            gid=secrets.token_hex(7); players=[u for u,_ in picked]
-            g={"id":gid,"mode":mode,"players":players,"active":players[:],"sockets":{u:s for u,s in picked},"scores":{u:0 for u in players},"round":0,"drawer":None,"word":None,"options":[],"guesses":{},"wrong":{u:set() for u in players},"round_active":False,"deadline":0.0,"strokes":[]}
-            self.games[gid]=g
-            for u in players:self.player_game[u]=gid
-        await self._next_round(gid)
-    async def _send(self,g,u,p):
-        ws=g["sockets"].get(u)
-        if ws:
-            try: await ws.send_json(p)
-            except Exception: pass
-    async def _broadcast(self,g,p):
-        for u in g["active"]: await self._send(g,u,p)
-    async def _send_state(self,g,u):
-        await self._send(g,u,{"type":"rejoin","round":g["round"],"total_rounds":g["mode"],"drawer":g["drawer"],"role":"drawer" if u==g["drawer"] else "guesser","word":g["word"] if u==g["drawer"] else None,"options":g["options"] if u!=g["drawer"] else [],"active":g["active"],"scores":g["scores"],"strokes":g["strokes"],"remaining":max(1,round(g["deadline"]-time.monotonic()))})
-    async def _next_round(self,gid):
-        g=self.games.get(gid)
-        if not g:return
-        g["round"]+=1
-        if g["round"]>g["mode"]: return await self._finish(gid)
-        if not g["active"]: return await self._finish(gid)
-        drawer=g["active"][(g["round"]-1)%len(g["active"])]
-        word,options=words_draw.pick_round_words(min(12,max(8,len(g["active"])*2)))
-        g.update({"drawer":drawer,"word":word,"options":options,"guesses":{},"wrong":{u:set() for u in g["active"]},"round_active":True,"deadline":time.monotonic()+DRAW_ROUND_SECONDS,"strokes":[]})
-        for u in g["active"]:
-            await self._send(g,u,{"type":"round_start","round":g["round"],"total_rounds":g["mode"],"duration":DRAW_ROUND_SECONDS,"role":"drawer" if u==drawer else "guesser","word":word if u==drawer else None,"options":options if u!=drawer else [],"drawer":drawer,"active":g["active"],"scores":g["scores"]})
-        asyncio.create_task(self._timeout(gid,g["round"]))
-    async def _timeout(self,gid,r):
-        await asyncio.sleep(DRAW_ROUND_SECONDS)
-        g=self.games.get(gid)
-        if g and g["round_active"] and g["round"]==r: await self._end_round(gid,False)
-    async def draw(self,username,data):
-        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
-        if not g or not g["round_active"] or username!=g["drawer"]:return
-        if data.get("type")=="clear":g["strokes"]=[]; await self._broadcast(g,{"type":"clear"}); return
-        if data.get("type")=="draw_batch":
-            segs=(data.get("segments") or [])[:200]
-            clean=[{"x0":s.get("x0"),"y0":s.get("y0"),"x1":s.get("x1"),"y1":s.get("y1"),"color":s.get("color","#111"),"size":max(1,min(30,float(s.get("size") or 4)))} for s in segs]
-            if clean:
-                g["strokes"].extend({"type":"draw",**s} for s in clean)
-                await self._broadcast(g,{"type":"draw_batch","segments":clean})
-            return
-        if data.get("type")!="draw":return
-        stroke={"type":"draw","x0":data.get("x0"),"y0":data.get("y0"),"x1":data.get("x1"),"y1":data.get("y1"),"color":data.get("color","#111"),"size":max(1,min(30,float(data.get("size") or 4)))}
-        g["strokes"].append(stroke); await self._broadcast(g,stroke)
-    async def guess(self,username,word):
-        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
-        if not g or not g["round_active"] or username==g["drawer"] or username not in g["active"]:return
-        word=(word or '').strip()
-        if not word or username in g["guesses"] or word in g["wrong"].setdefault(username,set()):return
-        if word==g["word"]:
-            now=time.monotonic(); g["guesses"][username]=now; pts=max(10,round(max(0,g["deadline"]-now)/DRAW_ROUND_SECONDS*100)); g["scores"][username]+=pts; await db.update_stats(username,correct_guesses=1,points=pts); await self._send(g,username,{"type":"correct","points":pts})
-            if len(g["guesses"])>=max(1,len(g["active"])-1): await self._end_round(gid,True)
-        else:
-            g["wrong"].setdefault(username,set()).add(word); await db.update_stats(username,wrong_guesses=1); await self._send(g,username,{"type":"guess_wrong","word":word})
-    async def _end_round(self,gid,correct):
-        g=self.games.get(gid)
-        if not g or not g["round_active"]:return
-        g["round_active"]=False
-        await self._broadcast(g,{"type":"round_result","round":g["round"],"total_rounds":g["mode"],"word":g["word"],"scores":g["scores"],"active":g["active"],"is_last":g["round"]>=g["mode"],"break_seconds":5})
-        asyncio.create_task(self._advance(gid))
-    async def _advance(self,gid):
-        await asyncio.sleep(5); g=self.games.get(gid)
-        if not g:return
-        if g["round"]>=g["mode"] or len(g["active"])<=1:return await self._finish(gid)
-        await self._next_round(gid)
-    async def _finish(self,gid):
-        g=self.games.pop(gid,None)
-        if not g:return
-        # رتبه‌بندی هر ۴ بازیکن اصلی بر اساس امتیاز نهایی، حتی اگر کسی زودتر خارج شده باشد.
-        ranked=sorted(g["players"],key=lambda u:g["scores"].get(u,0),reverse=True)
-        trophy_by_rank=[10,5,0,-1]
-        for i,u in enumerate(ranked):
-            trophies=trophy_by_rank[i] if i<len(trophy_by_rank) else 0
-            if trophies: await db.update_stats(u,wins=trophies)
-        winner=ranked[0] if ranked else None
-        await self._broadcast(g,{"type":"game_over","winner":winner,"scores":g["scores"],"active":g["active"]})
-        for u in g["players"]:self.player_game.pop(u,None)
-    async def leave(self,username):
-        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
-        if not g:return
-        if username in g["active"]:g["active"].remove(username)
-        self.player_game.pop(username,None)
-        if len(g["active"])<=1: await self._finish(gid)
-        else: await self._broadcast(g,{"type":"player_left","username":username,"active":g["active"]})
-    async def disconnect(self,username):
-        gid=self.player_game.get(username); g=self.games.get(gid) if gid else None
-        if g:g["sockets"].pop(username,None)
+            gid = self.player_game.get(username)
+            if gid and gid in self.games:
+                game = self.games[gid]
+                game["sockets"][username] = ws
+                await self._send_state(game, username)
+                return
 
-multiplayer_drawing_manager=MultiplayerDrawingManager()
+            self.waiting = [(u, s) for u, s in self.waiting if u != username]
+            self.waiting.append((username, ws))
+            if len(self.waiting) < self.mode:
+                await self._send(ws, {"type":"waiting", "needed":self.mode, "count":len(self.waiting), "timeout":30})
+                asyncio.create_task(self._queue_timeout(username, ws))
+                return
+
+            picked = self.waiting[:self.mode]
+            del self.waiting[:self.mode]
+            players = [u for u, _ in picked]
+            gid = secrets.token_hex(7)
+            game = {
+                "id": gid, "mode": self.mode, "players": players,
+                "active": players[:], "sockets": {u:s for u,s in picked},
+                "scores": {u:0 for u in players}, "round":0,
+                "drawer":None, "guesser":None, "word":None, "options":[],
+                "wrong_words": {u:set() for u in players}, "guesses": {}, "round_points": {},
+                "round_active":False, "phase":"waiting", "deadline":0.0,
+                "strokes":[], "profiles": await self._profiles(players), "last_result": None,
+            }
+            self.games[gid] = game
+            for u in players:
+                self.player_game[u] = gid
+
+        await self._next_round(gid)
+
+    async def _queue_timeout(self, username, ws):
+        await asyncio.sleep(30)
+        async with self.lock:
+            for i, (u, s) in enumerate(self.waiting):
+                if u == username and s is ws:
+                    self.waiting.pop(i)
+                    try: await ws.send_json({"type":"queue_timeout"})
+                    except Exception: pass
+                    break
+
+    async def _send(self, ws, payload):
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            pass
+
+    async def _to_user(self, game, username, payload):
+        ws = game["sockets"].get(username)
+        if ws: await self._send(ws, payload)
+
+    async def _broadcast(self, game, payload):
+        for u in list(game["active"]):
+            await self._to_user(game, u, payload)
+
+    def _base_payload(self, game, username, typ):
+        drawer = game["drawer"]
+        return {
+            "type": typ,
+            "round": game["round"],
+            "total_rounds": self.mode if self.mode == 4 else DRAW_TOTAL_ROUNDS,
+            "duration": self.duration,
+            "preview_seconds": DRAW_PREVIEW_SECONDS,
+            "role": "drawer" if username == drawer else "guesser",
+            "drawer": drawer,
+            "opponent": next((u for u in game["active"] if u != username), None),
+            "scores": game["scores"],
+            "active": game["active"],
+            "profiles": game["profiles"],
+        }
+
+    async def _send_state(self, game, username):
+        if game["phase"] == "preview":
+            p = self._base_payload(game, username, "round_preview")
+            p["remaining"] = max(0, int(game["deadline"] - time.monotonic() + 0.999))
+            p["word"] = game["word"] if username == game["drawer"] else None
+            await self._to_user(game, username, p)
+            return
+        if game["phase"] == "result" and game.get("last_result"):
+            await self._to_user(game, username, game["last_result"])
+            return
+        if game["phase"] == "round":
+            p = self._base_payload(game, username, "round_start")
+            p["remaining"] = max(0, int(game["deadline"] - time.monotonic() + 0.999))
+            p["word"] = game["word"] if username == game["drawer"] else None
+            p["options"] = game["options"] if username != game["drawer"] else []
+            p["colors"] = words_draw.COLORS if username == game["drawer"] else []
+            p["strokes"] = game["strokes"]
+            await self._to_user(game, username, p)
+
+    async def _next_round(self, gid):
+        game = self.games.get(gid)
+        if not game: return
+        game["round"] += 1
+        total_rounds = self.mode if self.mode == 4 else DRAW_TOTAL_ROUNDS
+        if game["round"] > total_rounds or len(game["active"]) <= 1:
+            return await self._finish_game(gid)
+
+        players = game["active"]
+        drawer = players[(game["round"] - 1) % len(players)]
+        target, options = words_draw.pick_round_words(min(DRAW_OPTIONS_COUNT, max(8, len(players)*2)))
+        game.update({
+            "drawer": drawer, "word": target, "options": options,
+            "wrong_words": {u:set() for u in players}, "guesses": {}, "round_points": {},
+            "round_active": False, "phase":"preview",
+            "deadline": time.monotonic() + DRAW_PREVIEW_SECONDS, "strokes":[],
+        })
+        for u in players:
+            p = self._base_payload(game, u, "round_preview")
+            p["remaining"] = DRAW_PREVIEW_SECONDS
+            p["word"] = target if u == drawer else None
+            p["message"] = "موضوع را حفظ کن؛ تا چند ثانیه دیگر شروع می‌شود!"
+            await self._to_user(game, u, p)
+        asyncio.create_task(self._preview_timeout(gid, game["round"]))
+
+    async def _preview_timeout(self, gid, round_number):
+        await asyncio.sleep(DRAW_PREVIEW_SECONDS)
+        game = self.games.get(gid)
+        if game and game["round"] == round_number and game["phase"] == "preview":
+            await self._start_round(gid, round_number)
+
+    async def _start_round(self, gid, round_number):
+        game = self.games.get(gid)
+        if not game or game["round"] != round_number: return
+        game["phase"] = "round"
+        game["round_active"] = True
+        game["deadline"] = time.monotonic() + self.duration
+        for u in list(game["active"]):
+            p = self._base_payload(game, u, "round_start")
+            p["word"] = game["word"] if u == game["drawer"] else None
+            p["options"] = game["options"] if u != game["drawer"] else []
+            p["colors"] = words_draw.COLORS if u == game["drawer"] else []
+            p["strokes"] = []
+            await self._to_user(game, u, p)
+        asyncio.create_task(self._round_timeout(gid, round_number))
+
+    async def _round_timeout(self, gid, round_number):
+        await asyncio.sleep(self.duration)
+        game = self.games.get(gid)
+        if game and game["round"] == round_number and game["round_active"]:
+            await self._end_round(gid, False)
+
+    async def draw(self, username, data):
+        gid = self.player_game.get(username)
+        game = self.games.get(gid) if gid else None
+        if not game or not game["round_active"] or username != game["drawer"]: return
+        if data.get("type") == "clear":
+            game["strokes"] = []
+            await self._broadcast(game, {"type":"clear"})
+            return
+        if data.get("type") == "draw_batch":
+            segs = data.get("segments") or []
+            clean=[]
+            for s in segs[:200]:
+                try:
+                    clean.append({"x0":float(s.get("x0")),"y0":float(s.get("y0")),"x1":float(s.get("x1")),"y1":float(s.get("y1")),"color":str(s.get("color") or "#111")[:20],"size":max(1,min(30,float(s.get("size") or 4)))})
+                except Exception: pass
+            if clean:
+                game["strokes"].extend(clean)
+                await self._broadcast(game, {"type":"draw_batch","segments":clean})
+            return
+        if data.get("type") != "draw": return
+        try:
+            stroke={"x0":float(data.get("x0")),"y0":float(data.get("y0")),"x1":float(data.get("x1")),"y1":float(data.get("y1")),"color":str(data.get("color") or "#111")[:20],"size":max(1,min(30,float(data.get("size") or 4)))}
+        except Exception: return
+        game["strokes"].append(stroke)
+        await self._broadcast(game, {"type":"draw",**stroke})
+
+    async def guess(self, username, word):
+        gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
+        if not game or not game["round_active"] or username==game["drawer"] or username not in game["active"]: return
+        word=(word or "").strip()
+        if not word or username in game["guesses"] or word in game["wrong_words"].setdefault(username,set()): return
+        if word == game["word"]:
+            now=time.monotonic(); game["guesses"][username]=now
+            wrong_count=len(game["wrong_words"].get(username,set()))
+            pts=max(10, round(max(0,game["deadline"]-now)/self.duration*100) - 10*wrong_count)
+            game["round_points"][username]=pts
+            game["scores"][username]+=pts
+            await db.update_stats(username, correct_guesses=1, points=pts)
+            await self._to_user(game, username, {"type":"correct","points":pts})
+            needed=max(1,len(game["active"])-1)
+            if len(game["guesses"]) >= needed: await self._end_round(gid, True)
+        else:
+            game["wrong_words"].setdefault(username,set()).add(word)
+            await db.update_stats(username, wrong_guesses=1)
+            await self._to_user(game, username, {"type":"guess_wrong","word":word})
+
+    async def _end_round(self, gid, correct):
+        game=self.games.get(gid)
+        if not game or not game["round_active"]: return
+        game["round_active"]=False; game["phase"]="result"
+        points_drawer=0
+        if correct:
+            points_drawer=50
+            game["scores"][game["drawer"]]+=points_drawer
+            await db.update_stats(game["drawer"], points=points_drawer)
+        points_map=game.get("round_points",{})
+        points_guesser=sum(points_map.values()) if game["mode"]==4 else next(iter(points_map.values()),0)
+        total_rounds=self.mode if self.mode==4 else DRAW_TOTAL_ROUNDS
+        is_last=game["round"]>=total_rounds
+        payload={"type":"round_result","round":game["round"],"total_rounds":total_rounds,"correct":correct,"word":game["word"],"drawer":game["drawer"],"guesser":next(iter(points_map),None),"points_guesser":points_guesser,"points_drawer":points_drawer,"points_map":points_map,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"],"is_last":is_last,"break_seconds":DRAW_BREAK_SECONDS}
+        game["last_result"] = payload
+        await self._broadcast(game,payload)
+        asyncio.create_task(self._advance(gid, game["round"]))
+
+    async def _advance(self,gid,round_number):
+        await asyncio.sleep(DRAW_BREAK_SECONDS)
+        game=self.games.get(gid)
+        if not game or game["round"]!=round_number: return
+        total_rounds=self.mode if self.mode==4 else DRAW_TOTAL_ROUNDS
+        if round_number>=total_rounds or len(game["active"])<=1: return await self._finish_game(gid)
+        await self._next_round(gid)
+
+    async def _finish_game(self,gid):
+        game=self.games.pop(gid,None)
+        if not game:return
+        ranked=sorted(game["players"], key=lambda u:game["scores"].get(u,0), reverse=True)
+        winner=ranked[0] if ranked and len([x for x in ranked if game["scores"].get(x,0)==game["scores"].get(ranked[0],0)])==1 else None
+        if winner:
+            await db.update_stats(winner,wins=5,points=game["scores"].get(winner,0))
+            for u in ranked[1:]: await db.update_stats(u,losses=1,points=game["scores"].get(u,0))
+        else:
+            for u in ranked: await db.update_stats(u,draws=1,points=game["scores"].get(u,0))
+        await self._broadcast(game,{"type":"game_over","winner":winner,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"]})
+        for u in game["players"]: self.player_game.pop(u,None)
+
+    async def leave(self,username):
+        self.waiting=[x for x in self.waiting if x[0]!=username]
+        gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
+        if not game:return
+        if username in game["active"]: game["active"].remove(username)
+        self.player_game.pop(username,None)
+        if len(game["active"])<=1: await self._finish_game(gid)
+        else: await self._broadcast(game,{"type":"player_left","username":username,"active":game["active"]})
+
+    async def disconnect(self,username):
+        gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
+        if game: game["sockets"].pop(username,None)
+
+
+two_player_drawing_manager=DrawingBattleManager(2)
+four_player_drawing_manager=DrawingBattleManager(4)
 
 @app.websocket("/ws/drawing-multi/{mode}")
 async def ws_drawing_multi(websocket: WebSocket, mode: int):
     username=websocket.session.get("username")
     if not username or mode != 4: await websocket.close(code=4001); return
     if not _is_support(username) and (await _ban_for(username,"games") or await _ban_for(username,"drawing")): await websocket.close(code=4003); return
-    await multiplayer_drawing_manager.connect(username,websocket,mode)
+    await four_player_drawing_manager.connect(username,websocket)
     try:
         while True:
             data=await websocket.receive_json(); typ=data.get("type")
-            if typ in ("draw","draw_batch","clear"): await multiplayer_drawing_manager.draw(username,data)
-            elif typ=="guess": await multiplayer_drawing_manager.guess(username,data.get("word"))
-    except WebSocketDisconnect: await multiplayer_drawing_manager.disconnect(username)
+            if typ in ("draw","draw_batch","clear"): await four_player_drawing_manager.draw(username,data)
+            elif typ=="guess": await four_player_drawing_manager.guess(username,data.get("word"))
+    except WebSocketDisconnect: await four_player_drawing_manager.disconnect(username)
 
-
-class DrawingGameManager:
-    def __init__(self):
-        self.waiting: tuple[str, WebSocket] | None = None
-        self.games: dict[str, dict] = {}
-        self.player_game: dict[str, str] = {}
-        self.lock = asyncio.Lock()
-
-    # ---------------------------------------------------------- matchmaking
-    async def connect(self, username: str, ws: WebSocket):
-        await ws.accept()
-        async with self.lock:
-            game_id = self.player_game.get(username)
-            if game_id and game_id in self.games:
-                game = self.games[game_id]
-                game["sockets"][username] = ws
-                await self._send(game, username, self._round_start_payload(game, username))
-                return
-
-            # Matchmaking is atomic: simultaneous requests cannot both become
-            # the waiting player. A stale socket is replaced only for the same user.
-            if self.waiting is not None and self.waiting[0] == username:
-                old_ws = self.waiting[1]
-                self.waiting = (username, ws)
-                try:
-                    await old_ws.close(code=4000)
-                except Exception:
-                    pass
-                await ws.send_json({"type": "waiting", "timeout": 30, "count": 1, "needed": 2})
-                asyncio.create_task(self._queue_timeout(username, ws))
-                return
-
-            if self.waiting is None:
-                self.waiting = (username, ws)
-                await ws.send_json({"type": "waiting", "timeout": 30, "count": 1, "needed": 2})
-                asyncio.create_task(self._queue_timeout(username, ws))
-                return
-
-            other_username, other_ws = self.waiting
-            self.waiting = None
-            game_id = secrets.token_hex(6)
-            game = {
-                "id": game_id,
-                "players": [other_username, username],
-                "sockets": {other_username: other_ws, username: ws},
-                "scores": {other_username: 0, username: 0},
-                "round": 0, "drawer": None, "guesser": None,
-                "word": None, "options": [], "wrong_words": set(),
-                "round_active": False, "round_deadline": 0.0,
-            }
-            self.games[game_id] = game
-            self.player_game[other_username] = game_id
-            self.player_game[username] = game_id
-
-        # Do not hold the matchmaking lock while sending the round.
-        await self._next_round(game_id)
-
-    async def _queue_timeout(self, username, ws):
-        await asyncio.sleep(30)
-        if self.waiting and self.waiting[0] == username and self.waiting[1] is ws:
-            self.waiting = None
-            try: await ws.send_json({"type":"queue_timeout"})
-            except Exception: pass
-
-    async def _send(self, game: dict, username: str, payload: dict):
-        ws = game["sockets"].get(username)
-        if not ws:
-            return
-        try:
-            await ws.send_json(payload)
-        except Exception:
-            pass
-
-    async def _broadcast(self, game: dict, payload: dict):
-        for username in game["players"]:
-            await self._send(game, username, payload)
-
-    def _round_start_payload(self, game: dict, username: str) -> dict:
-        base = {
-            "type": "round_start",
-            "round": game["round"],
-            "total_rounds": DRAW_TOTAL_ROUNDS,
-            "duration": DRAW_ROUND_SECONDS,
-            "scores": game["scores"],
-        }
-        if username == game["drawer"]:
-            base["role"] = "drawer"
-            base["word"] = game["word"]
-            base["colors"] = words_draw.COLORS
-            base["opponent"] = game["guesser"]
-        else:
-            base["role"] = "guesser"
-            base["options"] = game["options"]
-            base["opponent"] = game["drawer"]
-        return base
-
-    # ---------------------------------------------------------------- rounds
-    async def _next_round(self, game_id: str):
-        game = self.games.get(game_id)
-        if not game:
-            return
-
-        game["round"] += 1
-        if game["round"] > DRAW_TOTAL_ROUNDS:
-            await self._finish_game(game_id)
-            return
-
-        players = game["players"]
-        drawer = players[(game["round"] - 1) % 2]
-        guesser = players[game["round"] % 2]
-        target, options = words_draw.pick_round_words(DRAW_OPTIONS_COUNT)
-
-        game.update({
-            "drawer": drawer,
-            "guesser": guesser,
-            "word": target,
-            "options": options,
-            "wrong_words": set(),
-            "round_active": True,
-            "round_deadline": time.monotonic() + DRAW_ROUND_SECONDS,
-        })
-
-        for username in players:
-            await self._send(game, username, self._round_start_payload(game, username))
-
-        asyncio.create_task(self._round_timeout(game_id, game["round"]))
-
-    async def _round_timeout(self, game_id: str, round_number: int):
-        await asyncio.sleep(DRAW_ROUND_SECONDS)
-        game = self.games.get(game_id)
-        if game and game["round_active"] and game["round"] == round_number:
-            await self._end_round(game_id, correct=False)
-
-    async def handle_draw(self, username: str, data: dict):
-        game_id = self.player_game.get(username)
-        game = self.games.get(game_id) if game_id else None
-        if not game or not game["round_active"] or username != game["drawer"]:
-            return
-        other = game["guesser"]
-        msg_type = data.get("type")
-        if msg_type == "draw":
-            await self._send(game, other, {
-                "type": "draw",
-                "x0": data.get("x0"), "y0": data.get("y0"),
-                "x1": data.get("x1"), "y1": data.get("y1"),
-                "color": data.get("color"),
-                "size": max(1, min(30, float(data.get("size") or 4))),
-            })
-        elif msg_type == "draw_batch":
-            segments = data.get("segments") or []
-            clean = [{
-                "x0": s.get("x0"), "y0": s.get("y0"),
-                "x1": s.get("x1"), "y1": s.get("y1"),
-                "color": s.get("color"),
-                "size": max(1, min(30, float(s.get("size") or 4))),
-            } for s in segments[:200]]
-            if clean:
-                await self._send(game, other, {"type": "draw_batch", "segments": clean})
-        elif msg_type == "clear":
-            await self._send(game, other, {"type": "clear"})
-
-    async def handle_guess(self, username: str, word: str):
-        game_id = self.player_game.get(username)
-        game = self.games.get(game_id) if game_id else None
-        if not game or not game["round_active"] or username != game["guesser"]:
-            return
-        word = (word or "").strip()
-        if not word or word in game["wrong_words"]:
-            return
-
-        if word == game["word"]:
-            await db.update_stats(username, correct_guesses=1)
-            await self._end_round(game_id, correct=True)
-        else:
-            game["wrong_words"].add(word)
-            await db.update_stats(username, wrong_guesses=1)
-            await self._send(game, username, {"type": "guess_wrong", "word": word})
-
-    async def _end_round(self, game_id: str, correct: bool):
-        game = self.games.get(game_id)
-        if not game or not game["round_active"]:
-            return
-        game["round_active"] = False
-
-        points_guesser = 0
-        points_drawer = 0
-        if correct:
-            remaining = max(0.0, game["round_deadline"] - time.monotonic())
-            ratio = remaining / DRAW_ROUND_SECONDS
-            raw_points = round(ratio * 100) - 10 * len(game["wrong_words"])
-            points_guesser = max(10, raw_points)
-            points_drawer = 50
-            game["scores"][game["guesser"]] += points_guesser
-            game["scores"][game["drawer"]] += points_drawer
-
-        is_last = game["round"] >= DRAW_TOTAL_ROUNDS
-        await self._broadcast(game, {
-            "type": "round_result",
-            "round": game["round"],
-            "total_rounds": DRAW_TOTAL_ROUNDS,
-            "correct": correct,
-            "word": game["word"],
-            "drawer": game["drawer"],
-            "guesser": game["guesser"],
-            "points_guesser": points_guesser,
-            "points_drawer": points_drawer,
-            "scores": game["scores"],
-            "is_last": is_last,
-            "break_seconds": DRAW_FINAL_RESULT_SECONDS if is_last else DRAW_SCOREBOARD_SECONDS,
-        })
-
-        delay = DRAW_FINAL_RESULT_SECONDS if is_last else DRAW_SCOREBOARD_SECONDS
-        asyncio.create_task(self._advance_after_delay(game_id, delay))
-
-    async def _advance_after_delay(self, game_id: str, delay: float):
-        await asyncio.sleep(delay)
-        game = self.games.get(game_id)
-        if not game:
-            return
-        if game["round"] >= DRAW_TOTAL_ROUNDS:
-            await self._finish_game(game_id)
-        else:
-            await self._next_round(game_id)
-
-    async def _finish_game(self, game_id: str):
-        game = self.games.get(game_id)
-        if not game:
-            return
-        scores = game["scores"]
-        best = max(scores.values())
-        winners = [u for u, s in scores.items() if s == best]
-        winner = winners[0] if len(winners) == 1 else None
-        await self._broadcast(game, {
-            "type": "game_over",
-            "scores": scores,
-            "winner": winner,
-        })
-        if winner:
-            loser = next(u for u in game["players"] if u != winner)
-            await db.update_stats(winner, wins=5, points=scores[winner])
-            await db.update_stats(loser, losses=1, points=scores[loser])
-        else:
-            for u in game["players"]:
-                await db.update_stats(u, draws=1, points=scores[u])
-        for username in game["players"]:
-            self.player_game.pop(username, None)
-        self.games.pop(game_id, None)
-
-    async def _forfeit(self, game_id: str, leaving: str):
-        game = self.games.get(game_id)
-        if not game:
-            return
-        game["round_active"] = False
-        winner = next((u for u in game["players"] if u != leaving), None)
-        if winner:
-            await db.update_stats(winner, wins=5, points=max(1, game["scores"].get(winner, 0)))
-            await self._send(game, winner, {"type":"game_won", "winner":winner, "reason":"حریف از بازی خارج شد."})
-        for u in game["players"]:
-            self.player_game.pop(u, None)
-        self.games.pop(game_id, None)
-
-    async def leave(self, username: str):
-        if self.waiting and self.waiting[0] == username:
-            self.waiting = None
-        game_id = self.player_game.get(username)
-        if game_id and game_id in self.games:
-            await self._forfeit(game_id, username)
-
-    # ------------------------------------------------------------- lifecycle
-    async def disconnect(self, username: str):
-        if self.waiting and self.waiting[0] == username:
-            self.waiting = None
-        game_id = self.player_game.get(username)
-        if game_id and game_id in self.games:
-            await self._forfeit(game_id, username)
-
-
-drawing_manager = DrawingGameManager()
+@app.websocket("/ws/drawing")
+async def ws_drawing(websocket: WebSocket):
+    username=websocket.session.get("username")
+    if not username: await websocket.close(code=4001); return
+    if not _is_support(username) and (await _ban_for(username,"games") or await _ban_for(username,"drawing")): await websocket.close(code=4003); return
+    await two_player_drawing_manager.connect(username,websocket)
+    try:
+        while True:
+            data=await websocket.receive_json(); typ=data.get("type")
+            if typ in ("draw","draw_batch","clear"): await two_player_drawing_manager.draw(username,data)
+            elif typ=="guess": await two_player_drawing_manager.guess(username,data.get("word"))
+    except WebSocketDisconnect: await two_player_drawing_manager.disconnect(username)
 
 
 @app.get("/game/drawing4", response_class=HTMLResponse)
@@ -1177,25 +1131,3 @@ async def drawing_page(request: Request):
     username, blocked = await _require_game_scope(request, "drawing")
     if blocked: return blocked
     return tpl.drawing_page(username)
-
-
-@app.websocket("/ws/drawing")
-async def ws_drawing(websocket: WebSocket):
-    username = websocket.session.get("username")
-    if not username:
-        await websocket.close(code=4001)
-        return
-    if not _is_support(username) and (await _ban_for(username, "games") or await _ban_for(username, "drawing")):
-        await websocket.close(code=4003)
-        return
-    await drawing_manager.connect(username, websocket)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            msg_type = data.get("type")
-            if msg_type in ("draw", "draw_batch", "clear"):
-                await drawing_manager.handle_draw(username, data)
-            elif msg_type == "guess":
-                await drawing_manager.handle_guess(username, data.get("word"))
-    except WebSocketDisconnect:
-        await drawing_manager.disconnect(username)

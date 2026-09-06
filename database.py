@@ -109,6 +109,12 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, tag TEXT NOT NULL,
             created_at INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1)""")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_support_tags_user ON support_tags(username,active,id)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS support_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, filename TEXT NOT NULL,
+            mime_type TEXT NOT NULL, blob BLOB NOT NULL, amount INTEGER NOT NULL DEFAULT 100000,
+            created_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'new'
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_support_receipts_status ON support_receipts(status,id)")
         await db.commit()
 
 async def create_user(username, password_hash, salt, is_support=False):
@@ -485,3 +491,39 @@ async def tags_for(username):
         db.row_factory=aiosqlite.Row
         cur=await db.execute("SELECT id,tag,created_at FROM support_tags WHERE username=? AND active=1 ORDER BY id DESC",(username,))
         return [dict(r) for r in await cur.fetchall()]
+
+
+async def adjust_wallet(username, coins_delta=0, trophies_delta=0):
+    coins_delta=int(coins_delta or 0); trophies_delta=int(trophies_delta or 0)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)", (username,))
+        await db.execute("UPDATE wallet SET coins=MAX(0,coins+?) WHERE username=?", (coins_delta,username))
+        await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)", (username,))
+        await db.execute("UPDATE stats SET wins=MAX(0,wins+?) WHERE username=?", (trophies_delta,username))
+        await db.commit()
+    return await wallet_for(username), await profile(username)
+
+async def create_support_receipt(username, filename, mime_type, blob, amount=100000):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur=await db.execute("INSERT INTO support_receipts(username,filename,mime_type,blob,amount,created_at,status) VALUES(?,?,?,?,?,?,?)",
+                             (username,filename[:180],mime_type[:100],blob,int(amount),int(time.time()),'new'))
+        await db.commit()
+        return cur.lastrowid
+
+async def get_support_receipts(limit=100):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT id,username,filename,mime_type,amount,created_at,status FROM support_receipts ORDER BY id DESC LIMIT ?",(limit,))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def get_support_receipt(receipt_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory=aiosqlite.Row
+        cur=await db.execute("SELECT * FROM support_receipts WHERE id=?",(int(receipt_id),))
+        r=await cur.fetchone()
+        return dict(r) if r else None
+
+async def mark_support_receipt(receipt_id,status):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE support_receipts SET status=? WHERE id=?",(status[:30],int(receipt_id)))
+        await db.commit()

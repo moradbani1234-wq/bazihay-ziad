@@ -291,7 +291,7 @@ def page_shell(title: str, body: str, username: str | None = None) -> str:
 let __reportPayload=null;
 function openReportModal(target,content,context,attachment){__reportPayload={target,content,context,attachment:attachment||""};const m=document.getElementById("reportModal");if(m){m.classList.add("show");m.setAttribute("aria-hidden","false");}}
 function closeReportModal(){const m=document.getElementById("reportModal");if(m){m.classList.remove("show");m.setAttribute("aria-hidden","true");}}
-document.querySelectorAll("#reportReasons button").forEach(b=>b.addEventListener("click",async()=>{if(!__reportPayload)return;const category=b.dataset.cat,extra=document.getElementById("reportExtra").value.trim();b.disabled=true;try{const payload={...__reportPayload,category,content:(__reportPayload.content||"")+(extra?"\nتوضیح: "+extra:"")};const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(d.ok){closeReportModal();alert("✅ گزارش ثبت شد.");}else alert("❌ ثبت گزارش ناموفق بود.");}finally{b.disabled=false;}}));
+document.querySelectorAll("#reportReasons button").forEach(b=>b.addEventListener("click",async()=>{if(!__reportPayload)return;const category=b.dataset.cat,extra=document.getElementById("reportExtra").value.trim();b.disabled=true;try{const payload={...__reportPayload,category,content:(__reportPayload.content||"")+(extra?"\\nتوضیح: "+extra:"")};const r=await fetch("/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(d.ok){closeReportModal();alert("✅ گزارش ثبت شد.");}else alert("❌ ثبت گزارش ناموفق بود.");}finally{b.disabled=false;}}));
 </script>"""
     return f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title><style>{BASE_CSS}</style></head><body><div class="container">{body}</div>{report_modal}</body></html>"""
 
@@ -415,21 +415,42 @@ def leaderboard_page(username: str, rows: list[dict], by: str = "wins") -> str:
     body=f'''<div class="page-heading"><div><div class="sub">RANKING • TOP PLAYERS</div><h1>🏆 لیدر بورد</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter">{tabs}<p>سه نفر اول با پروفایل نئونی ویژه نمایش داده می‌شوند؛ روی پروفایل هر بازیکن بزن.</p><div class="leader-podium">{''.join(podium) or '<p>هنوز آماری ثبت نشده.</p>'}</div><div class="leader-list">{''.join(rest)}</div></div>'''
     return page_shell('رتبه‌بندی',body,username)
 
-def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None) -> str:
-    active_bans=active_bans or []; tickets=tickets or []
-    labels={'all':'همه امکانات','games':'بازی‌ها','chat':'چت','drawing':'نقاشی','profile':'پروفایل','bio':'بیوگرافی','username':'آیدی (تعلیق حساب)'}
+def support_page(username: str, reports: list[dict], active_bans: list[dict] | None = None, tickets: list[dict] | None = None, receipts: list[dict] | None = None) -> str:
+    active_bans=active_bans or []; tickets=tickets or []; receipts=receipts or []
+    labels={'all':'همه امکانات','games':'بازی‌ها','chat':'چت','drawing':'نقاشی','profile':'پروفایل','bio':'بیوگرافی','username':'آیدی'}
     cat_labels={'collusion':'تبانی/تقلب','profile':'پروفایل نامناسب','username':'آیدی نامناسب','spam':'اسپم','chat':'پیام چت نامناسب','bio':'بیوگرافی نامناسب','other':'سایر'}
     items=[]
     for r in reports:
-        cat=r.get('category') or 'other'; status='حل‌شده' if r['status']!='open' else 'باز'
-        attachment = ('<img src="'+html.escape(r.get('attachment') or '')+'" class="report-image">') if r.get('attachment') else ''
-        items.append(f'''<div class="report-item"><div><b>گزارش #{r['id']}</b> <span class="report-category">{cat_labels.get(cat,cat)}</span> — {status}</div><div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر: <b>{html.escape(r['target'])}</b></div><p><b>محتوا:</b> {html.escape(r['content'])}</p>{attachment}<div class="support-action-grid"><select class="ban-scope"><option value="all">همه امکانات</option><option value="username">آیدی (تعلیق حساب)</option><option value="profile">پروفایل</option><option value="bio">بیوگرافی</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option></select><input class="ban-hours" type="number" min="0" max="168" value="0"><input class="ban-minutes" type="number" min="0" max="59" value="10"><button class="glow-btn" onclick="banUser({r['id']},this)">🚫 محروم کن</button></div></div>''')
+        cat=r.get('category') or 'other'; status='حل‌شده' if r['status']!='open' else 'باز'; attachment=(' <img src="'+html.escape(r.get('attachment') or '')+'" class="report-image">') if r.get('attachment') else ''
+        items.append(f'''<div class="report-item"><div><b>گزارش #{r['id']}</b> <span class="report-category">{cat_labels.get(cat,cat)}</span> — {status}</div><div class="report-meta">گزارش‌دهنده: {html.escape(r['reporter'])} | کاربر: <b>{html.escape(r['target'])}</b></div><p>{html.escape(r['content'])}</p>{attachment}<div class="support-action-grid"><select class="ban-scope"><option value="all">همه امکانات</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option></select><input class="ban-hours" type="number" min="0" max="168" value="0"><input class="ban-minutes" type="number" min="1" max="59" value="10"><button class="glow-btn" onclick="banUser({r['id']},this)">🚫 محروم کن</button></div></div>''')
     bans=[]
     for b in active_bans:
         remaining=max(0,b['until_ts']-int(time.time())); h,rem=divmod(remaining,3600); m=rem//60; left=(f'{h} ساعت و ' if h else '')+f'{m} دقیقه'
         bans.append(f'''<div class="ban-row" data-target="{html.escape(b['username'])}" data-scope="{html.escape(b['scope'])}"><b>@{html.escape(b['username'])}</b> <span class="ban-scope-tag">{labels.get(b['scope'],b['scope'])}</span><div class="report-meta">{html.escape(b.get('reason') or '—')} • {left}</div><button class="btn" onclick="unbanUser(this)">رفع محرومیت</button></div>''')
-    ticket_items=[f'<div class="report-item"><b>#{t["id"]} — {html.escape(t["subject"])}</b><div class="report-meta">از {html.escape(t["user"])} • {html.escape(t["status"])}</div><p>{html.escape(t["content"])}</p></div>' for t in tickets]
-    body=f'''<div class="card admin-card page-enter"><h1>🛡️ پنل پشتیبانی رسمی</h1><p>مدیریت کامل گزارش، محرومیت، پیام رسمی، پین چت و تگ پروفایل.</p></div><div class="card"><h2>📣 پیام رسمی به کاربر</h2><div class="support-direct-grid"><input id="officialTarget" placeholder="آیدی کاربر"><input id="officialText" placeholder="متن پیام رسمی"><button class="glow-btn" onclick="sendOfficial()">ارسال پیام</button></div></div><div class="card"><h2>🏷️ تگ پشتیبانی</h2><div class="support-direct-grid"><input id="tagTarget" placeholder="آیدی کاربر"><input id="tagText" maxlength="40" placeholder="مثلاً بازیکن برتر"><button class="glow-btn" onclick="addTag()">ثبت تگ</button><button class="btn" onclick="removeTags()">حذف تگ‌ها</button></div></div><div class="card"><h2>🔨 محرومیت مستقیم</h2><div class="support-direct-grid"><input id="directTarget" placeholder="آیدی کاربر"><select id="directScope"><option value="all">همه امکانات</option><option value="username">آیدی (تعلیق حساب)</option><option value="profile">پروفایل</option><option value="bio">بیوگرافی</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option></select><input id="directHours" type="number" min="0" max="168" value="0"><input id="directMinutes" type="number" min="0" max="59" value="10"></div><input id="directReason" placeholder="دلیل محرومیت"><button class="glow-btn" onclick="banDirect()">🚫 محروم کن</button></div><div class="card"><h2>⏳ محرومیت‌های فعال</h2><div id="activeBans">{''.join(bans) or '<p>محرومیت فعالی وجود ندارد.</p>'}</div></div><div class="card"><h2>🎫 تیکت‌ها</h2>{''.join(ticket_items) or '<p>تیکتی ثبت نشده.</p>'}</div><div class="card"><h2>🚩 گزارش‌ها</h2>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div><div style="text-align:center"><a class="btn" href="/chat/public">💬 مدیریت چت عمومی</a> <a class="btn" href="/lobby">لابی</a></div><script>async function post(url,payload){{const r=await fetch(url,{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});return r.json()}}async function doBan(p){{const d=await post('/support/ban',p);if(d.ok)location.reload();else alert('❌ اطلاعات را بررسی کن.')}}async function banUser(id,btn){{const item=btn.closest('.report-item');const target=item.querySelector('.report-meta b').textContent.trim();await doBan({{report_id:id,target,scope:item.querySelector('.ban-scope').value,hours:Number(item.querySelector('.ban-hours').value)||0,minutes:Number(item.querySelector('.ban-minutes').value)||0,reason:'بر اساس گزارش #'+id}})}}async function banDirect(){{const target=directTarget.value.trim();if(!target)return;await doBan({{target,scope:directScope.value,hours:Number(directHours.value)||0,minutes:Number(directMinutes.value)||0,reason:directReason.value.trim()||'نقض قوانین'}})}}async function unbanUser(btn){{const row=btn.closest('.ban-row');const d=await post('/support/unban',{{target:row.dataset.target,scope:row.dataset.scope}});if(d.ok)row.remove()}}async function sendOfficial(){{const target=officialTarget.value.trim(),content=officialText.value.trim();if(!target||!content)return alert('آیدی و پیام را کامل کن.');const d=await post('/support/message',{{target,content}});alert(d.ok?'✅ پیام رسمی ارسال شد.':'❌ ارسال ناموفق بود.');if(d.ok)officialText.value=''}}async function addTag(){{const target=tagTarget.value.trim(),tag=tagText.value.trim();if(!target||!tag)return;const d=await post('/support/tag',{{target,tag}});alert(d.ok?'🏷️ تگ ثبت شد.':'❌ ثبت نشد.')}}async function removeTags(){{const target=tagTarget.value.trim();if(!target)return;const d=await post('/support/tag/remove',{{target}});if(d.ok)alert('تگ‌ها حذف شدند.')}} </script>'''
+    ticket_items=''.join(f'<div class="report-item"><b>#{t["id"]} — {html.escape(t["subject"])}</b><div class="report-meta">از {html.escape(t["user"])}</div><p>{html.escape(t["content"])}</p></div>' for t in tickets)
+    receipt_items=''.join(f'''<div class="receipt-row"><div><b>🧾 @{html.escape(r['username'])}</b><div class="report-meta">۱۰۰۰ سکه • {html.escape(r['filename'])} • وضعیت: {html.escape(r['status'])}</div></div><div class="receipt-actions"><a class="btn" target="_blank" href="/support/receipt/{int(r['id'])}">مشاهده</a><button class="btn" onclick="receiptStatus({int(r['id'])},'accepted')">تأیید</button><button class="btn" onclick="receiptStatus({int(r['id'])},'rejected')">رد</button></div></div>''' for r in receipts)
+    body=f'''<div class="card admin-card page-enter"><h1>🛡️ مرکز فرماندهی پشتیبانی</h1><p>گزارش‌ها، محرومیت‌ها، موجودی کاربران و رسیدهای پرداخت از یکجا.</p></div>
+    <div class="card support-admin-card"><h2>💰 مدیریت سکه و جام</h2><div class="support-direct-grid"><input id="walletTarget" placeholder="آیدی کاربر"><input id="coinDelta" type="number" placeholder="تغییر سکه، مثلاً +1000 یا -500"><input id="trophyDelta" type="number" placeholder="تغییر جام، مثلاً +5 یا -2"><button class="glow-btn" onclick="adjustWallet()">اعمال تغییر</button></div><div id="walletStatus" class="status-line"></div></div>
+    <div class="card support-admin-card"><h2>🧾 صندوق رسیدهای پرداخت</h2><div class="payment-note">هر بسته: <b>۱۰۰۰ سکه = ۱۰۰٬۰۰۰ تومان</b> • کارت: <b>۶۲۱۹۸۶۱۸۵۱۱۶۰۰۶۸</b></div>{receipt_items or '<p>هنوز رسیدی ارسال نشده.</p>'}</div>
+    <div class="card"><h2>📣 پیام رسمی به کاربر</h2><div class="support-direct-grid"><input id="officialTarget" placeholder="آیدی کاربر"><input id="officialText" placeholder="متن پیام رسمی"><button class="glow-btn" onclick="sendOfficial()">ارسال پیام</button></div></div>
+    <div class="card"><h2>🏷️ تگ پشتیبانی</h2><div class="support-direct-grid"><input id="tagTarget" placeholder="آیدی کاربر"><input id="tagText" maxlength="40" placeholder="مثلاً بازیکن برتر"><button class="glow-btn" onclick="addTag()">ثبت تگ</button><button class="btn" onclick="removeTags()">حذف تگ‌ها</button></div></div>
+    <div class="card"><h2>🔨 محرومیت مستقیم</h2><div class="support-direct-grid"><input id="directTarget" placeholder="آیدی کاربر"><select id="directScope"><option value="all">همه امکانات</option><option value="chat">چت</option><option value="games">بازی‌ها</option><option value="drawing">نقاشی</option><option value="profile">پروفایل</option></select><input id="directHours" type="number" min="0" max="168" value="0"><input id="directMinutes" type="number" min="1" max="59" value="10"></div><input id="directReason" placeholder="دلیل محرومیت"><button class="glow-btn" onclick="banDirect()">🚫 محروم کن</button></div>
+    <div class="card"><h2>⏳ محرومیت‌های فعال</h2><div id="activeBans">{''.join(bans) or '<p>محرومیت فعالی وجود ندارد.</p>'}</div></div>
+    <div class="card"><h2>🎫 تیکت‌ها</h2>{ticket_items or '<p>تیکتی ثبت نشده.</p>'}</div>
+    <div class="card"><h2>🚩 گزارش‌ها</h2>{''.join(items) or '<p>گزارشی وجود ندارد.</p>'}</div>
+    <div style="text-align:center"><a class="btn" href="/chat/private/morad">💬 پیوی پشتیبانی</a> <a class="btn" href="/chat/public">چت عمومی</a> <a class="btn" href="/lobby">لابی</a></div>
+    <script>
+    async function post(url,payload){{const r=await fetch(url,{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}});return r.json()}}
+    async function doBan(p){{const d=await post('/support/ban',p);if(d.ok)location.reload();else alert('❌ اطلاعات را بررسی کن.')}}
+    async function banUser(id,btn){{const item=btn.closest('.report-item');const target=item.querySelector('.report-meta b').textContent.trim();await doBan({{report_id:id,target,scope:item.querySelector('.ban-scope').value,hours:Number(item.querySelector('.ban-hours').value)||0,minutes:Number(item.querySelector('.ban-minutes').value)||0,reason:'بر اساس گزارش #'+id}})}}
+    async function banDirect(){{const target=directTarget.value.trim();if(!target)return;await doBan({{target,scope:directScope.value,hours:Number(directHours.value)||0,minutes:Number(directMinutes.value)||0,reason:directReason.value.trim()||'نقض قوانین'}})}}
+    async function unbanUser(btn){{const row=btn.closest('.ban-row');const d=await post('/support/unban',{{target:row.dataset.target,scope:row.dataset.scope}});if(d.ok)row.remove()}}
+    async function adjustWallet(){{const target=walletTarget.value.trim();if(!target)return;const d=await post('/support/adjust',{{target,coins:Number(coinDelta.value)||0,trophies:Number(trophyDelta.value)||0}});walletStatus.textContent=d.ok?'✅ تغییر با موفقیت اعمال شد. موجودی جدید: '+(d.wallet?.coins??0)+' سکه':'❌ انجام نشد';}}
+    async function receiptStatus(id,status){{const d=await post('/support/receipt/status',{{id,status}});if(d.ok)location.reload()}}
+    async function sendOfficial(){{const target=officialTarget.value.trim(),content=officialText.value.trim();if(!target||!content)return alert('آیدی و پیام را کامل کن.');const d=await post('/support/message',{{target,content}});alert(d.ok?'✅ پیام رسمی ارسال شد.':'❌ ارسال ناموفق بود.');if(d.ok)officialText.value=''}}
+    async function addTag(){{const target=tagTarget.value.trim(),tag=tagText.value.trim();if(!target||!tag)return;const d=await post('/support/tag',{{target,tag}});alert(d.ok?'🏷️ تگ ثبت شد.':'❌ ثبت نشد.')}}
+    async function removeTags(){{const target=tagTarget.value.trim();if(!target)return;const d=await post('/support/tag/remove',{{target}});if(d.ok)alert('تگ‌ها حذف شدند.')}}
+    </script>'''
     return page_shell('پنل پشتیبانی',body,username)
 
 def _render_messages(messages: list[dict], username: str, support=False) -> str:
@@ -454,442 +475,55 @@ def chat_private_page(username: str, other: str, messages: list[dict]) -> str:
     body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 @{html.escape(other)}</div><a class="btn" href="/messages">پیام‌ها</a></div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username,False)}</div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنوی..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{html.escape(other)}'),box=document.getElementById('chatBox'),me={username!r};function addMsg(d){{const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'');const s=document.createElement('span');s.className='sender';s.textContent=d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(s,c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}box.appendChild(div);box.scrollTop=box.scrollHeight}}ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.content!==undefined)addMsg(d)}};function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;</script>'''
     return page_shell(f'چت با {other}',body,username)
 
-def drawing_page(username: str) -> str:
-    body = """
-    <div class="card">
-      <h1>🎨 نقاشی حدسی دو نفره</h1>
-      <div class="status-line" id="status">در حال اتصال...</div>
-      <div id="queueBox" class="queue-widget" style="display:none"></div>
-
-      <div id="playersRow" class="draw-players-row" style="display:none"></div>
-
-      <div id="roundInfo" class="draw-round-info" style="display:none">
-        <span id="roundLabel"></span>
-        <span id="timerLabel" class="draw-timer"></span>
-      </div>
-
-      <div id="boardFrame" class="draw-board-frame" style="display:none">
-        <div id="canvasWrap" class="draw-canvas-wrap">
-          <canvas id="board" width="600" height="420"></canvas>
-        </div>
-      </div>
-
+def _drawing_battle_page(username: str, mode: int) -> str:
+    title = "🎨 حدس نقاشی دو نفره" if mode == 2 else "🎨 نقاشی ۴ نفره"
+    path = "/ws/drawing" if mode == 2 else "/ws/drawing-multi/4"
+    total_rounds = 6 if mode == 2 else 4
+    duration = 45 if mode == 2 else 35
+    body = f"""<div class="draw-battle page-enter">
+      <div class="draw-hero"><div><div class="draw-kicker">DRAW BATTLE • LIVE</div><h1>{title}</h1><div id="status" class="draw-status">🔌 در حال اتصال...</div></div><div class="draw-mode-badge">{mode} بازیکن</div></div>
+      <div id="queueBox" class="queue-widget"><div class="queue-spinner"></div><div class="queue-text">🔌 در حال پیدا کردن بازیکن‌ها...</div></div>
+      <div id="playersRow" class="draw-players-grid"></div>
+      <div id="roundInfo" class="draw-round-info"><span id="roundLabel">دور ۱ از {total_rounds}</span><span id="timerLabel" class="draw-timer">⏱ --</span></div>
+      <div id="previewPanel" class="draw-preview" style="display:none"><div class="preview-orb">🎨</div><div class="preview-title">آماده شو!</div><div id="previewText">موضوع برای نقاش آماده می‌شود...</div><div id="previewTimer" class="preview-count">5</div></div>
+      <div id="boardFrame" class="draw-board-frame" style="display:none"><div class="draw-board-top"><span id="turnBadge">LIVE</span><span id="drawerLabel"></span></div><div class="draw-canvas-wrap"><canvas id="board" width="600" height="420"></canvas></div></div>
       <div id="palette" class="draw-palette" style="display:none"></div>
-      <div id="tools" class="draw-tools" style="display:none">
-        <button class="draw-tool active" id="penTool">✏️ قلم</button>
-        <button class="draw-tool" id="eraserTool">🧽 پاک‌کن</button>
-        <div class="draw-size-slider-wrap">
-          <span class="draw-size-label">ضخامت</span>
-          <input type="range" id="sizeSlider" min="1" max="30" value="4" step="1">
-          <span id="sizeValue" class="draw-size-value">4</span>
-        </div>
-      </div>
+      <div id="tools" class="draw-tools" style="display:none"><button class="draw-tool active" id="penTool">✏️ قلم</button><button class="draw-tool" id="eraserTool">🧽 پاک‌کن</button><div class="draw-size-slider-wrap"><span class="draw-size-label">ضخامت</span><input type="range" id="sizeSlider" min="1" max="30" value="5"><span id="sizeValue" class="draw-size-value">5</span></div><button class="draw-tool" id="clearBtn">🧹 پاک‌کردن</button></div>
       <div id="drawerWordBox" class="draw-word-box" style="display:none"></div>
-      <div style="text-align:center;display:none" id="clearBtnWrap">
-        <button id="clearBtn">🧹 پاک کردن بوم</button>
-      </div>
-
       <div id="optionsGrid" class="draw-options" style="display:none"></div>
-
+      <div id="guessBox" class="draw-guess-box" style="display:none"><input id="guessInput" placeholder="حدست رو بنویس..." autocomplete="off"><button id="guessBtn">حدس بزن ⚡</button></div>
       <div id="resultPanel" class="draw-result" style="display:none"></div>
-
-      <div style="text-align:center;margin-top:14px">
-        <a class="btn glow-btn" href="/lobby" onclick="event.preventDefault(); intentionallyLeaving=true; fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">بازگشت به لابی</a>
-      </div>
+      <div class="draw-exit"><a class="btn glow-btn" href="/lobby" onclick="event.preventDefault();leaveGame()">🏠 بازگشت به لابی</a></div>
     </div>
-
     <script>
-    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    let ws = null;
-    let reconnectTimer = null;
-    let intentionallyLeaving = false;
-    const me = """ + f"{username!r}" + """;
-
-    const statusEl = document.getElementById("status");
-    const queueBox = document.getElementById("queueBox");
-    const roundInfo = document.getElementById("roundInfo");
-    const roundLabel = document.getElementById("roundLabel");
-    const timerLabel = document.getElementById("timerLabel");
-    const playersRow = document.getElementById("playersRow");
-    const boardFrame = document.getElementById("boardFrame");
-    const canvasWrap = document.getElementById("canvasWrap");
-    const canvas = document.getElementById("board");
-    const ctx = canvas.getContext("2d");
-    const palette = document.getElementById("palette");
-    const tools = document.getElementById("tools");
-    const penTool = document.getElementById("penTool");
-    const eraserTool = document.getElementById("eraserTool");
-    const drawerWordBox = document.getElementById("drawerWordBox");
-    const clearBtnWrap = document.getElementById("clearBtnWrap");
-    const clearBtn = document.getElementById("clearBtn");
-    const optionsGrid = document.getElementById("optionsGrid");
-    const resultPanel = document.getElementById("resultPanel");
-
-    let role = null;
-    let currentColor = "#111111";
-    let currentSize = 4;
-    let tool = "pen";
-    let drawing = false;
-    let lastX = null, lastY = null;
-    let countdownTimer = null;
-
-    function clearCanvas() {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    clearCanvas();
-
-    function renderPlayers(scores, drawerName) {
-        playersRow.innerHTML = "";
-        Object.entries(scores || {}).forEach(([name, score]) => {
-            const isMe = name === me;
-            const isDrawer = drawerName != null && name === drawerName;
-            const card = document.createElement("div");
-            card.className = "draw-player-card" + (isMe ? " me" : "") + (isDrawer ? " turn" : "");
-
-            const avatar = document.createElement("div");
-            avatar.className = "draw-player-avatar";
-            avatar.textContent = name.slice(0, 1).toUpperCase();
-            card.appendChild(avatar);
-
-            const info = document.createElement("div");
-            info.className = "draw-player-info";
-
-            const nameRow = document.createElement("div");
-            nameRow.className = "draw-player-name-row";
-            const link = document.createElement("a");
-            link.className = "profile-link draw-player-name";
-            link.href = "/profile?u=" + encodeURIComponent(name);
-            link.target = "_blank";
-            link.rel = "noopener";
-            link.textContent = name;
-            const star = document.createElement("span");
-            star.className = "draw-player-star";
-            star.textContent = "⭐ " + score;
-            nameRow.appendChild(link);
-            nameRow.appendChild(star);
-            info.appendChild(nameRow);
-
-            if (drawerName != null) {
-                const roleEl = document.createElement("div");
-                roleEl.className = "draw-player-role";
-                roleEl.textContent = isDrawer ? "✏️ نقاش" : "👁 حدس‌زن";
-                info.appendChild(roleEl);
-            }
-
-            card.appendChild(info);
-            playersRow.appendChild(card);
-        });
-        playersRow.style.display = "flex";
-    }
-
-    function renderQueue(count, needed) {
-        queueBox.style.display = "flex";
-        let dots = "";
-        for (let i = 0; i < needed; i++) dots += '<div class="queue-dot' + (i < count ? ' filled' : '') + '"></div>';
-        queueBox.innerHTML = '<div class="queue-spinner"></div><div class="queue-dots">' + dots +
-            '</div><div class="queue-text">' + count + ' از ' + needed + ' نفر در صف هستند</div>' +
-            '<div class="queue-sub">صبور باش؛ به‌محض تکمیل ظرفیت، بازی شروع می‌شود ✨</div>';
-    }
-
-    function startCountdown(seconds, onTick) {
-        if (countdownTimer) clearInterval(countdownTimer);
-        let remaining = seconds;
-        onTick(remaining);
-        countdownTimer = setInterval(() => {
-            remaining -= 1;
-            onTick(remaining);
-            if (remaining <= 0) clearInterval(countdownTimer);
-        }, 1000);
-    }
-
-    function normPoint(x, y) {
-        return {x: x / canvas.width, y: y / canvas.height};
-    }
-
-    function canvasPos(ev) {
-        const rect = canvas.getBoundingClientRect();
-        const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-        const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
-        return {
-            x: (clientX - rect.left) * (canvas.width / rect.width),
-            y: (clientY - rect.top) * (canvas.height / rect.height)
-        };
-    }
-
-    function drawLine(x0, y0, x1, y1, color, size = currentSize) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = size;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
-        ctx.stroke();
-    }
-
-    let pendingSegments = [];
-    let flushScheduled = false;
-
-    function queueSegment(x0, y0, x1, y1, color, size) {
-        pendingSegments.push({x0, y0, x1, y1, color, size});
-        if (!flushScheduled) {
-            flushScheduled = true;
-            requestAnimationFrame(flushSegments);
-        }
-    }
-
-    function flushSegments() {
-        flushScheduled = false;
-        if (!pendingSegments.length) return;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({type: "draw_batch", segments: pendingSegments}));
-        }
-        pendingSegments = [];
-    }
-
-    canvas.addEventListener("pointerdown", (ev) => {
-        if (role !== "drawer") return;
-        drawing = true;
-        canvas.setPointerCapture(ev.pointerId);
-        const p = canvasPos(ev);
-        lastX = p.x; lastY = p.y;
-    });
-    canvas.addEventListener("pointermove", (ev) => {
-        if (role !== "drawer" || !drawing) return;
-        const paintColor = tool === "eraser" ? "#ffffff" : currentColor;
-        const events = ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
-        for (const ce of (events.length ? events : [ev])) {
-            const p = canvasPos(ce);
-            drawLine(lastX, lastY, p.x, p.y, paintColor, currentSize);
-            const n0 = normPoint(lastX, lastY);
-            const n1 = normPoint(p.x, p.y);
-            queueSegment(n0.x, n0.y, n1.x, n1.y, paintColor, currentSize);
-            lastX = p.x; lastY = p.y;
-        }
-    });
-    ["pointerup", "pointerleave", "pointercancel"].forEach(evName => {
-        canvas.addEventListener(evName, () => { drawing = false; flushSegments(); });
-    });
-
-    clearBtn.addEventListener("click", () => {
-        clearCanvas();
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "clear"}));
-    });
-    penTool.onclick=()=>{tool="pen"; penTool.classList.add("active"); eraserTool.classList.remove("active");};
-    eraserTool.onclick=()=>{tool="eraser"; eraserTool.classList.add("active"); penTool.classList.remove("active");};
-    const sizeSlider = document.getElementById("sizeSlider");
-    const sizeValue = document.getElementById("sizeValue");
-    sizeSlider.addEventListener("input", () => {
-        currentSize = Number(sizeSlider.value) || 4;
-        sizeValue.textContent = currentSize;
-    });
-
-
-    function buildPalette(colors) {
-        palette.innerHTML = "";
-        colors.forEach((c, i) => {
-            const sw = document.createElement("div");
-            sw.className = "draw-swatch" + (i === 0 ? " active" : "");
-            sw.style.background = c;
-            sw.onclick = () => {
-                currentColor = c;
-                [...palette.children].forEach(el => el.classList.remove("active"));
-                sw.classList.add("active");
-            };
-            palette.appendChild(sw);
-        });
-        currentColor = colors[0];
-    }
-
-    function buildOptions(options) {
-        optionsGrid.innerHTML = "";
-        options.forEach((word) => {
-            const btn = document.createElement("button");
-            btn.className = "draw-option-btn";
-            btn.textContent = word;
-            btn.onclick = () => {
-                if (btn.disabled) return;
-                if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: "guess", word: word}));
-            };
-            btn.dataset.word = word;
-            optionsGrid.appendChild(btn);
-        });
-    }
-
-    function resetRoundUI() {
-        resultPanel.style.display = "none";
-        roundInfo.style.display = "flex";
-        clearCanvas();
-    }
-
-    function connectDrawing() {
-        statusEl.style.display = "block";
-        statusEl.textContent = "🔌 اتصال سریع به سرور بازی...";
-        ws = new WebSocket(wsProto + "//" + location.host + "/ws/drawing");
-        ws.onopen = () => { statusEl.textContent = "⚡ وصل شد! حریف در حال پیدا شدن..."; };
-        ws.onerror = () => { statusEl.textContent = "⚠️ اتصال ناپایدار؛ دوباره تلاش می‌کنیم..."; };
-        ws.onclose = () => {
-            if (!intentionallyLeaving && !reconnectTimer) {
-                statusEl.textContent = "🔄 اتصال قطع شد؛ اتصال مجدد...";
-                reconnectTimer = setTimeout(() => { reconnectTimer=null; connectDrawing(); }, 1200);
-            }
-        };
-        ws.onmessage = onDrawingMessage;
-    }
-
-    function onDrawingMessage(ev) {
-        const data = JSON.parse(ev.data);
-
-        if (data.type === "waiting") {
-            statusEl.style.display = "none";
-            renderQueue(data.count || 1, data.needed || 2);
-            boardFrame.style.display = "none";
-            playersRow.style.display = "none";
-        }
-
-        else if (data.type === "queue_timeout") {
-            queueBox.style.display = "none";
-            statusEl.style.display = "block";
-            statusEl.textContent = "⌛ حریفی پیدا نشد؛ برای جستجوی دوباره وارد شو.";
-            boardFrame.style.display = "none";
-        }
-
-        else if (data.type === "round_start") {
-            statusEl.style.display = "none";
-            queueBox.style.display = "none";
-            resetRoundUI();
-            role = data.role;
-            const drawerName = role === "drawer" ? me : data.opponent;
-            renderPlayers(data.scores, drawerName);
-            boardFrame.style.display = "block";
-            roundLabel.textContent = "دور " + data.round + " از " + data.total_rounds +
-                (role === "drawer" ? " — نوبت نقاشی توئه" : " — حدس بزن " + data.opponent + " چی می‌کشه");
-
-            if (role === "drawer") {
-                drawerWordBox.style.display = "block";
-                drawerWordBox.textContent = "کلمه‌ای که باید بکشی: " + data.word;
-                palette.style.display = "flex";
-                tools.style.display = "flex";
-                clearBtnWrap.style.display = "block";
-                optionsGrid.style.display = "none";
-                buildPalette(data.colors);
-            } else {
-                drawerWordBox.style.display = "none";
-                palette.style.display = "none";
-                clearBtnWrap.style.display = "none";
-                optionsGrid.style.display = "flex";
-                buildOptions(data.options);
-            }
-
-            startCountdown(data.duration, (remaining) => {
-                timerLabel.textContent = "⏱ " + Math.max(0, remaining) + " ثانیه";
-            });
-        }
-
-        else if (data.type === "draw") {
-            const x0 = data.x0 * canvas.width, y0 = data.y0 * canvas.height;
-            const x1 = data.x1 * canvas.width, y1 = data.y1 * canvas.height;
-            const remoteSize = Math.max(1, Math.min(30, Number(data.size) || 4));
-            drawLine(x0, y0, x1, y1, data.color || "#111111", remoteSize);
-        }
-
-        else if (data.type === "draw_batch") {
-            (data.segments || []).forEach(seg => {
-                const x0 = seg.x0 * canvas.width, y0 = seg.y0 * canvas.height;
-                const x1 = seg.x1 * canvas.width, y1 = seg.y1 * canvas.height;
-                const remoteSize = Math.max(1, Math.min(30, Number(seg.size) || 4));
-                drawLine(x0, y0, x1, y1, seg.color || "#111111", remoteSize);
-            });
-        }
-
-        else if (data.type === "clear") {
-            clearCanvas();
-        }
-
-        else if (data.type === "guess_wrong") {
-            const btn = optionsGrid.querySelector('[data-word="' + CSS.escape(data.word) + '"]');
-            if (btn) { btn.disabled = true; btn.classList.add("wrong"); }
-        }
-
-        else if (data.type === "round_result") {
-            if (countdownTimer) clearInterval(countdownTimer);
-            roundInfo.style.display = "none";
-            palette.style.display = "none";
-            clearBtnWrap.style.display = "none";
-            drawerWordBox.style.display = "none";
-            optionsGrid.style.display = "none";
-            renderPlayers(data.scores, data.drawer);
-
-            resultPanel.style.display = "block";
-            let html = "<div class='draw-result-title'>" +
-                (data.correct ? "✅ حدس درست بود!" : "⌛ زمان تموم شد!") +
-                "</div>";
-            html += "<div>کلمه: <b>" + data.word + "</b></div>";
-            if (data.correct) {
-                html += "<div>" + data.guesser + " امتیاز " + data.points_guesser + " گرفت و " +
-                    data.drawer + " امتیاز " + data.points_drawer + " گرفت.</div>";
-            } else {
-                html += "<div>این دور امتیازی داده نشد.</div>";
-            }
-            resultPanel.innerHTML = html;
-            if (data.drawer !== me) {
-                const rb=document.createElement("button"); rb.className="report-btn"; rb.textContent="گزارش نقاشی";
-                rb.onclick=()=>openReportModal(data.drawer,"نقاشی/محتوای دور گزارش شد","drawing",(canvas.toDataURL("image/jpeg",0.65)||""));
-                resultPanel.appendChild(rb);
-            }
-            const noteEl = document.createElement("div");
-            noteEl.className = "draw-result-note";
-            resultPanel.appendChild(noteEl);
-            startCountdown(data.break_seconds, (remaining) => {
-                noteEl.textContent = data.is_last
-                    ? "نمایش نتیجهٔ نهایی... " + Math.max(0, remaining)
-                    : "دور بعدی تا " + Math.max(0, remaining) + " ثانیهٔ دیگر شروع می‌شود...";
-            });
-        }
-
-        else if (data.type === "game_over") {
-            if (countdownTimer) clearInterval(countdownTimer);
-            statusEl.style.display = "none";
-            roundInfo.style.display = "none";
-            boardFrame.style.display = "none";
-            palette.style.display = "none";
-            clearBtnWrap.style.display = "none";
-            optionsGrid.style.display = "none";
-            renderPlayers(data.scores, null);
-
-            resultPanel.style.display = "block";
-            const entries = Object.entries(data.scores).sort((a, b) => b[1] - a[1]);
-            let html = "<div class='draw-result-title'>🏁 نتیجهٔ نهایی</div>";
-            entries.forEach(([name, score]) => {
-                const tag = (data.winner === name) ? " 🏆" : "";
-                html += "<div>" + name + ": " + score + tag + "</div>";
-            });
-            if (!data.winner) html += "<div>🤝 مساوی شدید!</div>";
-            resultPanel.innerHTML = html;
-        }
-
-        else if (data.type === "game_won") {
-            if (countdownTimer) clearInterval(countdownTimer);
-            statusEl.style.display = "block";
-            statusEl.textContent = "🏆 شما برنده شدید! حریف از بازی خارج شد.";
-            roundInfo.style.display = "none";
-            boardFrame.style.display = "none";
-            palette.style.display = "none";
-            clearBtnWrap.style.display = "none";
-            optionsGrid.style.display = "none";
-            resultPanel.style.display = "block";
-            resultPanel.innerHTML = "<div class='draw-result-title'>🏆 شما برنده شدید!</div><div>حریف از بازی خارج شد و برد به شما رسید.</div>";
-        }
-
-        else if (data.type === "opponent_left") {
-            if (countdownTimer) clearInterval(countdownTimer);
-            statusEl.style.display = "block";
-            statusEl.textContent = "❌ حریف بازی رو ترک کرد.";
-        }
-    }
-    connectDrawing();
+    const me={username!r}, MODE={mode}, TOTAL_ROUNDS={total_rounds}, DURATION={duration}, WS_PATH={path!r};
+    const proto=location.protocol==='https:'?'wss:':'ws:'; let ws=null,recon=null,intentionallyLeaving=false,timerInt=null,previewInt=null,role=null,currentColor='#20163a',currentSize=5,tool='pen',drawing=false,last=null,pending=[];
+    const $=id=>document.getElementById(id), status=$('status'),queue=$('queueBox'),players=$('playersRow'),roundInfo=$('roundInfo'),roundLabel=$('roundLabel'),timer=$('timerLabel'),preview=$('previewPanel'),previewText=$('previewText'),previewTimer=$('previewTimer'),boardFrame=$('boardFrame'),drawerLabel=$('drawerLabel'),canvas=$('board'),ctx=canvas.getContext('2d'),palette=$('palette'),tools=$('tools'),wordBox=$('drawerWordBox'),opts=$('optionsGrid'),guessBox=$('guessBox'),guessInput=$('guessInput'),result=$('resultPanel');
+    function clearBoard(){{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)}} clearBoard();
+    function avatarNode(profile){{const wrap=document.createElement('div');wrap.className='draw-avatar';const a=profile?.avatar||'🎮';if(typeof a==='string'&&a.startsWith('data:image/')){{const img=document.createElement('img');img.src=a;img.alt='';wrap.appendChild(img)}}else wrap.textContent=a||'🎮';return wrap}}
+    function renderPlayers(scores,active,drawerName,profiles){{players.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,sc],i)=>{{const p=(profiles||{{}})[u]||{{username:u,display_name:u,avatar:'🎮'}};const card=document.createElement('div');card.className='draw-player-card'+(u===me?' me':'')+(u===drawerName?' turn':'')+((active||[]).includes(u)?'':' out');const link=document.createElement('a');link.href='/profile?u='+encodeURIComponent(u);link.target='_blank';link.rel='noopener';link.className='draw-player-main';link.appendChild(avatarNode(p));const info=document.createElement('div');info.className='draw-player-info';const name=document.createElement('b');name.textContent=p.display_name||u;const handle=document.createElement('span');handle.textContent='@'+u;const score=document.createElement('strong');score.textContent='⭐ '+sc;info.append(name,handle);link.append(info,score);const role=document.createElement('div');role.className='draw-role';role.textContent=u===drawerName?'✏️ نقاش':'🔎 حدس‌زن';card.append(link,role);players.appendChild(card)}})}}
+    function queueUI(n,needed){{queue.style.display='flex';let dots='';for(let i=0;i<needed;i++)dots+='<i class="queue-dot'+(i<n?' filled':'')+'"></i>';queue.innerHTML='<div class="queue-spinner"></div><div class="queue-dots">'+dots+'</div><div class="queue-text">'+n+' از '+needed+' نفر آماده‌اند</div><div class="queue-sub">به‌محض تکمیل ظرفیت، رقابت شروع می‌شود ✨</div>'}}
+    function countdown(sec,fn,clearOld=true){{if(clearOld&&timerInt)clearInterval(timerInt);let left=Math.max(0,Math.ceil(sec));fn(left);timerInt=setInterval(()=>{{left--;fn(Math.max(0,left));if(left<=0)clearInterval(timerInt)}},1000)}}
+    function previewCountdown(sec){{if(previewInt)clearInterval(previewInt);let left=Math.max(0,Math.ceil(sec));previewTimer.textContent=left;previewInt=setInterval(()=>{{left--;previewTimer.textContent=Math.max(0,left);if(left<=0)clearInterval(previewInt)}},1000)}}
+    function paint(x0,y0,x1,y1,color,size){{ctx.strokeStyle=color||'#20163a';ctx.lineWidth=Math.max(1,Math.min(30,Number(size)||5));ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0*canvas.width,y0*canvas.height);ctx.lineTo(x1*canvas.width,y1*canvas.height);ctx.stroke()}}
+    function pos(e){{const r=canvas.getBoundingClientRect();return {{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}}}}
+    function sendPending(){{if(pending.length&&ws?.readyState===1){{ws.send(JSON.stringify({{type:'draw_batch',segments:pending}}));pending=[]}}}}
+    canvas.addEventListener('pointerdown',e=>{{if(role!=='drawer')return;drawing=true;canvas.setPointerCapture(e.pointerId);last=pos(e)}});canvas.addEventListener('pointermove',e=>{{if(role!=='drawer'||!drawing)return;const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ce of evs){{const p=pos(ce);const color=tool==='eraser'?'#fff':currentColor;paint(last.x,last.y,p.x,p.y,color,currentSize);pending.push({{x0:last.x,y0:last.y,x1:p.x,y1:p.y,color,size:currentSize}});last=p}}if(pending.length>=8)sendPending()}});window.addEventListener('pointerup',()=>{{drawing=false;sendPending()}});
+    $('penTool').onclick=()=>{{tool='pen';$('penTool').classList.add('active');$('eraserTool').classList.remove('active')}};$('eraserTool').onclick=()=>{{tool='eraser';$('eraserTool').classList.add('active');$('penTool').classList.remove('active')}};$('clearBtn').onclick=()=>{{clearBoard();ws?.send(JSON.stringify({{type:'clear'}}))}};$('sizeSlider').oninput=e=>{{currentSize=Number(e.target.value)||5;$('sizeValue').textContent=currentSize}};
+    function buildPalette(colors){{palette.innerHTML='';(colors||[]).forEach((c,i)=>{{const b=document.createElement('button');b.className='draw-swatch'+(i===0?' active':'');b.style.background=c;b.onclick=()=>{{currentColor=c;[...palette.children].forEach(x=>x.classList.remove('active'));b.classList.add('active')}};palette.appendChild(b)}});if(colors?.length)currentColor=colors[0]}}
+    function buildOptions(arr){{opts.innerHTML='';(arr||[]).forEach(w=>{{const b=document.createElement('button');b.textContent=w;b.onclick=()=>sendGuess(w);b.dataset.word=w;opts.appendChild(b)}})}}
+    function sendGuess(word){{const v=(word||guessInput.value||'').trim();if(!v||ws?.readyState!==1)return;ws.send(JSON.stringify({{type:'guess',word:v}}));guessInput.value=''}}$('guessBtn').onclick=()=>sendGuess();guessInput.addEventListener('keydown',e=>{{if(e.key==='Enter')sendGuess()}});
+    function showRoundUI(){{queue.style.display='none';preview.style.display='none';roundInfo.style.display='flex';boardFrame.style.display='block';result.style.display='none'}}
+    function renderResult(d){{if(timerInt)clearInterval(timerInt);roundInfo.style.display='none';boardFrame.style.display='none';palette.style.display='none';tools.style.display='none';wordBox.style.display='none';opts.style.display='none';guessBox.style.display='none';result.style.display='block';renderPlayers(d.scores,d.active,d.drawer,d.profiles);const rows=Object.entries(d.scores||{{}}).sort((a,b)=>b[1]-a[1]).map(([u,s],i)=>'<div class="result-row"><span>#'+(i+1)+'</span><b>'+((d.profiles||{{}})[u]?.display_name||u)+'</b><strong>⭐ '+s+'</strong></div>').join('');result.innerHTML='<div class="result-glow">'+(d.correct?'🎯':'⌛')+'</div><div class="draw-result-title">'+(d.correct?'حدس درست بود!':'زمان این دور تمام شد')+'</div><div class="result-word">موضوع: <b>'+String(d.word||'—')+'</b></div><div class="result-table">'+rows+'</div><div id="breakText" class="draw-result-note"></div>';const bt=$('breakText');countdown(d.break_seconds||10,x=>bt.textContent=d.is_last?'🏁 نتیجه نهایی در حال آماده‌سازی… '+x+' ثانیه':'⚡ دور بعدی تا '+x+' ثانیه دیگر');}}
+    function connect(){{ws=new WebSocket(proto+'//'+location.host+WS_PATH);ws.onopen=()=>status.textContent='🟢 وصل شد؛ در حال پیدا کردن بازیکن…';ws.onclose=()=>{{if(!intentionallyLeaving&&!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onerror=()=>status.textContent='⚠️ اتصال ناپایدار؛ دوباره تلاش می‌کنیم';ws.onmessage=e=>onMsg(JSON.parse(e.data))}}
+    function onMsg(d){{if(d.type==='waiting'){{queueUI(d.count,d.needed);return}}if(d.type==='queue_timeout'){{queue.innerHTML='<div class="queue-text">⌛ بازیکنی پیدا نشد. دوباره وارد شو.</div>';return}}if(d.type==='round_preview'){{role=d.role;queue.style.display='none';preview.style.display='block';boardFrame.style.display='none';roundInfo.style.display='flex';roundLabel.textContent='دور '+d.round+' از '+d.total_rounds;renderPlayers(d.scores,d.active,d.drawer,d.profiles);previewText.textContent=role==='drawer'?'موضوع نقاشی: '+(d.word||'—'):'موضوع مخفی است؛ آماده حدس‌زدن شو!';preview.classList.toggle('drawer-preview',role==='drawer');previewCountdown(d.remaining||5);status.textContent=role==='drawer'?'✏️ موضوع را ببین و آماده شو!':'🔎 آماده باش؛ نقاش به‌زودی شروع می‌کند';return}}if(d.type==='round_start'){{showRoundUI();role=d.role;roundLabel.textContent='دور '+d.round+' از '+d.total_rounds;drawerLabel.textContent=role==='drawer'?'✏️ تو نقاشی':'🎯 نقاش: '+(d.drawer||'—');renderPlayers(d.scores,d.active,d.drawer,d.profiles);clearBoard();(d.strokes||[]).forEach(s=>paint(s.x0,s.y0,s.x1,s.y1,s.color,s.size));if(role==='drawer'){{wordBox.style.display='block';wordBox.textContent='🎯 موضوع: '+d.word;palette.style.display='flex';tools.style.display='flex';opts.style.display='none';guessBox.style.display='none';buildPalette(d.colors)}}else{{wordBox.style.display='none';palette.style.display='none';tools.style.display='none';opts.style.display='flex';guessBox.style.display='flex';buildOptions(d.options)}}countdown(d.remaining||d.duration,x=>timer.textContent='⏱ '+x+' ثانیه');status.textContent=role==='drawer'?'✏️ بکش!':'🔎 حدس بزن!';return}}if(d.type==='draw'){{paint(d.x0,d.y0,d.x1,d.y1,d.color,d.size);return}}if(d.type==='draw_batch'){{(d.segments||[]).forEach(s=>paint(s.x0,s.y0,s.x1,s.y1,s.color,s.size));return}}if(d.type==='clear'){{clearBoard();return}}if(d.type==='guess_wrong'){{const b=opts.querySelector('[data-word="'+CSS.escape(d.word)+'"]');if(b){{b.disabled=true;b.classList.add('wrong')}}status.textContent='❌ '+d.word+' اشتباه بود';return}}if(d.type==='correct'){{status.textContent='✅ درست! +'+d.points+' امتیاز';return}}if(d.type==='round_result'){{renderResult(d);return}}if(d.type==='game_over'){{if(timerInt)clearInterval(timerInt);preview.style.display='none';boardFrame.style.display='none';roundInfo.style.display='none';palette.style.display='none';tools.style.display='none';wordBox.style.display='none';opts.style.display='none';guessBox.style.display='none';result.style.display='block';renderPlayers(d.scores,d.active,null,d.profiles);const entries=Object.entries(d.scores||{{}}).sort((a,b)=>b[1]-a[1]);result.innerHTML='<div class="result-glow">🏆</div><div class="draw-result-title">نتیجه نهایی</div>'+entries.map(([u,s],i)=>'<div class="result-row '+(u===d.winner?'winner':'')+'"><span>#'+(i+1)+'</span><b>'+((d.profiles||{{}})[u]?.display_name||u)+'</b><strong>⭐ '+s+(u===d.winner?' 🏆':'')+'</strong></div>').join('');status.textContent=d.winner===me?'🏆 قهرمان شدی!':'بازی تمام شد';return}}if(d.type==='player_left')status.textContent='⚠️ '+d.username+' از بازی خارج شد'}}
+    function leaveGame(){{intentionallyLeaving=true;if(ws)try{{ws.close()}}catch(e){{}};fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')}}
+    connect();
     </script>"""
-    return page_shell("نقاشی حدسی", body, username)
+    return page_shell(title, body, username)
+
+def drawing_page(username: str) -> str:
+    return _drawing_battle_page(username, 2)
 
 
 BASE_CSS += """
@@ -1208,24 +842,22 @@ def games_page(username):
     return page_shell('انتخاب بازی',body,username)
 
 def multiplayer_drawing_page(username, mode):
-    title='حدس نقاشی ۴ نفره'
-    body=f"""<div class="mp-game page-enter"><div class="mp-head"><h1>🎨 {title}</h1><div class="mp-meta"><span id="round">در انتظار بازیکن‌ها...</span><span id="timer">⏱️ --</span></div></div><div id="queueBox" class="queue-widget"><div class="queue-spinner"></div><div class="queue-text">🔌 در حال اتصال...</div></div><div id="gameArea" style="display:none"><div id="score" class="mp-score"></div><canvas id="canvas" class="mp-canvas" width="600" height="420"></canvas><div id="options" class="mp-options"></div><div class="mp-guess"><input id="guess" placeholder="حدست رو بنویس..." autocomplete="off"><button onclick="sendGuess()">حدس</button></div></div><div id="status" class="status-line" style="display:none"></div><div id="result" class="mp-result"></div></div><div style="text-align:center;margin-top:12px"><a class="btn" href="/lobby" onclick="event.preventDefault();window.__leaving=true;fetch('/game/leave',{{method:'POST'}}).finally(()=>location.href='/lobby')">🏠 خروج</a></div><script>
-const mode={mode}, me={username!r}, wsProto=location.protocol==='https:'?'wss:':'ws:';let ws,recon,timerInt;const c=document.getElementById('canvas'),ctx=c.getContext('2d'),status=document.getElementById('status'),round=document.getElementById('round'),timer=document.getElementById('timer'),opts=document.getElementById('options'),score=document.getElementById('score'),result=document.getElementById('result'),queueBox=document.getElementById('queueBox'),gameArea=document.getElementById('gameArea');let drawer=false,drawing=false,last=null;
-function renderQueue(n,needed){{queueBox.style.display='flex';gameArea.style.display='none';status.style.display='none';let dots='';for(let i=0;i<needed;i++)dots+='<div class="queue-dot'+(i<n?' filled':'')+'"></div>';queueBox.innerHTML='<div class="queue-spinner"></div><div class="queue-dots">'+dots+'</div><div class="queue-text">'+n+' از '+needed+' نفر در صف هستند</div><div class="queue-sub">صبور باش؛ به‌محض تکمیل ظرفیت، بازی شروع می‌شود ✨</div>'}}
-function enterGame(){{queueBox.style.display='none';gameArea.style.display='block';status.style.display='block'}}
-function paint(x0,y0,x1,y1,color,size){{ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke()}}function clearBoard(){{ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height)}}clearBoard();function pos(e){{const r=c.getBoundingClientRect();return {{x:(e.clientX-r.left)*c.width/r.width,y:(e.clientY-r.top)*c.height/r.height}}}}let pendingSeg=[],flushSched=false;function queueSeg(s){{pendingSeg.push(s);if(!flushSched){{flushSched=true;requestAnimationFrame(flushSeg)}}}}function flushSeg(){{flushSched=false;if(!pendingSeg.length)return;ws?.send(JSON.stringify({{type:'draw_batch',segments:pendingSeg}}));pendingSeg=[]}}c.addEventListener('pointerdown',e=>{{if(!drawer)return;drawing=true;c.setPointerCapture(e.pointerId);last=pos(e)}});c.addEventListener('pointermove',e=>{{if(!drawer||!drawing)return;const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];(evs.length?evs:[e]).forEach(ce=>{{const p=pos(ce);paint(last.x,last.y,p.x,p.y,'#20163a',5);queueSeg({{x0:last.x,y0:last.y,x1:p.x,y1:p.y,color:'#20163a',size:5}});last=p}})}});window.addEventListener('pointerup',()=>{{drawing=false;flushSeg()}});
-function renderScores(scores,active){{score.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,s])=>{{const d=document.createElement('div');d.className='mp-player'+((active||[]).includes(u)?'':' out');const a2=document.createElement('a');a2.className='profile-link';a2.target='_blank';a2.rel='noopener';a2.href='/profile?u='+encodeURIComponent(u);a2.textContent=u+' • '+s+' ⭐';d.appendChild(a2);score.appendChild(d)}})}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/drawing-multi/'+mode);ws.onopen=()=>status.textContent='🟢 وصل شد؛ در حال پیدا کردن بازیکن‌ها...';ws.onclose=()=>{{if(!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onmessage=e=>onMsg(JSON.parse(e.data))}}function onMsg(d){{if(d.type==='rejoin'){{enterGame();drawer=d.role==='drawer';round.textContent='دور '+d.round+' / '+d.total_rounds+(drawer?' • تو نقاشی 🎨':' • حدس بزن 🔎');opts.innerHTML='';clearBoard();renderScores(d.scores,d.active);(d.strokes||[]).forEach(st=>paint(st.x0,st.y0,st.x1,st.y1,st.color,st.size));status.textContent=drawer?'کلمه: '+d.word:'نقاش: '+d.drawer;return}}if(d.type==='waiting'){{renderQueue(d.count,d.needed);return}}if(d.type==='round_start'){{enterGame();drawer=d.role==='drawer';round.textContent='دور '+d.round+' / '+d.total_rounds+(drawer?' • تو نقاشی 🎨':' • حدس بزن 🔎');result.textContent='';opts.innerHTML='';clearBoard();renderScores(d.scores,d.active);status.textContent=drawer?'کلمه: '+d.word:'نقاش: '+d.drawer;(d.options||[]).forEach(w=>{{const b=document.createElement('button');b.textContent=w;b.onclick=()=>{{document.getElementById('guess').value=w;sendGuess()}};opts.appendChild(b)}});let left=d.duration;clearInterval(timerInt);timer.textContent='⏱️ '+left;timerInt=setInterval(()=>{{left--;timer.textContent='⏱️ '+Math.max(0,left);if(left<=0)clearInterval(timerInt)}},1000);return}}if(d.type==='draw'){{paint(d.x0,d.y0,d.x1,d.y1,d.color,d.size);return}}if(d.type==='draw_batch'){{(d.segments||[]).forEach(s=>paint(s.x0,s.y0,s.x1,s.y1,s.color,s.size));return}}if(d.type==='clear'){{clearBoard();return}}if(d.type==='guess_wrong'){{status.textContent='❌ '+d.word+' درست نبود';return}}if(d.type==='correct'){{status.textContent='✅ درست! +'+d.points+' امتیاز';return}}if(d.type==='round_result'){{result.innerHTML='🎯 <b>کلمه: '+d.word+'</b>'+'<br>دور بعدی تا ۵ ثانیه دیگر...';renderScores(d.scores,d.active);return}}if(d.type==='game_over'){{round.textContent='🏆 بازی تمام شد';result.innerHTML='🏆 برنده: <b>'+((d.winner)||'مساوی')+'</b>';renderScores(d.scores,d.active);clearInterval(timerInt)}}if(d.type==='player_left')status.textContent='⚠️ '+d.username+' خارج شد'}}connect();</script>"""
-    return page_shell(title,body,username)
+    return _drawing_battle_page(username, 4)
+
 
 def shop_page(username, wallet=None):
     w=wallet or {'coins':500,'diamonds':5,'streak':0}
     items=[('neon_pen','✏️','قلم نئونی','رنگ و افکت ویژه قلم',250),('profile_frame','🖼️','قاب پروفایل','قاب درخشان برای پروفایل',400),('victory_fx','✨','افکت پیروزی','انیمیشن ویژه پایان بازی',650),('crown_badge','👑','نشان تاج','نشان ویژه کنار نام',900)]
-    cards=''.join(f'''<div class="store-item"><div style="font-size:38px">{ic}</div><div class="grow"><b>{name}</b><div style="color:#9b96b8;font-size:12px">{desc}</div></div><span class="price">{cost} 🪙</span><button onclick="buy('{key}',{cost})">خرید</button></div>''' for key,ic,name,desc,cost in items)
-    body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • ITEMS</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><div class="coin-bar"><span class="coin-pill">🪙 {w.get('coins',500)} سکه</span><span class="coin-pill">💎 {w.get('diamonds',5)} الماس</span><span class="coin-pill">🔥 روزهای متوالی {w.get('streak',0)}</span></div><button class="glow-btn" onclick="claimDaily()">🎁 جایزه روزانه</button><div id="dailyStatus" class="status-line"></div></div><div class="card">{cards}</div><div style="text-align:center"><a class="btn" href="/lobby">← بازگشت</a></div><script>async function claimDaily(){{const d=await(await fetch('/daily/claim',{{method:'POST'}})).json();document.getElementById('dailyStatus').textContent=d.message; if(d.ok)setTimeout(()=>location.reload(),700)}}async function buy(key,cost){{const d=await(await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key,cost}})}})).json();alert(d.ok?'✨ خرید موفق بود!':d.status==='owned'?'این آیتم را داری.': 'سکه کافی نیست.');if(d.ok)location.reload()}}</script>'''
+    cards=''.join(f"<div class=\"store-item\"><div style=\"font-size:38px\">{ic}</div><div class=\"grow\"><b>{name}</b><div style=\"color:#9b96b8;font-size:12px\">{desc}</div></div><span class=\"price\">{cost} 🪙</span><button onclick=\"buy('{key}',{cost})\">خرید</button></div>" for key,ic,name,desc,cost in items)
+    body=f"""<div class="page-heading"><div><div class="sub">ARCADE STORE • ITEMS</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div>
+    <div class="card hero page-enter"><div class="coin-bar"><span class="coin-pill">🪙 {w.get('coins',500)} سکه</span><span class="coin-pill">💎 {w.get('diamonds',5)} الماس</span><span class="coin-pill">🔥 روزهای متوالی {w.get('streak',0)}</span></div><button class="glow-btn" onclick="claimDaily()">🎁 جایزه روزانه</button><div id="dailyStatus" class="status-line"></div></div>
+    <div class="card coin-pack-card"><div class="coin-pack-icon">🪙</div><div><div class="sub">COIN PACK</div><h2>۱۰۰۰ سکه</h2><p>قیمت: <b>۱۰۰٬۰۰۰ تومان</b></p></div><div class="coin-pack-cardnum">💳 ۶۲۱۹۸۶۱۸۵۱۱۶۰۰۶۸</div><div class="coin-pack-steps"><span>۱</span> مبلغ را به کارت بالا واریز کن <span>۲</span> رسید را فقط در <a href="/chat/private/morad">پیوی پشتیبانی</a> ارسال کن</div><a class="glow-btn receipt-shop-btn" href="/chat/private/morad">🧾 ارسال رسید به پشتیبانی</a></div>
+    <div class="card"><h2>✨ آیتم‌ها</h2>{cards}</div><div style="text-align:center"><a class="btn" href="/lobby">← بازگشت</a></div>
+    <script>async function claimDaily(){{const d=await(await fetch('/daily/claim',{{method:'POST'}})).json();document.getElementById('dailyStatus').textContent=d.message;if(d.ok)setTimeout(()=>location.reload(),700)}}async function buy(key,cost){{const d=await(await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key,cost}})}})).json();alert(d.ok?'✨ خرید موفق بود!':d.status==='owned'?'این آیتم را داری.':'سکه کافی نیست.');if(d.ok)location.reload()}}</script>"""
     return page_shell('فروشگاه',body,username)
 
 def chat_private_page(username, other, messages):
-    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><a class="icon-btn" href="/messages">←</a><div class="chat-title">💬 @{html.escape(other)} <span id="online" style="color:#35df7a;font-size:10px">● آنلاین</span></div><a class="icon-btn" href="/profile?u={quote(other,safe='')}">👤</a></div></div><div class="chat-box" id="chatBox">{_render_messages(messages, username, False)}</div><div id="typing" style="padding:5px 12px;color:#9a8ed1;font-size:11px;height:25px"></div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',me={username!r},other={other!r},box=document.getElementById('chatBox'),inp=document.getElementById('msgInput'),typing=document.getElementById('typing');let ws,recon,typingTimer;function addMsg(d){{if(d.sender===me&&[...box.querySelectorAll('.msg')].some(x=>x.dataset.id==d.id))return;const el=document.createElement('div');el.className='msg '+(d.sender===me?'me':'');el.dataset.id=d.id;const s=document.createElement('span');s.className='sender';s.textContent=d.display_name||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;el.append(s,c);if(d.sender!==me){{const rb=document.createElement('button');rb.className='report-btn';rb.textContent='🚩 گزارش';rb.onclick=()=>openReportModal(d.sender,d.content,'chat','');el.append(rb)}}box.appendChild(el);box.scrollTop=box.scrollHeight}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/'+encodeURIComponent(other));ws.onopen=()=>document.getElementById('online').textContent='● آنلاین';ws.onclose=()=>{{document.getElementById('online').textContent='● تلاش برای اتصال...';if(!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='typing'&&d.sender!==me){{typing.textContent=d.typing?'در حال نوشتن...':'';return}}if(d.content!==undefined)addMsg(d)}}}}function sendMsg(){{const v=inp.value.trim();if(!v||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));inp.value='';ws.send(JSON.stringify({{type:'typing',typing:false}}))}}inp.addEventListener('input',()=>{{if(ws?.readyState===1)ws.send(JSON.stringify({{type:'typing',typing:true}}));clearTimeout(typingTimer);typingTimer=setTimeout(()=>ws?.send(JSON.stringify({{type:'typing',typing:false}})),900)}});inp.addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;connect();</script>'''
+    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><a class="icon-btn" href="/messages">←</a><div class="chat-title">💬 @{html.escape(other)} <span id="online" style="color:#35df7a;font-size:10px">● آنلاین</span></div><a class="icon-btn" href="/profile?u={quote(other,safe='')}">👤</a></div></div><div class="chat-box" id="chatBox">{_render_messages(messages, username, False)}</div><div id="typing" style="padding:5px 12px;color:#9a8ed1;font-size:11px;height:25px"></div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div>{('<div class="support-receipt-upload"><input id="receiptFile" type="file" accept="image/*,application/pdf" hidden><button class="receipt-btn" onclick="receiptFile.click()">🧾 ارسال رسید پرداخت</button><small>فقط این پیوی • فقط تصویر/PDF</small></div>' if other.lower()=='morad' and username.lower()!='morad' else '')}</div></div><script>const wsProto=location.protocol==='https:'?'wss:':'ws:',me={username!r},other={other!r},box=document.getElementById('chatBox'),inp=document.getElementById('msgInput'),typing=document.getElementById('typing');let ws,recon,typingTimer;function addMsg(d){{if(d.sender===me&&[...box.querySelectorAll('.msg')].some(x=>x.dataset.id==d.id))return;const el=document.createElement('div');el.className='msg '+(d.sender===me?'me':'');el.dataset.id=d.id;const s=document.createElement('span');s.className='sender';s.textContent=d.display_name||d.sender;const c=document.createElement('span');c.className='content';c.textContent=d.content;el.append(s,c);if(d.sender!==me){{const rb=document.createElement('button');rb.className='report-btn';rb.textContent='🚩 گزارش';rb.onclick=()=>openReportModal(d.sender,d.content,'chat','');el.append(rb)}}box.appendChild(el);box.scrollTop=box.scrollHeight}}function connect(){{ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/'+encodeURIComponent(other));ws.onopen=()=>document.getElementById('online').textContent='● آنلاین';ws.onclose=()=>{{document.getElementById('online').textContent='● تلاش برای اتصال...';if(!recon)recon=setTimeout(()=>{{recon=null;connect()}},1200)}};ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='typing'&&d.sender!==me){{typing.textContent=d.typing?'در حال نوشتن...':'';return}}if(d.content!==undefined)addMsg(d)}}}}function sendMsg(){{const v=inp.value.trim();if(!v||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));inp.value='';ws.send(JSON.stringify({{type:'typing',typing:false}}))}}inp.addEventListener('input',()=>{{if(ws?.readyState===1)ws.send(JSON.stringify({{type:'typing',typing:true}}));clearTimeout(typingTimer);typingTimer=setTimeout(()=>ws?.send(JSON.stringify({{type:'typing',typing:false}})),900)}});inp.addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;{('receiptFile.onchange=async()=>{const f=receiptFile.files[0];if(!f)return;const fd=new FormData();fd.append("receipt",f);const r=await fetch("/support/receipt",{method:"POST",body:fd});const d=await r.json();alert(d.ok?"✅ رسید به پشتیبانی ارسال شد.":"❌ ارسال رسید ناموفق بود.");receiptFile.value=""};' if other.lower()=='morad' and username.lower()!='morad' else '')}connect();</script>'''
     return page_shell(f'چت با {other}',body,username)
 
 
@@ -1255,4 +887,9 @@ body *{backdrop-filter:none!important}
 BASE_CSS += """
 .notification-bell{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:10px 0;padding:10px 14px;border-radius:16px;background:linear-gradient(135deg,#271052,#112d59);color:#fff;border:1px solid #6d48d8;box-shadow:0 0 18px rgba(114,70,255,.18)}.notification-bell span{min-width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:#ff3fb9;font-size:11px}.notification-panel{display:none;margin:0 0 12px;border:1px solid #51358e;border-radius:18px;background:#0e0b21;box-shadow:0 0 28px rgba(125,60,255,.18);overflow:hidden}.notification-panel.show{display:block}.notification-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #29234a}.notification-head button{padding:6px 9px;font-size:10px;background:#25204a;color:#fff}.notification-item{padding:10px 12px;border-bottom:1px solid #201c39;display:flex;flex-direction:column;gap:2px}.notification-item b{color:#fff;font-size:12px}.notification-item span{color:#aaa7c4;font-size:11px}.notification-item.unread{background:rgba(255,65,190,.06);border-right:3px solid #ff4fbf}.support-tag{display:inline-block;margin:4px 3px 0 0;padding:4px 9px;border-radius:999px;background:linear-gradient(90deg,#ff43c8,#7658ff);color:#fff;font-size:10px;font-weight:900;box-shadow:0 0 12px rgba(255,67,200,.25)}.support-tags{margin-top:5px}.report-user-main{background:linear-gradient(135deg,#ff416c,#b721ff)!important;color:#fff!important}.pin-btn{margin-inline-start:6px;padding:3px 7px;border-radius:7px;background:rgba(100,82,255,.12);border:1px solid #5b4bb1;color:#aaa1ff;font-size:10px}.pinned-box{display:flex;gap:6px;overflow:auto;padding-top:8px}.pinned-item{white-space:nowrap;padding:6px 9px;border-radius:10px;background:#1b1434;border:1px solid #45317b;color:#d7d0ff;font-size:11px}.pinned-empty{opacity:.55;text-align:center;padding:10px;font-size:11px}
 .leader-tabs{display:flex;gap:8px;margin-bottom:14px}.leader-tab{flex:1;text-align:center;padding:10px 8px;border-radius:14px;text-decoration:none;font-size:13px;font-weight:900;color:#c9c4e6;background:#171339;border:1px solid #372c66}.leader-tab.active{color:#fff;background:linear-gradient(135deg,#ff43c8,#7658ff);border-color:transparent;box-shadow:0 0 16px rgba(255,67,200,.3)}
+"""
+
+BASE_CSS += """
+/* DRAW BATTLE + PAYMENT + SUPPORT V4 */
+.draw-battle{max-width:900px;margin:0 auto;background:linear-gradient(145deg,#11092a,#070615);border:1px solid #6b2bd6;border-radius:30px;padding:12px;box-shadow:0 0 45px rgba(133,48,255,.18),0 22px 70px rgba(0,0,0,.45);overflow:hidden}.draw-hero{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:17px;border-radius:23px;background:radial-gradient(circle at 15% 0,rgba(0,218,255,.24),transparent 35%),linear-gradient(135deg,#25105d,#100822);border:1px solid #7043d6}.draw-kicker{font-size:10px;letter-spacing:2px;color:#67eaff}.draw-hero h1{margin:3px 0;color:#fff;font-size:25px}.draw-status{font-size:11px;color:#aaa6c4}.draw-mode-badge{padding:8px 12px;border-radius:999px;background:linear-gradient(135deg,#ff42c8,#6b4cff);color:#fff;font-weight:900;box-shadow:0 0 18px rgba(255,66,200,.25)}.draw-players-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin:10px 0}.draw-player-card{position:relative;display:flex;align-items:center;gap:8px;padding:9px;border-radius:17px;background:linear-gradient(145deg,#1a1238,#0e0a22);border:1px solid #38266c;transition:.2s}.draw-player-card.me{border-color:#16d9ff;box-shadow:0 0 16px rgba(22,217,255,.12)}.draw-player-card.turn{border-color:#ff48cb;box-shadow:0 0 20px rgba(255,72,203,.18)}.draw-player-card.out{opacity:.4}.draw-player-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;color:#fff;text-decoration:none}.draw-avatar{width:43px;height:43px;flex:0 0 43px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#26305e,#11142a);border:2px solid #7650ff;overflow:hidden;font-size:23px}.draw-avatar img{width:100%;height:100%;object-fit:cover}.draw-player-info{min-width:0;display:flex;flex-direction:column}.draw-player-info b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.draw-player-info span{font-size:9px;color:#8783a7}.draw-player-main strong{margin-right:auto;color:#ffd95c;font-size:11px;white-space:nowrap}.draw-role{position:absolute;left:7px;top:5px;font-size:8px;color:#9f96ca}.draw-round-info{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;margin-bottom:8px;border-radius:14px;background:#0e0b22;border:1px solid #33215e;color:#fff;font-weight:900}.draw-timer{color:#6de9ff;font-variant-numeric:tabular-nums}.draw-preview{min-height:250px;margin:10px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border-radius:25px;background:radial-gradient(circle at 50% 35%,rgba(255,75,207,.22),transparent 30%),linear-gradient(145deg,#211047,#0c0820);border:2px solid #8d37e8;box-shadow:inset 0 0 40px rgba(118,35,255,.18),0 0 30px rgba(255,57,210,.13)}.preview-orb{width:65px;height:65px;border-radius:50%;display:grid;place-items:center;font-size:31px;background:radial-gradient(circle,#ff6bdd,#7139ff);box-shadow:0 0 28px rgba(255,82,221,.45);animation:previewPulse 1s infinite}.preview-title{font-size:25px;font-weight:1000;color:#fff;margin-top:10px}.draw-preview #previewText{font-size:15px;color:#b9b1d8;margin:5px 0}.preview-count{font-size:40px;font-weight:1000;color:#67eaff;text-shadow:0 0 18px rgba(103,234,255,.5)}.draw-preview.drawer-preview #previewText{color:#ff86dc;font-weight:900}.draw-board-frame{padding:8px;border-radius:22px;background:linear-gradient(145deg,#291057,#0b0820);border:1px solid #6f35c8;box-shadow:0 0 30px rgba(105,42,232,.15)}.draw-board-top{display:flex;justify-content:space-between;padding:7px 9px;color:#fff;font-size:11px}.draw-canvas-wrap{border-radius:16px;overflow:hidden}.draw-canvas-wrap canvas{display:block;width:100%;height:auto;background:#fff;touch-action:none}.draw-palette{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:10px}.draw-swatch{width:28px;height:28px;border-radius:50%;border:2px solid #fff3;cursor:pointer;box-shadow:0 0 0 0 transparent;transition:.15s}.draw-swatch.active{box-shadow:0 0 0 3px #ff53d3,0 0 12px #ff53d3;transform:scale(1.12)}.draw-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px;background:#0d0920;border:1px solid #2e2054;border-radius:15px;margin-bottom:8px}.draw-tool{padding:8px 10px;border-radius:10px;background:#18112e;color:#fff;border:1px solid #3c2a6b}.draw-tool.active{border-color:#ff50d0;box-shadow:0 0 12px rgba(255,80,208,.2)}.draw-size-slider-wrap{display:flex;align-items:center;gap:8px;flex:1;min-width:170px}.draw-size-slider-wrap input{flex:1}.draw-size-label,.draw-size-value{font-size:10px;color:#aaa3c4}.draw-word-box{margin:8px 0;padding:12px;border-radius:15px;text-align:center;background:linear-gradient(135deg,#ff3dbb,#6b49ff);color:#fff;font-weight:1000;box-shadow:0 0 18px rgba(255,61,187,.2)}.draw-options{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;padding:8px}.draw-option-btn{padding:10px 14px;border-radius:14px;background:#17112f;color:#fff;border:1px solid #4a3181;font-weight:800}.draw-option-btn.wrong{opacity:.45;text-decoration:line-through}.draw-guess-box{display:flex;gap:7px;padding:8px}.draw-guess-box input{margin:0!important;flex:1}.draw-guess-box button{border-radius:13px;background:linear-gradient(135deg,#00d9ff,#7b4dff);color:#fff;border:0;font-weight:900;padding:0 15px}.draw-result{margin-top:10px;padding:20px;border-radius:23px;text-align:center;background:radial-gradient(circle at 50% 0,rgba(255,73,202,.18),transparent 35%),linear-gradient(145deg,#1a0e3c,#0c081e);border:2px solid #7433d2;box-shadow:0 0 32px rgba(131,46,240,.2);animation:resultPop .35s ease both}.result-glow{font-size:45px;filter:drop-shadow(0 0 12px rgba(255,90,210,.5))}.draw-result-title{font-size:23px;font-weight:1000;color:#fff}.result-word{margin:5px 0 12px;color:#bdb5d9}.result-table{display:grid;gap:6px;text-align:right}.result-row{display:grid;grid-template-columns:35px 1fr auto;align-items:center;gap:7px;padding:9px 11px;border-radius:12px;background:#12102a;border:1px solid #33255c;color:#fff}.result-row.winner{border-color:#ff53d1;box-shadow:0 0 14px rgba(255,83,209,.14)}.result-row strong{color:#ffd75c}.draw-result-note{margin-top:12px;color:#67eaff;font-weight:900}.draw-exit{text-align:center;margin:12px 0 4px}.receipt-shop-btn{display:inline-block;text-decoration:none;text-align:center}.coin-pack-card{position:relative;overflow:hidden;background:radial-gradient(circle at 10% 20%,rgba(255,215,71,.17),transparent 28%),linear-gradient(145deg,#261043,#100a27)!important;border:2px solid #9c4dff!important}.coin-pack-icon{font-size:55px;filter:drop-shadow(0 0 15px rgba(255,215,71,.35))}.coin-pack-card h2{margin:0;color:#fff}.coin-pack-card p{color:#aaa2c2}.coin-pack-cardnum{margin:12px 0;padding:12px;border-radius:14px;text-align:center;background:#0b091a;border:1px solid #584087;color:#ffd75b;font-size:18px;font-weight:1000;letter-spacing:1px}.coin-pack-steps{color:#bcb5d1;font-size:12px;line-height:1.9}.coin-pack-steps span{display:inline-grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#7548ff;color:#fff;font-weight:900;margin:0 4px}.coin-pack-steps a{color:#6eeaff;font-weight:900}.receipt-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;margin-top:8px;border-radius:15px;background:#120d28;border:1px solid #3b2867}.receipt-actions{display:flex;gap:5px;flex-wrap:wrap}.receipt-actions .btn{padding:7px 9px}.payment-note{padding:10px;border-radius:13px;background:#0d0a1e;border:1px solid #4d357c;color:#d7d0e8}.support-receipt-upload{display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px;border-radius:13px;background:#120d29;border:1px dashed #7041ce}.receipt-btn{padding:9px 12px;border-radius:11px;background:linear-gradient(135deg,#00cfff,#7850ff);color:#fff;border:0;font-weight:900}.support-receipt-upload small{color:#9992b6}.support-admin-card{border-color:#6531b5}.support-admin-card h2{color:#fff}.receipt-actions a{text-decoration:none}@keyframes previewPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes resultPop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}@media(max-width:600px){.draw-hero{padding:13px}.draw-hero h1{font-size:20px}.draw-players-grid{grid-template-columns:1fr 1fr}.draw-player-card{padding:7px}.draw-avatar{width:37px;height:37px;flex-basis:37px}.draw-role{font-size:7px}.draw-guess-box{flex-direction:column}.draw-guess-box button{padding:11px}.coin-pack-cardnum{font-size:13px}.receipt-row{align-items:flex-start;flex-direction:column}.receipt-actions{width:100%}}
 """
