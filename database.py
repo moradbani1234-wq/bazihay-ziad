@@ -21,6 +21,11 @@ async def init_db():
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
             except Exception:
                 pass
+        # قاب فعال کاربر؛ فقط یک قاب در هر لحظه فعال است.
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN active_frame TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
         await db.execute("""CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, sender TEXT NOT NULL,
             content TEXT NOT NULL, reply_to_id INTEGER, created_at INTEGER NOT NULL)""")
@@ -105,6 +110,15 @@ async def init_db():
             mode TEXT NOT NULL DEFAULT 'drawing4', status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL
         )""")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_invites_receiver ON game_invites(receiver,status)")
+        # یک‌بار قاب فعال کاربران قدیمی را از آخرین قاب خریداری‌شده مهاجرت کن.
+        await db.execute("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        cur=await db.execute("SELECT value FROM app_meta WHERE key='active_frame_migrated'")
+        if not await cur.fetchone():
+            await db.execute("""UPDATE users SET active_frame=(SELECT oi.item_key FROM owned_items oi
+                WHERE oi.username=users.username AND oi.item_key IN ('fire_frame','lightning_frame','shadow_frame','royal_frame','angel_frame','gold_frame','ice_frame','profile_frame','bronze_frame','davinci_frame','picasso_frame')
+                ORDER BY oi.purchased_at DESC LIMIT 1)
+                WHERE COALESCE(active_frame,'')='' AND EXISTS(SELECT 1 FROM owned_items oi2 WHERE oi2.username=users.username AND oi2.item_key LIKE '%_frame')""")
+            await db.execute("INSERT INTO app_meta(key,value) VALUES('active_frame_migrated','1')")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_bans_user ON bans(username, scope, until_ts)")
@@ -181,6 +195,7 @@ async def get_recent_messages(room,limit=50):
         cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,
                                 CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=m.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
                                 m.sender display_name,COALESCE(u.public_username,u.username) public_username,
+                                COALESCE(u.active_frame,'') AS active_frame,
                                 (SELECT group_concat(oi.item_key, ',') FROM owned_items oi WHERE oi.username=m.sender) AS owned_items
                              FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? ORDER BY m.id DESC LIMIT ?""", (int(time.time()),room,limit))
         return [dict(r) for r in reversed(await cur.fetchall())]
@@ -213,7 +228,7 @@ async def leaderboard(limit=50, by="wins"):
                                 COALESCE(u.public_username,u.username) AS public_username,
                                 CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=s.username AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END AS avatar,
                                 CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=s.username AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN 1 ELSE 0 END AS profile_banned,
-                                COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio
+                                COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio, COALESCE(u.active_frame,'') AS active_frame
                                 FROM stats s LEFT JOIN users u ON u.username=s.username
                                 ORDER BY {primary} DESC, {secondary} DESC LIMIT ?""",(int(time.time()),int(time.time()),limit))
         rows=[dict(r) for r in await cur.fetchall()]
@@ -370,6 +385,7 @@ async def profile(username):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
         cur=await db.execute("""SELECT u.username,COALESCE(u.public_username,u.username) public_username,u.bio,u.avatar,COALESCE(u.age,18) age,
+                                      COALESCE(u.active_frame,'') active_frame,
                                       COALESCE(s.wins,0) wins,COALESCE(s.losses,0) losses,COALESCE(s.draws,0) draws,COALESCE(s.points,0) points,
                                       COALESCE(s.correct_guesses,0) correct_guesses,COALESCE(s.wrong_guesses,0) wrong_guesses
                                FROM users u LEFT JOIN stats s ON s.username=u.username
@@ -380,6 +396,9 @@ async def profile(username):
         out["league"]=await league_for_trophies(out.get("wins",0))
         cur2=await db.execute("SELECT item_key FROM owned_items WHERE username=? ORDER BY purchased_at DESC", (out["username"],))
         out["owned_items"]=[row[0] for row in await cur2.fetchall()]
+        frame_keys={"fire_frame","lightning_frame","shadow_frame","royal_frame","angel_frame","gold_frame","ice_frame","profile_frame","bronze_frame","davinci_frame","picasso_frame"}
+        active=str(out.get("active_frame") or "")
+        out["active_frame"]=active if active in frame_keys and active in out["owned_items"] else ""
         return out
 
 
@@ -389,6 +408,7 @@ async def get_messages_after(room, after_id=0, limit=100):
         cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,
                               CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=m.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
                               m.sender display_name,COALESCE(u.public_username,u.username) public_username,
+                              COALESCE(u.active_frame,'') AS active_frame,
                               (SELECT group_concat(oi.item_key, ',') FROM owned_items oi WHERE oi.username=m.sender) AS owned_items
                               FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? AND m.id>? ORDER BY m.id ASC LIMIT ?""", (int(time.time()),room, int(after_id), limit))
         return [dict(r) for r in await cur.fetchall()]
@@ -603,9 +623,29 @@ async def buy_item(username,item_key,cost):
             await db.rollback()
             return False,"not_enough",None
         await db.execute("INSERT INTO owned_items(username,item_key,purchased_at) VALUES(?,?,?)",(username,item_key,int(time.time())))
+        if item_key.endswith('_frame'):
+            await db.execute("UPDATE users SET active_frame=? WHERE username=?",(item_key,username))
         await db.commit()
         cur=await db.execute("SELECT * FROM wallet WHERE username=?",(username,)); w=dict(await cur.fetchone())
         return True,"ok",w
+
+async def set_active_frame(username, frame_key):
+    frame_key=str(frame_key or '').strip()
+    allowed={"fire_frame","lightning_frame","shadow_frame","royal_frame","angel_frame","gold_frame","ice_frame","profile_frame","bronze_frame","davinci_frame","picasso_frame"}
+    async with aiosqlite.connect(DB_PATH) as db:
+        if frame_key:
+            if frame_key not in allowed:
+                return False, 'invalid_frame'
+            cur=await db.execute("SELECT 1 FROM owned_items WHERE username=? AND item_key=?",(username,frame_key))
+            if not await cur.fetchone():
+                return False, 'not_owned'
+        await db.execute("UPDATE users SET active_frame=? WHERE username=?",(frame_key,username))
+        await db.commit()
+    return True, 'ok'
+
+async def active_frame_for(username):
+    prof=await profile(username)
+    return (prof or {}).get('active_frame') or ''
 
 
 async def create_notification(username, kind, title, content, data=""):

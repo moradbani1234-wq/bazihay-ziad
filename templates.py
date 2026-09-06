@@ -5,6 +5,12 @@ import time
 from urllib.parse import quote
 from frame_assets import GOLD_FRAME_OVERLAY_B64, ICE_FRAME_OVERLAY_B64, GOLD_FRAME_ICON_B64, ICE_FRAME_ICON_B64
 
+FRAME_ASSETS = {
+    'fire_frame': ('/static/frames/fire_frame.webp', '/static/frames/fire_frame_thumb.webp'),
+    'angel_frame': ('/static/frames/angel_frame.webp', '/static/frames/angel_frame_thumb.webp'),
+    'royal_frame': ('/static/frames/royal_frame.webp', '/static/frames/royal_frame_thumb.webp'),
+}
+
 BASE_CSS = """
 @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
 
@@ -497,7 +503,7 @@ def _drawing_battle_page(username: str, mode: int) -> str:
     const proto=location.protocol==='https:'?'wss:':'ws:'; let ws=null,recon=null,intentionallyLeaving=false,timerInt=null,previewInt=null,role=null,currentColor='#20163a',currentSize=5,tool='pen',drawing=false,last=null,pending=[];
     const $=id=>document.getElementById(id), status=$('status'),queue=$('queueBox'),players=$('playersRow'),roundInfo=$('roundInfo'),roundLabel=$('roundLabel'),timer=$('timerLabel'),preview=$('previewPanel'),previewText=$('previewText'),previewTimer=$('previewTimer'),boardFrame=$('boardFrame'),drawerLabel=$('drawerLabel'),canvas=$('board'),ctx=canvas.getContext('2d'),palette=$('palette'),tools=$('tools'),wordBox=$('drawerWordBox'),opts=$('optionsGrid'),result=$('resultPanel');
     function clearBoard(){{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)}} clearBoard();
-    function avatarNode(profile){{const wrap=document.createElement('div');wrap.className='draw-avatar';const a=profile?.avatar||'●';if(typeof a==='string'&&a.startsWith('data:image/')){{const img=document.createElement('img');img.src=a;img.alt='';wrap.appendChild(img)}}else wrap.textContent=a||'●';return wrap}}
+    function avatarNode(profile){{const wrap=document.createElement('div');wrap.className='draw-avatar';const a=profile?.avatar||'●';if(typeof a==='string'&&a.startsWith('data:image/')){{const img=document.createElement('img');img.src=a;img.alt='';wrap.appendChild(img)}}else wrap.textContent=a||'●';const fk=profile?.active_frame||'';const src=({{fire_frame:'/static/frames/fire_frame.webp',angel_frame:'/static/frames/angel_frame.webp',royal_frame:'/static/frames/royal_frame.webp'}})[fk];if(src){{const fr=document.createElement('img');fr.className='draw-avatar-frame';fr.src=src;fr.alt='';fr.loading='lazy';fr.decoding='async';wrap.appendChild(fr)}}return wrap}}
     function renderPlayers(scores,active,drawerName,profiles){{players.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,sc],i)=>{{const p=(profiles||{{}})[u]||{{username:u,display_name:u,avatar:'●'}};const card=document.createElement('div');card.className='draw-player-card'+(u===me?' me':'')+(u===drawerName?' turn':'')+((active||[]).includes(u)?'':' out');const info=document.createElement('div');info.className='draw-player-info';const name=document.createElement('b');name.textContent=p.display_name||u;const handle=document.createElement('span');handle.textContent='@'+u;const score=document.createElement('strong');score.textContent='⭐ '+sc;info.append(name,handle);const main=document.createElement('div');main.className='draw-player-main';main.appendChild(avatarNode(p));main.append(info,score);if(!p.profile_banned){{const link=document.createElement('a');link.href='/profile?u='+encodeURIComponent(u);link.target='_blank';link.rel='noopener';link.className='draw-player-main draw-profile-link';link.appendChild(avatarNode(p));link.append(info,score);card.append(link)}}else{{card.append(main)}}const role=document.createElement('div');role.className='draw-role';role.textContent=u===drawerName?'✏️ نقاش':'🔎 حدس‌زن';card.append(role);players.appendChild(card)}})}}
     function queueUI(n,needed){{queue.style.display='flex';let dots='';for(let i=0;i<needed;i++)dots+='<i class="queue-dot'+(i<n?' filled':'')+'"></i>';queue.innerHTML='<div class="queue-spinner"></div><div class="queue-dots">'+dots+'</div><div class="queue-text">'+n+' از '+needed+' نفر آماده‌اند</div><div class="queue-sub">به‌محض تکمیل ظرفیت، رقابت شروع می‌شود ✨</div>'}}
     function countdown(sec,fn,clearOld=true){{if(clearOld&&timerInt)clearInterval(timerInt);let left=Math.max(0,Math.ceil(sec));fn(left);timerInt=setInterval(()=>{{left--;fn(Math.max(0,left));if(left<=0)clearInterval(timerInt)}},1000)}}
@@ -984,23 +990,16 @@ def _public_id(prof):
     return str(prof.get('public_username') or prof.get('username') or '')
 
 
-def _frame_overlay_html(owned):
-    # قاب تصویری فروشگاه: عکس مستقیم به‌صورت base64 داخل صفحه embed می‌شود (نه فایل جدا)
-    # تا روی هر هاستی بدون درخواست شبکه‌ی اضافه و بدون شکستن تصویر نمایش داده شود.
-    # استایل به‌صورت inline نوشته شده تا وابسته به بارگذاری شیت CSS جداگانه نباشد.
-    # هیچ متنی (طلایی/یخی) نوشته نمی‌شود؛ فقط جلوه‌ی بصری (ذرات ریز CSS، بدون تصویر اضافه => بدون لگ).
-    _st = ("position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"
-           "pointer-events:none;z-index:5;object-fit:contain;border-radius:0;"
-           "max-width:none;max-height:none;display:block;")
-    if 'gold_frame' in owned:
-        img = f'<img class="avatar-frame-img frame-img-gold" alt="" style="{_st}width:172%;height:172%" src="data:image/webp;base64,{GOLD_FRAME_OVERLAY_B64}">'
-        sparks = ''.join(f'<span class="gold-spark gold-spark-{i}"></span>' for i in (1,2,3,4))
-        return img + sparks
-    if 'ice_frame' in owned:
-        img = f'<img class="avatar-frame-img frame-img-ice" alt="" style="{_st}width:163%;height:163%" src="data:image/webp;base64,{ICE_FRAME_OVERLAY_B64}">'
-        shards = ''.join(f'<span class="ice-shard ice-shard-{i}"></span>' for i in (1,2,3,4))
-        return img + shards
-    return ''
+def _frame_overlay_html(active_frame):
+    key=str(active_frame or '').strip()
+    if key == 'gold_frame':
+        return f'<img class="avatar-frame-img frame-img-gold" alt="" src="data:image/webp;base64,{GOLD_FRAME_OVERLAY_B64}" loading="lazy" decoding="async">'
+    if key == 'ice_frame':
+        return f'<img class="avatar-frame-img frame-img-ice" alt="" src="data:image/webp;base64,{ICE_FRAME_OVERLAY_B64}" loading="lazy" decoding="async">'
+    src=(FRAME_ASSETS.get(key) or ('/static/frames/'+key+'.webp', '/static/frames/'+key+'_thumb.webp'))[0] if key else ''
+    if not src:
+        return ''
+    return f'<img class="avatar-frame-img frame-img-{html.escape(key, quote=True)}" alt="" src="{html.escape(src, quote=True)}" loading="lazy" decoding="async">'
 
 
 def profile_page(username, prof):
@@ -1013,7 +1012,7 @@ def profile_page(username, prof):
     wrong=round(int(prof.get('wrong_guesses',0) or 0)*100/total,1) if total else 0
     avatar_banned=bool(prof.get('profile_banned')); bio_banned=bool(prof.get('bio_banned'))
     avatar_html='<div class="avatar-hidden">●</div>' if avatar_banned else _avatar_html(prof.get('avatar') or '')
-    img_frame='' if avatar_banned else _frame_overlay_html(owned)
+    img_frame='' if avatar_banned else _frame_overlay_html(prof.get('active_frame'))
     avatar_wrap_cls=' has-img-frame' if img_frame else ''
     avatar_wrap_style=' style="position:relative;overflow:visible"' if img_frame else ''
     is_support=prof['username'].lower()=='morad'; badge='<div class="verified-support">✓ پشتیبانی رسمی</div>' if is_support else '';
@@ -1050,7 +1049,7 @@ def profile_page(username, prof):
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
     bio='<div class="moderation-hidden">این بخش موقتاً محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get('chat_notice') else ''
-    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f'''<div class="profile-card hero page-enter {theme} {frame_class} {effect_class} {"has-frame" if prof.get('active_frame') else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-head"><div class="{avatar_wrap_cls}"{avatar_wrap_style}>{avatar_html}{img_frame}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{int(prof.get('wins',0) or 0)}</b><br>جام</div><div class="stat-box"><b>{int(prof.get('points',0) or 0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 
@@ -1061,12 +1060,12 @@ def lobby_page(username, prof=None, wallet=None):
     effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
     name_class = 'name-glow' if 'name_effect' in owned else ''
     crown = '👑 ' if 'crown_badge' in owned else ''
-    img_frame = '' if prof.get('profile_banned') else _frame_overlay_html(owned)
+    img_frame = '' if prof.get('profile_banned') else _frame_overlay_html(prof.get('active_frame'))
     avatar_wrap_cls = ' has-img-frame' if img_frame else ''
     avatar_wrap_style = ' style="position:relative;overflow:visible"' if img_frame else ''
     public_id=_public_id(prof); wins=int(prof.get('wins') or 0); points=int(prof.get('points') or 0); coins=int((wallet or {}).get('coins') or 0); age=int(prof.get('age') or 18)
     support_link='<a href="/support">🛡️ <b>پنل پشتیبانی</b><small>مدیریت گزارش‌ها</small></a>' if username=='morad' else ''
-    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {frame_class} {effect_class} {"has-frame" if (owned & {"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame"}) else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar{avatar_wrap_cls}"{avatar_wrap_style}>{avatar}{img_frame}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
+    body=f'''<div class="lobby-bg page-enter"><div class="lobby-topbar"><div><div class="lobby-kicker">DRAW BATTLE • ONLINE</div><div class="lobby-title">تخته گچی ⚡</div></div><div style="display:flex;gap:7px"><a class="lobby-settings" href="/settings">⚙️</a>{('<a class="lobby-settings" href="/support">🛡️</a>' if username=='morad' else '')}</div></div><a class="lobby-profile hero {theme} {frame_class} {effect_class} {"has-frame" if prof.get('active_frame') else ""} {"name-glow" if "name_effect" in owned else ""}" href="/profile?u={quote(username,safe='')}"><div class="lobby-profile-avatar{avatar_wrap_cls}"{avatar_wrap_style}>{avatar}{img_frame}</div><div class="lobby-profile-info"><div class="lobby-profile-name {name_class}">{crown}@{html.escape(public_id)}</div><div class="lobby-profile-meta">🎂 {age} سال <span>•</span> 🏆 {wins} جام <span>•</span> 💎 {points} امتیاز</div><div class="lobby-profile-meta"><span class="league-badge">🏆 لیگ {html.escape(league['name'])}</span></div></div><div class="lobby-profile-arrow">‹</div></a><div class="lobby-wallet">💰 <b>{coins:,}</b> سکه</div><button class="notification-bell" onclick="toggleNotifications()">🔔 <span id="notifCount">0</span></button><div id="notificationPanel" class="notification-panel"><div class="notification-head"><b>🔔 اعلان‌ها</b><button onclick="markNotifsRead()">خوانده شد</button></div><div id="notificationList"></div></div><div class="section-heading"><span>🎮 حالت‌های بازی</span><small>یک حالت را انتخاب کن</small></div><div class="game-mode-card mode-speed"><div class="mode-badge">⚡ دو نفره سرعتی</div><div class="mode-icon">🎨</div><div class="mode-copy"><h2>حدس نقاشی</h2><p>۲ بازیکن • ۴۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing">شروع <span>←</span></a></div><div class="game-mode-card mode-draw"><div class="mode-badge">🎨 رقابت نقاشان</div><div class="mode-icon">🖌️</div><div class="mode-copy"><h2>نقاشی ۴ نفره</h2><p>۴ بازیکن • ۳۵ ثانیه برای هر دور</p></div><a class="mode-start" href="/game/drawing4">شروع <span>←</span></a></div><div class="lobby-quick-grid"><a href="/chat/public">💬 <b>چت عمومی</b><small>گپ با همه</small></a><a href="/messages">💌 <b>چت خصوصی</b><small>دوستان و درخواست‌ها</small></a><a href="/leaderboard">🏆 <b>رتبه‌بندی</b><small>جام و لیگ</small></a><a href="/shop">🛍️ <b>فروشگاه</b><small>آیتم‌ها</small></a>{support_link}</div></div><script>async function loadNotifications(){{try{{const r=await fetch('/notifications');const d=await r.json();let all=[...(d.notifications||[])];(d.friend_requests||[]).forEach(x=>all.unshift({{title:'درخواست دوستی جدید',content:'@'+x.sender+' برای شما درخواست دوستی فرستاد.',read:0}}));document.getElementById('notificationList').innerHTML=all.length?all.slice(0,30).map(n=>`<div class="notification-item ${{n.read?'':'unread'}}"><b>${{n.title||'اعلان'}}</b><span>${{n.content||''}}</span></div>`).join(''):'<div class="pinned-empty">اعلان جدیدی نداری.</div>';document.getElementById('notifCount').textContent=d.count||0}}catch(e){{}}}}function toggleNotifications(){{document.getElementById('notificationPanel').classList.toggle('show');loadNotifications()}}async function markNotifsRead(){{await fetch('/notifications/read',{{method:'POST'}});loadNotifications()}}loadNotifications();setInterval(loadNotifications,5000);</script>{_bottom_nav('home',username)}'''
     return page_shell('منوی اصلی',body,username)
 
 
@@ -1176,7 +1175,7 @@ def _drawing_battle_page(username: str, mode: int) -> str:
     const me={username!r},MODE={mode},TOTAL_ROUNDS={total_rounds},DURATION={duration},WS_PATH={path!r},proto=location.protocol==='https:'?'wss:':'ws:';let ws=null,recon=null,intentionallyLeaving=false,timerInt=null,previewInt=null,role=null,currentColor='#111111',currentSize=5,tool='pen',drawing=false,last=null,pending=[],mediaRecorder=null,mediaChunks=[],drawingBlob=null,lastRoundVideoBlob=null,currentStrokes=[];
     const $=id=>document.getElementById(id),status=$('status'),queue=$('queueBox'),players=$('playersRow'),roundInfo=$('roundInfo'),roundLabel=$('roundLabel'),timer=$('timerLabel'),preview=$('previewPanel'),previewText=$('previewText'),previewTimer=$('previewTimer'),boardFrame=$('boardFrame'),drawerLabel=$('drawerLabel'),canvas=$('board'),ctx=canvas.getContext('2d'),palette=$('palette'),tools=$('tools'),wordBox=$('drawerWordBox'),opts=$('optionsGrid'),result=$('resultPanel'),reportBtn=$('drawingReportBtn'),drawerNotice=$('drawerNotice');
     function clearBoard(){{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);currentStrokes=[]}}clearBoard();
-    function avatarNode(p){{const w=document.createElement('div');w.className='draw-avatar';const a=p?.avatar||'';if(a.startsWith('data:image/')){{const i=document.createElement('img');i.src=a;w.appendChild(i)}}else w.textContent='●';return w}}
+    function avatarNode(p){{const w=document.createElement('div');w.className='draw-avatar';const a=p?.avatar||'';if(a.startsWith('data:image/')){{const i=document.createElement('img');i.src=a;i.alt='';i.loading='lazy';w.appendChild(i)}}else w.textContent='●';const fk=p?.active_frame||'';const src=({{fire_frame:'/static/frames/fire_frame.webp',angel_frame:'/static/frames/angel_frame.webp',royal_frame:'/static/frames/royal_frame.webp'}})[fk];if(src){{const fr=document.createElement('img');fr.className='draw-avatar-frame';fr.src=src;fr.alt='';fr.loading='lazy';fr.decoding='async';w.appendChild(fr)}}return w}}
     function renderPlayers(scores,active,drawerName,profiles){{players.innerHTML='';Object.entries(scores||{{}}).sort((a,b)=>b[1]-a[1]).forEach(([u,sc])=>{{const p=(profiles||{{}})[u]||{{username:u,display_name:u,avatar:''}};const card=document.createElement('div');card.className='draw-player-card'+(u===me?' me':'')+(u===drawerName?' turn':'')+((active||[]).includes(u)?'':' out');const info=document.createElement('div');info.className='draw-player-info';const n=document.createElement('b');n.textContent=(p.owned_items||[]).includes('crown_badge')?'👑 '+(p.display_name||u):(p.display_name||u);if((p.owned_items||[]).includes('name_effect'))n.classList.add('name-effect-owned');const h=document.createElement('span');h.textContent='@'+(p.public_username||u);const score=document.createElement('strong');score.textContent='⭐ '+sc;info.append(n,h,score);card.append(avatarNode(p),info);if(p.league){{const lg=document.createElement('small');lg.className='league-mini '+p.league.theme;lg.textContent='🏆 '+p.league.name;card.append(lg)}}const rr=document.createElement('div');rr.className='draw-role';rr.textContent=u===drawerName?'✏️ نقاش':'🔎 حدس‌زن';card.append(rr);players.appendChild(card)}})}}
     function queueUI(n,needed){{queue.style.display='flex';queue.innerHTML='<div class="queue-spinner"></div><div class="queue-text">'+n+' از '+needed+' نفر آماده‌اند</div><div class="queue-sub">به‌محض تکمیل ظرفیت، رقابت شروع می‌شود ✨</div>'}}
     function countdown(sec,fn){{if(timerInt)clearInterval(timerInt);let left=Math.max(0,Math.ceil(sec));fn(left);timerInt=setInterval(()=>{{left--;fn(Math.max(0,left));if(left<=0)clearInterval(timerInt)}},1000)}}
@@ -1358,3 +1357,155 @@ BASE_CSS += """
 @keyframes itemAura{from{transform:scale(.985);opacity:.25}to{transform:scale(1);opacity:.8}}
 @keyframes crownBounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-2px) rotate(2deg)}}
 """
+
+# ===== FRAME SYSTEM OVERRIDES =====
+FRAME_CATALOG = {
+    'fire_frame':  {'name':'قاب آتش اژدهایی', 'desc':'شعله‌های زنده و کریستال‌های سرخ؛ مناسب اکانت‌های افسانه‌ای', 'cost':1600, 'src':'/static/frames/fire_frame.webp', 'thumb':'/static/frames/fire_frame_thumb.webp'},
+    'angel_frame': {'name':'قاب فرشته آسمانی', 'desc':'بال‌های سفید، طلایی و کریستال‌های آبی درخشان', 'cost':1800, 'src':'/static/frames/angel_frame.webp', 'thumb':'/static/frames/angel_frame_thumb.webp'},
+    'royal_frame': {'name':'قاب پادشاهی سلطنتی', 'desc':'تاج طلایی، جواهرات سرخ و پارچه سلطنتی', 'cost':2000, 'src':'/static/frames/royal_frame.webp', 'thumb':'/static/frames/royal_frame_thumb.webp'},
+}
+FRAME_KEYS = set(FRAME_CATALOG) | {'gold_frame','ice_frame','profile_frame','bronze_frame','davinci_frame','picasso_frame'}
+
+
+def _frame_overlay_html(active_frame):
+    key=str(active_frame or '').strip()
+    if key == 'gold_frame':
+        return f'<img class="avatar-frame-img frame-img-gold" alt="" src="data:image/webp;base64,{GOLD_FRAME_OVERLAY_B64}" loading="lazy" decoding="async">'
+    if key == 'ice_frame':
+        return f'<img class="avatar-frame-img frame-img-ice" alt="" src="data:image/webp;base64,{ICE_FRAME_OVERLAY_B64}" loading="lazy" decoding="async">'
+    item=FRAME_CATALOG.get(key)
+    if not item:
+        return ''
+    return f'<img class="avatar-frame-img frame-img-{html.escape(key,quote=True)}" alt="" src="{item["src"]}" loading="lazy" decoding="async">'
+
+
+def _chat_avatar_html(m, cls='chat-avatar'):
+    avatar = str(m.get('avatar') or '').strip()
+    if avatar.startswith('data:image/'):
+        base=_avatar_html(avatar, cls=cls)
+    else:
+        base=f'<div class="{cls} avatar-placeholder">●</div>'
+    frame=_frame_overlay_html(m.get('active_frame'))
+    return f'<div class="chat-avatar-wrap">{base}{frame}</div>'
+
+
+def _render_messages(messages: list[dict], username: str, support=False) -> str:
+    if not messages:
+        return '<div class="chat-empty">هنوز پیامی نیست...</div>'
+    out=[]
+    for m in messages:
+        owned=set(str(m.get('owned_items') or '').split(',')) if m.get('owned_items') else set()
+        bubble=' chat-bubble-owned' if 'chat_bubble' in owned else ''
+        namefx=' name-effect-owned' if 'name_effect' in owned else ''
+        cls=('msg me' if m['sender']==username else 'msg')+bubble
+        sender=html.escape(str(m.get('public_username') or m['sender']))
+        content=html.escape(m['content'])
+        actions=''
+        if m['sender']!=username:
+            actions+=f'<button class="report-btn" onclick="openReportModal({m["sender"]!r},{m["content"]!r},\'chat\',\'\')">🚩 گزارش</button>'
+        if support:
+            actions+=f'<button class="pin-btn" onclick="pinMessage({int(m["id"])})">📌 پین</button>'
+        out.append(f'<div class="{cls}" data-id="{int(m["id"])}"><div class="msg-author">{_chat_avatar_html(m)}<span class="sender{namefx}">{sender}</span></div><span class="content">{content}</span>{actions}</div>')
+    return ''.join(out)
+
+
+def _leader_avatar(r, cls='leader-avatar'):
+    if r.get('profile_banned'):
+        return f'<div class="{cls} leader-avatar-fallback">●</div>'
+    raw=r.get('avatar') or ''
+    base=_avatar_html(raw, cls=cls) if raw else f'<div class="{cls} leader-avatar-fallback">●</div>'
+    frame=_frame_overlay_html(r.get('active_frame'))
+    return f'<div class="leader-avatar-wrap">{base}{frame}</div>'
+
+
+def leaderboard_page(username, rows, by='wins'):
+    value_key='points' if by=='points' else 'wins'; value_label='امتیاز' if by=='points' else 'جام'; value_icon='💎' if by=='points' else '🏆'
+    podium=[]; rest=[]
+    for i,r in enumerate(rows,1):
+        league=_league_data(r); public_id=str(r.get('public_username') or r.get('username')); value=int(r.get(value_key) or 0)
+        href=f'/profile?u={quote(str(r.get("username")),safe="")}'
+        av=_leader_avatar(r)
+        if i<=3:
+            medal=['🥇','🥈','🥉'][i-1]
+            podium.append(f'<a class="leader-podium-card rank-{i} {league["theme"]}" href="{href}"><div class="leader-rank">{medal}</div>{av}<div class="leader-name">@{html.escape(public_id)}</div><div class="leader-score">{value_icon} {value} {value_label}</div><div class="report-meta">🏆 {html.escape(league["name"])}</div></a>')
+        else:
+            cls=' me' if r.get('username')==username else ''
+            rest.append(f'<a class="leader-row{cls} {league["theme"]}" href="{href}"><div class="rank-medal">{i}</div><div class="leader-list-avatar">{av}</div><div><b>@{html.escape(public_id)}</b><div class="report-meta">🏆 لیگ {html.escape(league["name"])}</div></div><div><b>{value}</b><small> {value_label}</small></div></a>')
+    tabs=f'<div class="leader-tabs"><a class="leader-tab{" active" if by=="wins" else ""}" href="/leaderboard?by=wins">🏆 بیشترین جام</a><a class="leader-tab{" active" if by=="points" else ""}" href="/leaderboard?by=points">💎 بیشترین امتیاز</a></div>'
+    podium_html=f'<div class="leader-podium">{"".join(podium)}</div>' if podium else ''
+    rest_html=f'<div class="leader-list">{"".join(rest)}</div>' if rest else ('' if podium else '<p>هنوز آماری ثبت نشده.</p>')
+    body=f'<div class="page-heading"><div><div class="sub">RANKING • LEAGUES</div><h1>🏆 رتبه‌بندی و لیگ‌ها</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter">{tabs}<p>قاب فعال هر بازیکن در رتبه‌بندی نمایش داده می‌شود.</p>{podium_html}{rest_html}</div>'
+    return page_shell('رتبه‌بندی',body,username)
+
+
+def shop_page(username, wallet=None, owned=None, active_frame=''):
+    w=wallet or {'coins':500,'diamonds':5,'streak':0}; owned=set(owned or [])
+    active=str(active_frame or '')
+    items=[
+        ('fire_frame','🔥','قاب آتش اژدهایی','۱۶۰۰ سکه',1600,'frame'),
+        ('angel_frame','🪽','قاب فرشته آسمانی','۱۸۰۰ سکه',1800,'frame'),
+        ('royal_frame','👑','قاب پادشاهی سلطنتی','۲۰۰۰ سکه',2000,'frame'),
+    ]
+    def frame_card(key,icon,name,cost):
+        meta=FRAME_CATALOG[key]; is_owned=key in owned; is_active=active==key
+        if not is_owned: btn=f'<button class="frame-action buy-frame" onclick="buyItem(\'{key}\')">خرید • {cost:,} 🪙</button>'
+        elif is_active: btn=f'<button class="frame-action active-frame" onclick="toggleFrame(\'{key}\')">✓ فعال • غیرفعال</button>'
+        else: btn=f'<button class="frame-action activate-frame" onclick="toggleFrame(\'{key}\')">فعال‌سازی</button>'
+        state='<span class="shop-frame-state active">✨ قاب فعال</span>' if is_active else ('<span class="shop-frame-state owned">✓ خریداری شده</span>' if is_owned else '<span class="shop-frame-state">قابل خرید</span>')
+        return f'''<div class="frame-store-card {"is-active" if is_active else ""}" data-frame="{key}"><div class="frame-store-preview"><img src="{meta["src"]}" alt="" loading="lazy" decoding="async"></div><div class="frame-store-copy"><div class="frame-store-title"><b>{icon} {name}</b>{state}</div><p>{meta["desc"]}</p><div class="frame-store-bottom"><span class="frame-price">{cost:,} 🪙</span>{btn}</div></div></div>'''
+    frames=''.join(frame_card(x[0],x[1],x[2],x[4]) for x in items)
+    body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • AVATAR FRAMES</div><h1>🛍️ فروشگاه قاب‌ها</h1></div><a class="btn" href="/lobby">خانه</a></div>
+    <div class="card hero store-wallet"><div class="coin-bar"><span class="coin-pill">🪙 <b id="coinBalance">{int(w.get('coins',500) or 0):,}</b> سکه</span><span class="coin-pill">💎 {int(w.get('diamonds',5) or 0)} الماس</span><span class="coin-pill">🔥 {int(w.get('streak',0) or 0)} روز</span></div></div>
+    <div class="card frame-store-intro"><b>✨ قاب‌های اکانت</b><p>هر قاب را فقط یک‌بار با سکه می‌خری. بعد از خرید، قاب برای همیشه روی حسابت می‌ماند و می‌توانی هر زمان خواستی فعال یا غیرفعالش کنی. فقط یک قاب هم‌زمان فعال است.</p></div>
+    <div class="frame-store-grid">{frames}</div>
+    <div class="card"><h2>🎨 آیتم‌های قبلی</h2><p class="store-section-note">آیتم‌های قدیمی فروشگاه همچنان در حسابت قابل خرید هستند.</p>
+      {''.join(f'<div class="store-item" data-item="{k}"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div></div><span class="price">{cost} 🪙</span><button class="store-buy" {"disabled" if k in owned else ""} onclick="buyItem(\'{k}\')">{"✓ خریداری شد" if k in owned else "خرید"}</button></div>' for k,ic,name,desc,cost in [
+        ('neon_pen','✏️','قلم نئونی','هاله درخشان قلم در بازی',250),('victory_fx','✨','افکت پیروزی','افکت ویژه نتیجه برد',650),('crown_badge','👑','نشان تاج','تاج کنار نام کاربری',900),('chat_bubble','💬','حباب چت','حباب ویژه پیام‌ها',300),('name_effect','🌟','افکت نام','درخشش متحرک نام',500),('draw_glow','🖌️','قلم نورانی','هاله ویژه تخته',450)])}
+    </div>
+    <div id="shopToast" class="shop-toast"></div>
+    <script>
+    function toast(t){{const x=document.getElementById('shopToast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2200)}}
+    async function buyItem(key){{const card=document.querySelector('[data-frame="'+CSS.escape(key)+'"]')||document.querySelector('[data-item="'+CSS.escape(key)+'"]');const btn=card?.querySelector('button');if(btn)btn.disabled=true;try{{const r=await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{document.getElementById('coinBalance').textContent=Number(d.wallet.coins||0).toLocaleString('fa-IR');toast('✨ خرید انجام شد؛ قاب روی اکانت فعال شد.');setTimeout(()=>location.reload(),350)}}else if(d.status==='owned'){{toast('این آیتم را قبلاً خریدی؛ دوباره پول نمی‌دهد.');setTimeout(()=>location.reload(),250)}}else if(d.status==='not_enough')toast('🪙 سکه کافی نیست.');else if(d.status==='league_locked')toast('🏆 این آیتم برای لیگ تو باز نشده.');else toast('❌ خرید انجام نشد.')}}catch(e){{toast('❌ خطای ارتباط با فروشگاه.')}}finally{{if(btn)btn.disabled=false}}}}
+    async function toggleFrame(key){{const card=document.querySelector('[data-frame="'+CSS.escape(key)+'"]'),btn=card?.querySelector('button');if(btn)btn.disabled=true;try{{const d=await (await fetch('/shop/frame/toggle',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{frame_key:key}})}})).json();if(d.ok){{toast(d.status==='deactivated'?'قاب غیرفعال شد.':'✨ قاب فعال شد.');setTimeout(()=>location.reload(),300)}}else toast(d.status==='not_owned'?'اول قاب را خریداری کن.':'❌ عملیات ناموفق بود.')}}catch(e){{toast('❌ خطای ارتباط با سرور.')}}finally{{if(btn)btn.disabled=false}}}}
+    </script>'''
+    return page_shell('فروشگاه قاب‌ها',body,username)
+
+
+def chat_public_page(username, messages, pinned=None):
+    pinned=pinned or []; support=username=='morad'
+    pinned_html=''.join(f'<div class="pinned-item" data-id="{p["message_id"]}">📌 <b>@{html.escape(p["sender"])}</b> — {html.escape(p["content"])}</div>' for p in pinned) or '<div class="pinned-empty">پیام سنجاق‌شده‌ای نیست.</div>'
+    pin_js="const pb=document.createElement('button');pb.className='pin-btn';pb.textContent='📌 پین';pb.onclick=()=>pinMessage(d.id);div.append(pb);" if support else ''
+    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 چت عمومی</div><a class="btn" href="/lobby">خانه</a></div><div id="pinnedBox" class="pinned-box">{pinned_html}</div></div><div class="chat-box" id="chatBox">{_render_messages(messages,username,support)}</div><div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>
+    const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/public'),box=document.getElementById('chatBox'),me={username!r};
+    function chatAvatar(d){{const wrap=document.createElement('div');wrap.className='chat-avatar-wrap';const av=document.createElement('div');av.className='chat-avatar avatar-placeholder';const src=d.avatar||'';if(src.startsWith('data:image/')){{const im=document.createElement('img');im.src=src;im.alt='';im.loading='lazy';av.className='chat-avatar';av.appendChild(im)}}else av.textContent='●';wrap.appendChild(av);const fs={{fire_frame:'/static/frames/fire_frame.webp',angel_frame:'/static/frames/angel_frame.webp',royal_frame:'/static/frames/royal_frame.webp'}}[d.active_frame||''];if(fs){{const fr=document.createElement('img');fr.className='avatar-frame-img';fr.src=fs;fr.alt='';fr.loading='lazy';fr.decoding='async';wrap.appendChild(fr)}}return wrap}}
+    function addMsg(d){{if(d.content===undefined)return;const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'')+((d.owned_items||'').split(',').includes('chat_bubble')?' chat-bubble-owned':'');div.dataset.id=d.id;const author=document.createElement('div');author.className='msg-author';author.append(chatAvatar(d));const s=document.createElement('span');s.className='sender '+(((d.owned_items||'').split(',').includes('name_effect'))?'name-effect-owned':'');s.textContent=d.public_username||d.sender;author.append(s);div.append(author);const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}{pin_js}box.appendChild(div);box.scrollTop=box.scrollHeight}}
+    function renderPinned(arr){{document.getElementById('pinnedBox').innerHTML=(arr||[]).map(p=>`<div class="pinned-item">📌 <b>@${{p.sender}}</b> — ${{p.content}}</div>`).join('')||'<div class="pinned-empty">پیام سنجاق‌شده‌ای نیست.</div>'}}
+    ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='pinned_messages'){{renderPinned(d.messages);return}}if(d.content!==undefined)addMsg(d)}};async function pinMessage(id){{const r=await fetch('/support/pin',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{message_id:id,room:'public'}})}});const d=await r.json();if(d.ok)renderPinned(d.messages)}}function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});box.scrollTop=box.scrollHeight;</script>'''
+    return page_shell('چت عمومی',body,username)
+
+
+def chat_private_page(username, other, messages, other_display=None):
+    title_id=str(other_display or other); initial=_render_messages(messages,username,False)
+    receipt_ui=''
+    if str(other).lower()=='morad' and username.lower()!='morad':
+        receipt_ui='''<div class="receipt-chat-upload"><label class="receipt-btn" for="receiptFile">🧾 ارسال رسید پرداخت</label><input id="receiptFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden><span id="receiptStatus" class="report-meta">حداکثر ۸ مگابایت</span></div>'''
+    body=f'''<div class="chat-screen page-enter"><div class="chat-top"><div class="chat-toolbar"><div class="chat-title">💬 @{html.escape(title_id)}</div><a class="btn" href="/messages">پیام‌ها</a></div></div><div class="chat-box" id="chatBox">{initial}</div>{receipt_ui}<div class="chat-input-wrap"><div class="chat-input-row"><input type="text" id="msgInput" placeholder="پیامت رو بنویس..." autocomplete="off"><button class="send-btn" onclick="sendMsg()">➤</button></div></div></div><script>
+    const wsProto=location.protocol==='https:'?'wss:':'ws:',ws=new WebSocket(wsProto+'//'+location.host+'/ws/chat/private/{html.escape(other)}'),box=document.getElementById('chatBox'),me={username!r};
+    function chatAvatar(d){{const wrap=document.createElement('div');wrap.className='chat-avatar-wrap';const av=document.createElement('div');const src=d.avatar||'';if(src.startsWith('data:image/')){{av.className='chat-avatar';const im=document.createElement('img');im.src=src;im.alt='';im.loading='lazy';av.appendChild(im)}}else{{av.className='chat-avatar avatar-placeholder';av.textContent='●'}}wrap.appendChild(av);const fs={{fire_frame:'/static/frames/fire_frame.webp',angel_frame:'/static/frames/angel_frame.webp',royal_frame:'/static/frames/royal_frame.webp'}}[d.active_frame||''];if(fs){{const fr=document.createElement('img');fr.className='avatar-frame-img';fr.src=fs;fr.alt='';fr.loading='lazy';fr.decoding='async';wrap.appendChild(fr)}}return wrap}}
+    function addMsg(d){{if(d.content===undefined)return;const div=document.createElement('div');div.className='msg '+(d.sender===me?'me':'')+((d.owned_items||'').split(',').includes('chat_bubble')?' chat-bubble-owned':'');const author=document.createElement('div');author.className='msg-author';author.append(chatAvatar(d));const s=document.createElement('span');s.className='sender '+(((d.owned_items||'').split(',').includes('name_effect'))?'name-effect-owned':'');s.textContent=d.public_username||d.sender;author.append(s);div.append(author);const c=document.createElement('span');c.className='content';c.textContent=d.content;div.append(c);if(d.sender!==me){{const b=document.createElement('button');b.className='report-btn';b.textContent='🚩 گزارش';b.onclick=()=>openReportModal(d.sender,d.content,'chat','');div.append(b)}}box.appendChild(div);box.scrollTop=box.scrollHeight}}
+    ws.onmessage=e=>{{const d=JSON.parse(e.data);if(d.type==='friend_required'){{alert('💬 اول باید درخواست دوستی ارسال و پذیرفته شود.');location.href='/profile?u='+encodeURIComponent('{html.escape(other)}');return}}if(d.type==='blocked'){{alert(d.message||'این گفت‌وگو مسدود است.');return}}if(d.content!==undefined)addMsg(d)}};function sendMsg(){{const i=document.getElementById('msgInput'),v=i.value.trim();if(!v||ws.readyState!==1)return;ws.send(JSON.stringify({{content:v}}));i.value=''}}document.getElementById('msgInput').addEventListener('keydown',e=>{{if(e.key==='Enter')sendMsg()}});const rf=document.getElementById('receiptFile');if(rf)rf.addEventListener('change',async()=>{{const f=rf.files[0];if(!f)return;const st=document.getElementById('receiptStatus');if(f.size>8*1024*1024){{st.textContent='❌ فایل بیشتر از ۸ مگابایت است.';rf.value='';return}}st.textContent='⏳ در حال ارسال رسید...';const fd=new FormData();fd.append('receipt',f);try{{const r=await fetch('/support/receipt',{{method:'POST',body:fd}}),d=await r.json();st.textContent=d.ok?'✅ رسید برای پشتیبانی ارسال شد.':('❌ '+(d.message||'ارسال نشد.'));if(d.ok)rf.value=''}}catch(e){{st.textContent='❌ خطا در ارسال رسید.'}}}});box.scrollTop=box.scrollHeight;</script>'''
+    return page_shell(f'چت با {title_id}',body,username)
+
+
+# CSS for cached, low-overhead frame overlays and chat/shop presentation.
+BASE_CSS += r'''
+.avatar-frame-img{position:absolute!important;inset:50% auto auto 50%!important;transform:translate(-50%,-50%)!important;width:190%!important;height:190%!important;max-width:none!important;max-height:none!important;object-fit:contain!important;border-radius:0!important;pointer-events:none!important;z-index:8!important;display:block!important;filter:drop-shadow(0 0 5px rgba(0,0,0,.35));}
+.frame-img-fire_frame{width:194%!important;height:194%!important}.frame-img-angel_frame{width:190%!important;height:190%!important}.frame-img-royal_frame{width:194%!important;height:194%!important}
+.chat-avatar-wrap,.leader-avatar-wrap{position:relative;display:grid;place-items:center;overflow:visible;flex:0 0 auto}.chat-avatar-wrap{width:43px;height:43px}.chat-avatar{width:43px!important;height:43px!important;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#26305e,#11142a);border:2px solid #7650ff;color:#fff;font-size:20px}.chat-avatar img{width:100%;height:100%;object-fit:cover}.msg-author{display:flex;align-items:center;gap:8px;margin-bottom:3px}.msg-author .sender{margin:0}.leader-avatar-wrap{width:72px;height:72px}.leader-avatar-wrap .leader-avatar{width:58px;height:58px}.leader-avatar-wrap .avatar-frame-img{width:175%!important;height:175%!important}.leader-list-avatar .leader-avatar-wrap{width:54px;height:54px}.leader-list-avatar .leader-avatar-wrap .leader-avatar{width:42px;height:42px}.leader-list-avatar .leader-avatar-wrap .avatar-frame-img{width:178%!important;height:178%!important}
+.frame-store-grid{display:grid;gap:14px;margin-bottom:16px}.frame-store-card{display:flex;align-items:center;gap:14px;padding:13px;border-radius:21px;background:linear-gradient(145deg,#17112f,#0e0922);border:1px solid #3b2a69;box-shadow:0 10px 25px rgba(0,0,0,.2);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}.frame-store-card.is-active{border-color:#ff4fd0;box-shadow:0 0 24px rgba(255,79,208,.16),0 10px 25px rgba(0,0,0,.22)}.frame-store-preview{position:relative;width:108px;height:108px;flex:0 0 108px;border-radius:18px;background:#05040c;overflow:hidden;display:grid;place-items:center}.frame-store-preview img{width:150%;height:150%;object-fit:contain;display:block}.frame-store-copy{min-width:0;flex:1}.frame-store-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.frame-store-title b{font-size:15px;color:#fff}.frame-store-copy p{margin:4px 0 10px;font-size:10px;color:#a39dbb}.shop-frame-state{display:inline-block;padding:3px 7px;border-radius:999px;background:#211a3c;color:#a9a1c4;font-size:9px;white-space:nowrap}.shop-frame-state.owned{color:#8feaff;border:1px solid rgba(80,220,255,.2)}.shop-frame-state.active{color:#ffd5f3;background:rgba(255,67,200,.12);border:1px solid rgba(255,67,200,.3)}.frame-store-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px}.frame-price{font-weight:1000;color:#ffd75b;white-space:nowrap}.frame-action{border:0!important;border-radius:11px!important;padding:8px 12px!important;color:#fff!important;font-weight:950!important;cursor:pointer}.buy-frame{background:linear-gradient(135deg,#00d9ff,#7451ff)!important}.activate-frame{background:linear-gradient(135deg,#6c5cff,#a448ff)!important}.active-frame{background:linear-gradient(135deg,#ff43c8,#7a4cff)!important}.frame-action:disabled{opacity:.55;cursor:wait}.frame-store-intro p{font-size:11px;color:#aaa4bd;margin:5px 0 0}.shop-active-badge{display:inline-block;margin-inline-start:6px;padding:2px 7px;border-radius:999px;background:rgba(255,73,201,.12);color:#ff9ddd;font-size:9px}.store-item button:disabled{opacity:.5;cursor:default}
+@media(max-width:600px){.frame-store-card{align-items:flex-start}.frame-store-preview{width:82px;height:82px;flex-basis:82px}.frame-store-title{align-items:flex-start;flex-direction:column;gap:4px}.frame-store-title b{font-size:13px}.frame-store-copy p{font-size:9px}.frame-store-bottom{align-items:flex-start;flex-direction:column}.frame-action{width:100%}.chat-avatar-wrap{width:39px;height:39px}.chat-avatar{width:39px!important;height:39px!important}.leader-avatar-wrap{width:64px;height:64px}}
+@media(prefers-reduced-motion:reduce){.frame-store-card{transition:none}}
+'''
+BASE_CSS += r'''
+.draw-avatar{position:relative;overflow:visible!important}.draw-avatar-frame{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:178%;height:178%;object-fit:contain;pointer-events:none;z-index:4;filter:drop-shadow(0 0 4px rgba(0,0,0,.3))}.draw-player-main .draw-avatar-frame{width:178%;height:178%}
+'''
