@@ -3,7 +3,6 @@
 import html
 import time
 from urllib.parse import quote
-from frame_assets import GOLD_FRAME_OVERLAY_B64, ICE_FRAME_OVERLAY_B64, GOLD_FRAME_ICON_B64, ICE_FRAME_ICON_B64, ANGEL_FRAME_OVERLAY_B64, FIRE_FRAME_OVERLAY_B64, LIGHTNING_FRAME_OVERLAY_B64, PURPLE_FRAME_OVERLAY_B64, KING_FRAME_OVERLAY_B64
 
 FRAME_KEYS = {"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame"}
 
@@ -13,11 +12,7 @@ FRAME_CLASS = {
     "lightning_frame":"frame-lightning", "purple_frame":"frame-purple", "king_frame":"frame-king"
 }
 
-FRAME_B64 = {
-    "gold_frame": GOLD_FRAME_OVERLAY_B64, "ice_frame": ICE_FRAME_OVERLAY_B64, "angel_frame": ANGEL_FRAME_OVERLAY_B64,
-    "fire_frame": FIRE_FRAME_OVERLAY_B64, "lightning_frame": LIGHTNING_FRAME_OVERLAY_B64, "purple_frame": PURPLE_FRAME_OVERLAY_B64,
-    "king_frame": KING_FRAME_OVERLAY_B64
-}
+FRAME_B64 = {}
 
 def _active_frame(prof):
     key=str((prof or {}).get("active_frame") or "").strip()
@@ -372,7 +367,8 @@ def lobby_page(username: str, prof=None, wallet=None) -> str:
     points = int(prof.get("points") or 0)
     coins = int((wallet or {}).get("coins", 0) or 0)
     owned=set(prof.get("owned_items") or [])
-    frame_class = 'frame-davinci' if 'davinci_frame' in owned else ('frame-picasso' if 'picasso_frame' in owned else ('frame-bronze' if 'bronze_frame' in owned else ('frame-premium' if 'profile_frame' in owned else '')))
+    active_frame = str(prof.get("active_frame") or "")
+    frame_class = _frame_class(active_frame)
     effect_class = 'effect-davinci' if 'davinci_effect' in owned else ('effect-picasso' if 'picasso_effect' in owned else '')
     name_class = 'name-glow' if 'name_effect' in owned else ''
     crown = '👑 ' if 'crown_badge' in owned else ''
@@ -959,7 +955,7 @@ def shop_page(username, wallet=None):
     w=wallet or {'coins':500,'diamonds':5,'streak':0};
     items=[
       ('neon_pen','✏️','قلم نئونی','خط درخشان برای نقاشی','250','custom'),('profile_frame','🖼️','قاب درخشان','قاب متحرک و جذاب پروفایل','400','custom'),('victory_fx','✨','افکت پیروزی','افکت ویژه پایان دور','650','custom'),('crown_badge','👑','نشان تاج','نشان ویژه کنار نام','900','custom'),('chat_bubble','💬','حباب چت','استایل ویژه پیام‌های تو','300','custom'),('name_effect','🌟','افکت نام','درخشش نام کاربری','500','custom'),('draw_glow','🖌️','قلم نورانی','افکت ویژه قلم نقاش','450','custom'),
-      ('bronze_frame','🥉','قاب برنزی','ویژه لیگ برنزی • ۲۵۰ جام','550','league'),('bronze_badge','🏅','نشان برنزی','نشان اختصاصی لیگ برنزی','350','league'),('davinci_frame','🔷','قاب داوینچی','ویژه لیگ داوینچی • ۷۵۰ جام','1100','league'),('davinci_effect','💠','افکت داوینچی','افکت اختصاصی لیگ داوینچی','900','league'),('picasso_frame','🔴','قاب پیکاسو','ویژه لیگ پیکاسو • ۱۵۰۰ جام','1800','league'),('picasso_effect','🎨','افکت پیکاسو','افکت اختصاصی لیگ پیکاسو','1500','league')]
+      ('bronze_frame','<span class="aura-preview frame-bronze"></span>','قاب برنزی','هاله برنزی ویژه لیگ برنزی • ۲۵۰ جام','550','league'),('bronze_badge','🏅','نشان برنزی','نشان اختصاصی لیگ برنزی','350','league'),('davinci_frame','<span class="aura-preview frame-davinci"></span>','قاب داوینچی','هاله هنری آبی-فیروزه‌ای • ۷۵۰ جام','1100','league'),('davinci_effect','💠','افکت داوینچی','افکت اختصاصی لیگ داوینچی','900','league'),('picasso_frame','<span class="aura-preview frame-picasso"></span>','قاب پیکاسو','هاله هنری صورتی-قرمز • ۱۵۰۰ جام','1800','league'),('picasso_effect','🎨','افکت پیکاسو','افکت اختصاصی لیگ پیکاسو','1500','league')]
     cards=''.join(f'''<div class="store-item store-custom"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div></div><span class="price">{cost} 🪙</span><button onclick="buy('{key}',{cost})">خرید</button></div>''' for key,ic,name,desc,cost,_ in items[:7])
     league_cards=''.join(f'''<div class="store-item store-league"><div class="store-item-icon">{ic}</div><div class="grow"><b>{name}</b><div class="store-desc">{desc}</div></div><span class="price">{cost} 🪙</span><button onclick="buy('{key}',{cost})">خرید</button></div>''' for key,ic,name,desc,cost,_ in items[7:])
     body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • CUSTOMIZE</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div><div class="card hero page-enter"><div class="coin-bar"><span class="coin-pill">🪙 {w.get('coins',500)} سکه</span><span class="coin-pill">💎 {w.get('diamonds',5)} الماس</span><span class="coin-pill">🔥 روزهای متوالی {w.get('streak',0)}</span></div><button class="glow-btn" onclick="claimDaily()">🎁 جایزه روزانه</button><div id="dailyStatus" class="status-line"></div></div><div class="card coin-pack-card"><div class="coin-pack-icon">🪙</div><div><div class="sub">COIN PACK</div><h2>۱۰۰۰ سکه</h2><p>قیمت: <b>۱۰۰٬۰۰۰ تومان</b></p></div><div class="coin-pack-cardnum">💳 ۶۲۱۹۸۶۱۸۵۱۱۶۰۰۶۸</div><div class="coin-pack-steps">۱ مبلغ را واریز کن • ۲ رسید را در پیوی پشتیبانی ارسال کن</div><a class="glow-btn receipt-shop-btn" href="/chat/private/morad">🧾 ارسال رسید به پشتیبانی</a></div><div class="card"><h2>🎨 شخصی‌سازی</h2><p class="store-section-note">همه آیتم‌ها با 🪙 سکه خریداری می‌شوند و بعد از خرید روی حساب تو باقی می‌مانند.</p>{cards}</div><div class="card"><h2>🏆 آیتم‌های مخصوص لیگ</h2><p class="store-section-note">این آیتم‌ها فقط با رسیدن به لیگ مربوطه قابل خرید هستند؛ خرید به‌تنهایی لیگ را باز نمی‌کند.</p>{league_cards}</div><div style="text-align:center"><a class="btn" href="/lobby">← بازگشت</a></div><script>async function claimDaily(){{const d=await(await fetch('/daily/claim',{{method:'POST'}})).json();document.getElementById('dailyStatus').textContent=d.message;if(d.ok)setTimeout(()=>location.reload(),700)}}async function buy(key,cost){{const d=await(await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key,cost}})}})).json();if(d.ok){{alert('✨ خرید موفق بود!');location.reload()}}else if(d.status==='owned')alert('این آیتم را قبلاً داری.');else if(d.status==='league_locked')alert('🏆 این آیتم مخصوص لیگ بالاتر است.');else if(d.status==='not_enough')alert('🪙 سکه کافی نیست.');else alert('❌ خرید انجام نشد.')}} </script>'''
@@ -1084,26 +1080,8 @@ def _public_id(prof):
 
 
 def _frame_overlay_html(owned, active_frame=None):
-    # فقط قاب فعال نمایش داده می‌شود؛ مالکیت با فعال‌بودن فرق دارد.
-    key = active_frame if active_frame in FRAME_KEYS else ""
-    if key in ("profile_frame","bronze_frame","davinci_frame","picasso_frame"):
-        return ""
-    b64=FRAME_B64.get(key)
-    if not b64: return ''
-    cls=FRAME_CLASS[key]
-    size={"gold_frame":"142%","ice_frame":"142%","angel_frame":"140%","fire_frame":"140%","lightning_frame":"140%","purple_frame":"142%","king_frame":"142%"}.get(key,"140%")
-    img=f'<img class="avatar-frame-img {cls}" alt="" src="data:image/webp;base64,{b64}">'
-    particles={
-        "gold_frame":''.join(f'<span class="gold-spark gold-spark-{i}"></span>' for i in (1,2,3,4)),
-        "ice_frame":''.join(f'<span class="ice-shard ice-shard-{i}"></span>' for i in (1,2,3,4)),
-        "angel_frame":''.join(f'<span class="angel-feather angel-feather-{i}"></span>' for i in (1,2,3,4)),
-        "fire_frame":''.join(f'<span class="fire-ember fire-ember-{i}"></span>' for i in (1,2,3,4,5,6)),
-        "lightning_frame":''.join(f'<span class="lightning-flash lightning-flash-{i}"></span>' for i in (1,2,3,4)),
-        "purple_frame":'<span class="purple-orbit purple-orbit-a"></span><span class="purple-orbit purple-orbit-b"></span>',
-        "king_frame":''.join(f'<span class="king-spark king-spark-{i}"></span>' for i in (1,2,3,4,5)),
-    }.get(key,'')
-    return f'<div class="frame-effect-layer {cls}" data-frame="{key}" style="--frame-size:{size}">{img}{particles}</div>'
-
+    # قاب‌های تصویری حذف شده‌اند؛ آیتم‌های قدیمی اکنون فقط هاله متحرک دور آواتار هستند.
+    return ""
 
 def profile_page(username, prof):
     prof=prof or {'username':username,'public_username':username,'bio':'','avatar':'','age':18,'wins':0,'losses':0,'draws':0,'points':0,'correct_guesses':0,'wrong_guesses':0,'support_tags':[]}
@@ -1326,23 +1304,82 @@ BASE_CSS += """
 .store-item{display:flex;align-items:center;gap:10px;padding:12px;margin-top:9px;border-radius:17px;background:linear-gradient(145deg,#17112f,#0f0a24);border:1px solid #3d2b70;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .18s,box-shadow .18s}.store-item:hover{transform:translateY(-2px);box-shadow:0 12px 25px rgba(0,0,0,.24)}.store-item-icon{width:45px;height:45px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,#29205a,#171332);font-size:27px;flex:0 0 45px}.store-desc{font-size:11px;color:#9d97b8;margin-top:3px}.store-item .price{font-weight:950;color:#ffd75b;white-space:nowrap}.store-item button{border:0;border-radius:11px;padding:8px 12px;background:linear-gradient(135deg,#00d9ff,#7451ff);color:#fff;font-weight:900;cursor:pointer}.store-league{border-color:#6b4bd0}.store-section-note{font-size:11px;color:#9d97b8}.league-davinci{color:#32d9d0}.league-picasso{color:#ff5a5a}
 """
 
+BASE_CSS += """
+
+/* === V5 AURA SYSTEM: old avatar frame images removed === */
+.frame-premium,.frame-bronze,.frame-davinci,.frame-picasso,.frame-gold,.frame-ice,.frame-angel,.frame-fire,.frame-lightning,.frame-purple,.frame-king{
+  position:relative!important;overflow:visible!important;isolation:isolate;
+}
+.frame-premium::before,.frame-bronze::before,.frame-davinci::before,.frame-picasso::before,.frame-gold::before,.frame-ice::before,.frame-angel::before,.frame-fire::before,.frame-lightning::before,.frame-purple::before,.frame-king::before,
+.frame-premium::after,.frame-bronze::after,.frame-davinci::after,.frame-picasso::after,.frame-gold::after,.frame-ice::after,.frame-angel::after,.frame-fire::after,.frame-lightning::after,.frame-purple::after,.frame-king::after{
+  content:"";position:absolute;left:50%;top:50%;pointer-events:none;border-radius:50%;z-index:-1;
+}
+.frame-premium::before{width:118%;height:118%;transform:translate(-50%,-50%);border:2px solid rgba(255,255,255,.7);box-shadow:0 0 8px #fff,0 0 24px rgba(90,190,255,.85);animation:auraPulse 1.8s ease-in-out infinite}
+.frame-premium::after{width:132%;height:132%;transform:translate(-50%,-50%);border:1px solid rgba(120,210,255,.45);animation:auraRotate 5s linear infinite}
+
+.frame-bronze::before{width:119%;height:119%;transform:translate(-50%,-50%);border:2px solid #c88958;box-shadow:0 0 8px rgba(221,151,92,.85),0 0 24px rgba(164,86,38,.55);animation:auraPulse 2s ease-in-out infinite}
+.frame-bronze::after{width:134%;height:134%;transform:translate(-50%,-50%);border:1px dashed rgba(255,190,120,.65);animation:auraRotate 7s linear infinite}
+
+.frame-davinci::before{width:120%;height:120%;transform:translate(-50%,-50%);border:2px solid #48e5ff;box-shadow:0 0 9px #48e5ff,0 0 27px rgba(49,174,255,.8);animation:auraPulse 1.9s ease-in-out infinite}
+.frame-davinci::after{width:136%;height:136%;transform:translate(-50%,-50%) rotate(45deg);border:1px solid rgba(116,248,255,.55);border-radius:28%;animation:auraRotate 8s linear infinite}
+
+.frame-picasso::before{width:121%;height:121%;transform:translate(-50%,-50%);border:2px solid #ff4fa8;box-shadow:0 0 9px #ff4fa8,0 0 28px rgba(255,58,157,.8);animation:auraPulse 1.6s ease-in-out infinite}
+.frame-picasso::after{width:136%;height:136%;transform:translate(-50%,-50%) rotate(12deg);border:1px solid rgba(255,120,202,.65);border-radius:44%;animation:auraRotate 6s linear infinite}
+
+.frame-gold::before{width:122%;height:122%;transform:translate(-50%,-50%);border:2px solid #ffd75a;box-shadow:0 0 10px #ffd75a,0 0 32px rgba(255,170,0,.85);animation:auraGold 1.45s ease-in-out infinite}
+.frame-gold::after{width:141%;height:141%;transform:translate(-50%,-50%);border:1px solid rgba(255,220,110,.55);animation:auraRotate 5s linear infinite}
+
+.frame-ice::before{width:121%;height:121%;transform:translate(-50%,-50%);border:2px solid #9df5ff;box-shadow:0 0 10px #9df5ff,0 0 30px rgba(57,201,255,.8);animation:auraIce 2.2s ease-in-out infinite}
+.frame-ice::after{width:140%;height:140%;transform:translate(-50%,-50%) rotate(45deg);border:1px solid rgba(185,250,255,.7);border-radius:24%;animation:auraRotate 9s linear infinite}
+
+.frame-angel::before{width:126%;height:126%;transform:translate(-50%,-50%);border:2px solid rgba(255,249,215,.9);box-shadow:0 0 10px #fff,0 0 34px rgba(255,226,146,.8);animation:auraAngel 2.4s ease-in-out infinite}
+.frame-angel::after{width:145%;height:145%;transform:translate(-50%,-50%);border:1px solid rgba(255,245,200,.45);box-shadow:0 -10px 25px rgba(255,235,170,.45);animation:auraRotate 10s linear infinite}
+
+.frame-fire::before{width:123%;height:123%;transform:translate(-50%,-50%);border:3px solid #ff7a18;box-shadow:0 0 10px #ff4b00,0 0 34px rgba(255,52,0,.82);animation:auraFire 1s ease-in-out infinite alternate}
+.frame-fire::after{width:139%;height:139%;transform:translate(-50%,-50%);border:1px solid rgba(255,180,45,.45);animation:auraRotate 4s linear infinite}
+
+.frame-lightning::before{width:124%;height:124%;transform:translate(-50%,-50%);border:2px solid #67dcff;box-shadow:0 0 10px #67dcff,0 0 30px rgba(76,117,255,.9);animation:auraLightning 1.25s steps(2,end) infinite}
+.frame-lightning::after{width:141%;height:141%;transform:translate(-50%,-50%);border:1px solid rgba(140,235,255,.55);animation:auraRotate 3.2s linear infinite}
+
+.frame-purple::before{width:122%;height:122%;transform:translate(-50%,-50%);border:2px solid #b94cff;box-shadow:0 0 11px #b94cff,0 0 35px rgba(128,42,255,.9);animation:auraPulse 1.7s ease-in-out infinite}
+.frame-purple::after{width:145%;height:145%;transform:translate(-50%,-50%);border:1px solid rgba(239,106,255,.6);animation:auraRotate 3.8s linear infinite}
+
+.frame-king::before{width:125%;height:125%;transform:translate(-50%,-50%);border:2px solid #ffcf4a;box-shadow:0 0 10px #ffcf4a,0 0 36px rgba(255,156,0,.82);animation:auraKing 1.8s ease-in-out infinite}
+.frame-king::after{width:148%;height:148%;transform:translate(-50%,-50%);border:1px solid rgba(255,218,102,.6);animation:auraRotate 6s linear infinite}
+
+.aura-preview{display:block;width:48px;height:48px;border-radius:50%;background:radial-gradient(circle,#12172a 48%,transparent 49%);flex:0 0 48px}
+.aura-preview::before,.aura-preview::after{z-index:1!important}
+@keyframes auraPulse{0%,100%{opacity:.65;transform:translate(-50%,-50%) scale(.98)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}}
+@keyframes auraGold{0%,100%{opacity:.7;filter:brightness(1)}50%{opacity:1;filter:brightness(1.3)}}
+@keyframes auraIce{0%,100%{opacity:.65;filter:brightness(1)}50%{opacity:1;filter:brightness(1.35)}}
+@keyframes auraAngel{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(.98)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}}
+@keyframes auraFire{from{transform:translate(-50%,-50%) scale(.98);filter:brightness(1)}to{transform:translate(-50%,-50%) scale(1.07);filter:brightness(1.35)}}
+@keyframes auraLightning{0%,42%,58%,100%{opacity:.65;filter:brightness(1)}45%,55%{opacity:1;filter:brightness(1.8)}}
+@keyframes auraKing{0%,100%{opacity:.65;transform:translate(-50%,-50%) scale(.99)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.07)}}
+@keyframes auraRotate{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+ .frame-premium::before,.frame-premium::after,.frame-bronze::before,.frame-bronze::after,.frame-davinci::before,.frame-davinci::after,.frame-picasso::before,.frame-picasso::after,.frame-gold::before,.frame-gold::after,.frame-ice::before,.frame-ice::after,.frame-angel::before,.frame-angel::after,.frame-fire::before,.frame-fire::after,.frame-lightning::before,.frame-lightning::after,.frame-purple::before,.frame-purple::after,.frame-king::before,.frame-king::after{animation:none}
+}
+
+"""
+
 # ===== V4.2 FINAL OVERRIDES =====
 def shop_page(username, wallet=None, owned=None, active_frame=''):
     w = wallet or {'coins': 500, 'diamonds': 5, 'streak': 0}
     owned = set(owned or [])
     active_frame = active_frame if active_frame in FRAME_KEYS else ''
     frame_items = [
-        ('profile_frame','🖼️','قاب درخشان','قاب ویژه آواتار','400','custom'),
-        ('bronze_frame','🥉','قاب برنزی','ویژه لیگ برنزی • ۲۵۰ جام','550','league'),
-        ('davinci_frame','🔷','قاب داوینچی','ویژه لیگ داوینچی • ۷۵۰ جام','1100','league'),
-        ('picasso_frame','🔴','قاب پیکاسو','ویژه لیگ پیکاسو • ۱۵۰۰ جام','1800','league'),
-        ('gold_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{GOLD_FRAME_ICON_B64}">','قاب طلایی افسانه‌ای','تاج، ستاره و ذرات طلایی متحرک','1300','custom'),
-        ('ice_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{ICE_FRAME_ICON_B64}">','قاب یخی الماسی','کریستال‌های یخی و ذرات سرد متحرک','1300','custom'),
-        ('angel_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{ANGEL_FRAME_OVERLAY_B64}">','قاب فرشته','بال‌های نورانی با پرهای ریز در حال ریزش','1600','custom'),
-        ('fire_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{FIRE_FRAME_OVERLAY_B64}">','قاب آتشین','شعله‌های زنده و اخگرهای سبک','1800','custom'),
-        ('lightning_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{LIGHTNING_FRAME_OVERLAY_B64}">','قاب رعدوبرقی','رعد و برق‌های متحرک دور قاب','2000','custom'),
-        ('purple_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{PURPLE_FRAME_OVERLAY_B64}">','قاب سایه بنفش','هاله‌های بنفش چرخان و انرژی شیطانی','2200','custom'),
-        ('king_frame',f'<img class="store-item-icon-img" alt="" src="data:image/webp;base64,{KING_FRAME_OVERLAY_B64}">','قاب پادشاهی','تاج سلطنتی با درخشش و ذرات طلایی','2500','custom'),
+        ('profile_frame','<span class="aura-preview frame-premium"></span>','قاب درخشان','هاله نئونی ویژه آواتار','400','custom'),
+        ('bronze_frame','<span class="aura-preview frame-bronze"></span>','قاب برنزی','هاله برنزی ویژه لیگ برنزی • ۲۵۰ جام','550','league'),
+        ('davinci_frame','<span class="aura-preview frame-davinci"></span>','قاب داوینچی','هاله هنری آبی-فیروزه‌ای • ۷۵۰ جام','1100','league'),
+        ('picasso_frame','<span class="aura-preview frame-picasso"></span>','قاب پیکاسو','هاله هنری صورتی-قرمز • ۱۵۰۰ جام','1800','league'),
+        ('gold_frame','<span class="aura-preview frame-gold"></span>','قاب طلایی افسانه‌ای','هاله طلایی سلطنتی با درخشش متحرک','1300','custom'),
+        ('ice_frame','<span class="aura-preview frame-ice"></span>','قاب یخی الماسی','هاله کریستالی یخی با برق الماسی متحرک','1300','custom'),
+        ('angel_frame','<span class="aura-preview frame-angel"></span>','قاب فرشته','هاله نورانی فرشته با موج‌های نرم و درخشان','1600','custom'),
+        ('fire_frame','<span class="aura-preview frame-fire"></span>','قاب آتشین','هاله شعله‌ای زنده با نفس‌کشیدن نور و اخگر','1800','custom'),
+        ('lightning_frame','<span class="aura-preview frame-lightning"></span>','قاب رعدوبرقی','هاله الکتریکی با پالس و جرقه‌های سریع','2000','custom'),
+        ('purple_frame','<span class="aura-preview frame-purple"></span>','قاب سایه بنفش','هاله بنفش مرموز با حلقه‌های انرژی چرخان','2200','custom'),
+        ('king_frame','<span class="aura-preview frame-king"></span>','قاب پادشاهی','هاله سلطنتی طلایی با پرتوهای متحرک','2500','custom'),
     ]
     other_items = [
         ('neon_pen','✏️','قلم نئونی','هاله درخشان قلم در بازی','250','custom'),
@@ -1386,12 +1423,12 @@ def shop_page(username, wallet=None, owned=None, active_frame=''):
     body=f'''<div class="page-heading"><div><div class="sub">ARCADE STORE • CUSTOMIZE</div><h1>🛍️ فروشگاه</h1></div><a class="btn" href="/lobby">خانه</a></div>
     <div class="card hero store-wallet"><div class="coin-bar"><span class="coin-pill">🪙 <b id="coinBalance">{int(w.get('coins',500) or 0):,}</b> سکه</span><span class="coin-pill">💎 {int(w.get('diamonds',5) or 0)} الماس</span><span class="coin-pill">🔥 {int(w.get('streak',0) or 0)} روز</span></div></div>
     <div class="card coin-pack-card"><div class="coin-pack-icon">🪙</div><h2>۱۰۰۰ سکه</h2><p>۱۰۰٬۰۰۰ تومان</p><div class="coin-pack-cardnum">💳 ۶۲۱۹۸۶۱۸۵۱۱۶۰۰۶۸</div><p>بعد از واریز، رسید را برای پشتیبانی ارسال کن.</p><a class="glow-btn receipt-shop-btn" href="/chat/private/morad">🧾 ارسال رسید</a></div>
-    <div class="card"><h2>🖼️ قاب‌های آواتار</h2><p class="store-section-note">هر قاب فقط یک‌بار خریداری می‌شود و همیشه روی حسابت می‌ماند. فقط یک قاب می‌تواند فعال باشد؛ قاب فعال را هر زمان خواستی غیرفعال کن یا قاب دیگری را فعال کن.</p>{cards('custom',True)}</div>
+    <div class="card"><h2>هاله‌های آواتار</h2><p class="store-section-note">قاب‌های تصویری حذف شده‌اند؛ هر آیتم قدیمی حالا به یک هاله متحرک دور آواتار تبدیل شده است. فقط یک هاله می‌تواند فعال باشد و در تمام بخش‌های بازی برای بقیه بازیکن‌ها هم نمایش داده می‌شود.</p>{cards('custom',True)}</div>
     <div class="card"><h2>🎨 شخصی‌سازی</h2><p class="store-section-note">آیتم‌های خریداری‌شده روی حساب تو باقی می‌مانند.</p>{cards('custom',False)}</div>
     <div class="card"><h2>🏆 آیتم‌های مخصوص لیگ</h2><p class="store-section-note">برای خرید باید حداقل جام همان لیگ را داشته باشی.</p>{cards('league',False)}{cards('league',True)}</div>
     <div id="shopToast" class="shop-toast"></div><script>
     async function buyItem(key){{const card=document.querySelector('[data-item="'+CSS.escape(key)+'"]'),btn=card?.querySelector('.store-buy');if(btn)btn.disabled=true;let d={{}};try{{const r=await fetch('/shop/buy',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});d=await r.json();if(d.ok){{document.getElementById('coinBalance').textContent=Number(d.wallet.coins||0).toLocaleString('fa-IR');toast('✨ خرید موفق بود');setTimeout(()=>location.reload(),350)}}else if(d.status==='owned')toast('این آیتم را قبلاً داری.');else if(d.status==='league_locked')toast('🏆 این آیتم برای لیگ تو باز نشده.');else if(d.status==='not_enough')toast('🪙 سکه کافی نیست.');else toast('❌ خرید انجام نشد.')}}catch(e){{toast('❌ خطای ارتباط با فروشگاه.')}}finally{{if(btn&&!d.ok)btn.disabled=false}}}}
-    async function toggleFrame(key){{const r=await fetch('/shop/frame/toggle',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{toast(d.active_frame?'✨ قاب فعال شد':'قاب غیرفعال شد');setTimeout(()=>location.reload(),250)}}else if(d.status==='not_owned')toast('اول قاب را خریداری کن.');else toast('❌ تغییر قاب انجام نشد.')}}
+    async function toggleFrame(key){{const r=await fetch('/shop/frame/toggle',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{item_key:key}})}});const d=await r.json();if(d.ok){{toast(d.active_frame?'هاله فعال شد':'هاله غیرفعال شد');setTimeout(()=>location.reload(),250)}}else if(d.status==='not_owned')toast('اول این هاله را خریداری کن.');else toast('❌ تغییر قاب انجام نشد.')}}
     function toast(t){{const x=document.getElementById('shopToast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2200)}}
     </script>'''
     return page_shell('فروشگاه',body,username)
