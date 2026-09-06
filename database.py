@@ -9,13 +9,13 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at INTEGER NOT NULL,
             is_support INTEGER NOT NULL DEFAULT 0,
-            display_name TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT '', avatar TEXT NOT NULL DEFAULT '🎮', age INTEGER NOT NULL DEFAULT 18)""")
+            display_name TEXT NOT NULL DEFAULT '', bio TEXT NOT NULL DEFAULT '', avatar TEXT NOT NULL DEFAULT '', age INTEGER NOT NULL DEFAULT 18)""")
         # Migration for databases created by older versions.
         try:
             await db.execute("ALTER TABLE users ADD COLUMN is_support INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
-        for col, definition in [("display_name", "TEXT NOT NULL DEFAULT ''"), ("bio", "TEXT NOT NULL DEFAULT ''"), ("avatar", "TEXT NOT NULL DEFAULT '🎮'"), ("age", "INTEGER NOT NULL DEFAULT 18")]:
+        for col, definition in [("display_name", "TEXT NOT NULL DEFAULT ''"), ("bio", "TEXT NOT NULL DEFAULT ''"), ("avatar", "TEXT NOT NULL DEFAULT ''"), ("age", "INTEGER NOT NULL DEFAULT 18")]:
             try:
                 await db.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
             except Exception:
@@ -76,6 +76,14 @@ async def init_db():
             user1 TEXT NOT NULL, user2 TEXT NOT NULL, created_at INTEGER NOT NULL,
             PRIMARY KEY(user1,user2)
         )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS user_blocks (
+            blocker TEXT NOT NULL, blocked TEXT NOT NULL, created_at INTEGER NOT NULL,
+            PRIMARY KEY(blocker, blocked)
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_blocks_blocker ON user_blocks(blocker,blocked)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON user_blocks(blocked,blocker)")
+        # پاک‌سازی آواتارهای ایموجی قدیمی؛ از این نسخه فقط تصویر مجاز است.
+        await db.execute("UPDATE users SET avatar='' WHERE avatar IS NOT NULL AND avatar!='' AND avatar NOT LIKE 'data:image/%'")
         await db.execute("""CREATE TABLE IF NOT EXISTS support_tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT NOT NULL, subject TEXT NOT NULL, content TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL
@@ -157,8 +165,10 @@ async def save_message(room,sender,content,reply_to_id=None):
 async def get_recent_messages(room,limit=50):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,m.sender display_name
-                             FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? ORDER BY m.id DESC LIMIT ?""", (room,limit))
+        cur=await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,
+                                CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=m.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
+                                m.sender display_name
+                             FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? ORDER BY m.id DESC LIMIT ?""", (int(time.time()),room,limit))
         return [dict(r) for r in reversed(await cur.fetchall())]
 
 async def ensure_stats(username):
@@ -180,10 +190,11 @@ async def leaderboard(limit=50, by="wins"):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
         cur=await db.execute(f"""SELECT s.username,s.wins,s.losses,s.draws,s.points,
-                                COALESCE(u.avatar,'🎮') AS avatar, COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio
+                                CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=s.username AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END AS avatar,
+                                COALESCE(u.age,18) AS age, COALESCE(u.bio,'') AS bio
                                 FROM stats s
                                 LEFT JOIN users u ON u.username=s.username
-                                ORDER BY {primary} DESC, {secondary} DESC LIMIT ?""",(limit,))
+                                ORDER BY {primary} DESC, {secondary} DESC LIMIT ?""",(int(time.time()),limit,))
         return [dict(r) for r in await cur.fetchall()]
 
 async def create_report(reporter,target,context,content,attachment=None,category="other"):
@@ -277,8 +288,10 @@ async def profile(username):
 async def get_messages_after(room, after_id=0, limit=100):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
-        cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,COALESCE(u.avatar,'🎮') avatar,m.sender display_name
-                              FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? AND m.id>? ORDER BY m.id ASC LIMIT ?""", (room, int(after_id), limit))
+        cur = await db.execute("""SELECT m.id,m.sender,m.content,m.reply_to_id,m.created_at,
+                              CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=m.sender AND b.scope IN ('profile','all') AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar,
+                              m.sender display_name
+                              FROM messages m LEFT JOIN users u ON u.username=m.sender WHERE m.room=? AND m.id>? ORDER BY m.id ASC LIMIT ?""", (int(time.time()),room, int(after_id), limit))
         return [dict(r) for r in await cur.fetchall()]
 
 async def set_room_music_file(room, title, audio_blob, mime_type, filename, added_by, target_user=''):
@@ -331,6 +344,7 @@ async def friend_status(me, other):
 async def send_friend_request(sender, receiver):
     if not sender or not receiver or sender==receiver: return False, "invalid"
     if not await get_user(receiver): return False, "user_not_found"
+    if await any_block(sender,receiver): return False, "blocked"
     status=await friend_status(sender,receiver)
     if status=="friends": return False,"already_friends"
     if status=="incoming":
@@ -373,9 +387,54 @@ async def friends_for(username):
         db.row_factory=aiosqlite.Row
         cur=await db.execute("""SELECT CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END username,
                                CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END display_name,
-                               COALESCE(u.avatar,'🎮') avatar FROM friends f JOIN users u ON u.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END)
-                               WHERE f.user1=? OR f.user2=? ORDER BY lower(display_name)""",(username,username,username,username,username))
+                               f.created_at,
+                               CASE WHEN EXISTS(SELECT 1 FROM bans b WHERE b.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END) AND b.scope='profile' AND b.active=1 AND b.until_ts>?) THEN '' ELSE COALESCE(u.avatar,'') END avatar
+                               FROM friends f JOIN users u ON u.username=(CASE WHEN f.user1=? THEN f.user2 ELSE f.user1 END)
+                               WHERE f.user1=? OR f.user2=? ORDER BY lower(display_name)""",(username,username,username,int(time.time()),username,username,username))
         return [dict(r) for r in await cur.fetchall()]
+
+
+async def remove_friend(me, other):
+    if not me or not other or me == other:
+        return False, "invalid"
+    a,b=sorted([me,other], key=lambda x:x.lower())
+    async with aiosqlite.connect(DB_PATH) as conn:
+        cur=await conn.execute("SELECT created_at FROM friends WHERE user1=? AND user2=?",(a,b))
+        row=await cur.fetchone()
+        if not row:
+            return False, "not_friends"
+        if int(time.time()) - int(row[0]) < 5*3600:
+            return False, "too_soon"
+        await conn.execute("DELETE FROM friends WHERE user1=? AND user2=?",(a,b))
+        await conn.commit()
+    return True, "removed"
+
+async def block_status(me, other):
+    if not me or not other or me == other:
+        return False
+    async with aiosqlite.connect(DB_PATH) as conn:
+        cur=await conn.execute("SELECT 1 FROM user_blocks WHERE blocker=? AND blocked=?",(me,other))
+        return bool(await cur.fetchone())
+
+async def toggle_block(me, other):
+    if not me or not other or me == other or not await get_user(other):
+        return False, "invalid"
+    async with aiosqlite.connect(DB_PATH) as conn:
+        cur=await conn.execute("SELECT 1 FROM user_blocks WHERE blocker=? AND blocked=?",(me,other))
+        exists=await cur.fetchone()
+        if exists:
+            await conn.execute("DELETE FROM user_blocks WHERE blocker=? AND blocked=?",(me,other))
+            result="unblocked"
+        else:
+            await conn.execute("INSERT INTO user_blocks(blocker,blocked,created_at) VALUES(?,?,?)",(me,other,int(time.time())))
+            result="blocked"
+        await conn.commit()
+    return True,result
+
+async def any_block(me, other):
+    if not me or not other:
+        return False
+    return await block_status(me,other) or await block_status(other,me)
 
 async def create_support_ticket(username, subject, content):
     async with aiosqlite.connect(DB_PATH) as db:

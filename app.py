@@ -184,9 +184,6 @@ async def game_leave(request: Request):
     username = _require_login(request)
     if not username:
         return {"ok": False}
-    if not _is_support(username):
-        await db.ban_user(username, "games", 0.05, "خروج از بازی با دکمه بازگشت به لابی")
-        await db.ban_user(username, "chat", 0.05, "خروج از بازی با دکمه بازگشت به لابی")
     await two_player_drawing_manager.leave(username)
     await four_player_drawing_manager.leave(username)
     return {"ok": True, "redirect": "/lobby"}
@@ -214,28 +211,13 @@ async def shop_buy(request: Request):
     ok,status,w=await db.buy_item(username,key,cost)
     return {"ok":ok,"status":status,"wallet":w}
 
-@app.post("/game/invite")
-async def game_invite(request: Request):
-    username=_require_login(request)
-    if not username: return {"ok":False,"error":"login_required"}
-    data=await request.json(); receiver=str(data.get("receiver") or "").strip(); mode=str(data.get("mode") or "drawing4")
-    if receiver==username or not await db.get_user(receiver) or mode not in {"drawing4"}: return {"ok":False,"error":"invalid"}
-    async with aiosqlite.connect(db.DB_PATH) as conn:
-        await conn.execute("INSERT INTO game_invites(sender,receiver,mode,status,created_at) VALUES(?,?,?,?,?)",(username,receiver,mode,"pending",int(time.time())))
-        await conn.commit()
-    return {"ok":True}
-
 @app.get("/notifications")
 async def notifications(request: Request):
     username=_require_login(request)
     if not username: return {"ok":False,"error":"login_required"}
     reqs=await db.friend_requests_for(username)
-    async with aiosqlite.connect(db.DB_PATH) as conn:
-        conn.row_factory=aiosqlite.Row
-        cur=await conn.execute("SELECT id,sender,mode,created_at FROM game_invites WHERE receiver=? AND status='pending' AND mode='drawing4' ORDER BY id DESC LIMIT 20",(username,))
-        inv=[dict(r) for r in await cur.fetchall()]
     notes=await db.notifications_for(username)
-    return {"ok":True,"friend_requests":reqs,"invites":inv,"notifications":notes,"count":len(reqs)+len(inv)+sum(1 for n in notes if not n.get('read'))}
+    return {"ok":True,"friend_requests":reqs,"invites":[],"notifications":notes,"count":len(reqs)+sum(1 for n in notes if not n.get('read'))}
 
 @app.post("/notifications/read")
 async def notifications_read(request: Request):
@@ -243,18 +225,6 @@ async def notifications_read(request: Request):
     if not username: return {"ok":False,"error":"login_required"}
     await db.mark_notifications_read(username)
     return {"ok":True}
-
-@app.post("/game/invite/respond")
-async def game_invite_respond(request: Request):
-    username=_require_login(request)
-    if not username: return {"ok":False,"error":"login_required"}
-    data=await request.json(); iid=int(data.get("id") or 0); accept=bool(data.get("accept"))
-    async with aiosqlite.connect(db.DB_PATH) as conn:
-        conn.row_factory=aiosqlite.Row
-        cur=await conn.execute("SELECT * FROM game_invites WHERE id=? AND receiver=? AND status='pending'",(iid,username)); row=await cur.fetchone()
-        if not row: return {"ok":False,"error":"not_found"}
-        await conn.execute("UPDATE game_invites SET status=? WHERE id=?",("accepted" if accept else "rejected",iid)); await conn.commit()
-    return {"ok":True,"mode":row["mode"] if accept else None}
 
 @app.post("/support/message")
 async def support_message(request: Request):
@@ -343,13 +313,32 @@ async def support_receipt(request: Request, receipt: UploadFile = File(...)):
     await db.create_notification("morad","support_receipt","🧾 رسید جدید",f"@{username} رسید خرید ۱۰۰۰ سکه را ارسال کرد.",link)
     return {"ok":True,"receipt_id":rid,"message":"رسید با موفقیت به پیوی پشتیبانی ارسال شد."}
 
-@app.get("/support/receipt/{receipt_id}")
+@app.get("/support/receipt/{receipt_id}", response_class=HTMLResponse)
 async def support_receipt_file(request: Request, receipt_id: int):
     username=_require_login(request)
     if not username or not _is_support(username): return Response(status_code=403)
     r=await db.get_support_receipt(receipt_id)
     if not r: return Response(status_code=404)
-    return Response(content=r["blob"],media_type=r["mime_type"],headers={"Content-Disposition":f'inline; filename="{r["filename"].replace(chr(34),"")}"'})
+    raw_url=f"/support/receipt/{int(receipt_id)}/raw"
+    mime=r.get("mime_type") or "application/octet-stream"
+    if mime.startswith("image/"):
+        viewer=f'<img src="{raw_url}" style="max-width:100%;max-height:80vh;object-fit:contain;border-radius:16px">'
+    elif mime=="application/pdf":
+        viewer=f'<iframe src="{raw_url}" style="width:100%;height:80vh;border:0;border-radius:16px;background:#fff"></iframe>'
+    else:
+        viewer=f'<a class="btn" href="{raw_url}">باز کردن فایل</a>'
+    body=f'<div style="max-width:900px;margin:20px auto;padding:18px;background:#17112f;color:#fff;border:1px solid #4a2b7d;border-radius:20px;text-align:center"><h2>🧾 رسید @{html.escape(r["username"])}</h2><p>{html.escape(r["filename"])}</p>{viewer}<div style="margin-top:14px"><a class="btn" href="/support">← بازگشت به پنل</a></div></div>'
+    return HTMLResponse(f'<!doctype html><html lang="fa" dir="rtl"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رسید</title><body style="margin:0;background:#09051b;font-family:Tahoma,sans-serif">{body}</body></html>')
+
+@app.get("/support/receipt/{receipt_id}/raw")
+async def support_receipt_raw(request: Request, receipt_id: int):
+    username=_require_login(request)
+    if not username or not _is_support(username): return Response(status_code=403)
+    r=await db.get_support_receipt(receipt_id)
+    if not r: return Response(status_code=404)
+    filename=str(r.get("filename") or "receipt").replace('"','')
+    headers={"Content-Disposition":f'inline; filename="{filename}"',"Cache-Control":"no-store"}
+    return Response(content=r["blob"],media_type=r.get("mime_type") or "application/octet-stream",headers=headers)
 
 @app.post("/support/receipt/status")
 async def support_receipt_status(request: Request):
@@ -364,7 +353,9 @@ async def support_receipt_status(request: Request):
     if status=="accepted" and not already_accepted:
         await db.adjust_wallet(r["username"],1000,0)
         await db.create_notification(r["username"],"support_receipt","💰 خرید تأیید شد","رسید شما تأیید شد و ۱۰۰۰ سکه به حساب اضافه شد.")
-    return {"ok":True}
+    elif status=="rejected":
+        await db.create_notification(r["username"],"support_receipt","❌ رسید رد شد","رسید پرداخت شما توسط پشتیبانی رد شد.")
+    return {"ok":True,"status":status}
 
 @app.post("/support/ban")
 async def support_ban(request: Request):
@@ -418,6 +409,10 @@ async def profile_query_page(request: Request, u: str = ""):
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     prof["support_tags"] = await db.tags_for(prof["username"])
+    prof["friend_status"] = await db.friend_status(username, prof["username"])
+    prof["blocked_by_me"] = await db.block_status(username, prof["username"])
+    prof["blocked_me"] = await db.block_status(prof["username"], username)
+    prof["chat_notice"] = "برای شروع چت خصوصی، اول باید درخواست دوستی ارسال و توسط این کاربر پذیرفته شود." if request.query_params.get("chat")=="friend_required" else ""
     return tpl.profile_page(username, prof)
 
 
@@ -432,6 +427,9 @@ async def profile_page(request: Request, target: str):
     prof["profile_banned"] = bool(await db.get_active_ban(prof["username"], "profile"))
     prof["bio_banned"] = bool(await db.get_active_ban(prof["username"], "bio"))
     prof["support_tags"] = await db.tags_for(prof["username"])
+    prof["friend_status"] = await db.friend_status(username, prof["username"])
+    prof["blocked_by_me"] = await db.block_status(username, prof["username"])
+    prof["blocked_me"] = await db.block_status(prof["username"], username)
     return tpl.profile_page(username, prof)
 
 @app.post("/friends/request")
@@ -456,6 +454,23 @@ async def friends_respond(request: Request):
     data=await request.json(); sender=str(data.get("sender") or "").strip(); accept=bool(data.get("accept"))
     ok=await db.respond_friend_request(sender,username,accept)
     return {"ok":ok}
+
+@app.post("/friends/remove")
+async def friends_remove(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); target=str(data.get("target") or "").strip()
+    ok,status=await db.remove_friend(username,target)
+    return {"ok":ok,"status":status}
+
+@app.post("/users/block")
+async def users_block(request: Request):
+    username=_require_login(request)
+    if not username: return {"ok":False,"error":"login_required"}
+    data=await request.json(); target=str(data.get("target") or "").strip()
+    if not target or target==username: return {"ok":False,"error":"invalid"}
+    ok,status=await db.toggle_block(username,target)
+    return {"ok":ok,"status":status}
 
 @app.get("/friends")
 async def friends_data(request: Request):
@@ -502,7 +517,7 @@ async def settings_profile(request: Request):
     current = await db.profile(username) or {}
     avatar_value = data.get("avatar")
     avatar_changed = avatar_value not in (None, "")
-    avatar = str(avatar_value) if avatar_changed else (current.get("avatar") or "🎮")
+    avatar = str(avatar_value) if avatar_changed else (current.get("avatar") or "")
     bio = str(data.get("bio") or "").strip()
     try:
         age = int(data.get("age") or 18)
@@ -514,8 +529,8 @@ async def settings_profile(request: Request):
         return {"ok": False, "error": "bio_too_long"}
     if avatar_changed and avatar.startswith("data:image/") and len(avatar) > 350000:
         return {"ok": False, "error": "image_too_large"}
-    if avatar.startswith("data:") and not avatar.startswith("data:image/"):
-        return {"ok": False, "error": "bad_image"}
+    if avatar_changed and not avatar.startswith("data:image/"):
+        return {"ok": False, "error": "avatar_must_be_image"}
     if not _is_support(username):
         if await db.get_active_ban(username, "profile"):
             current = await db.profile(username) or {}
@@ -552,7 +567,10 @@ async def lobby(request: Request):
     username = _require_login(request)
     if not username:
         return RedirectResponse("/login")
-    return tpl.lobby_page(username, await db.profile(username), await db.wallet_for(username))
+    prof=await db.profile(username)
+    if prof:
+        prof["profile_banned"]=bool(await db.get_active_ban(username,"profile"))
+    return tpl.lobby_page(username, prof, await db.wallet_for(username))
 
 @app.get("/shop", response_class=HTMLResponse)
 async def shop_page(request: Request):
@@ -577,6 +595,11 @@ async def start_private_chat(request: Request, other: str = Form(...)):
     other = other.strip()
     if not other or other == username or not await db.get_user(other):
         return RedirectResponse("/lobby", status_code=303)
+    if not _is_support(username):
+        if await db.any_block(username, other):
+            return RedirectResponse(f"/profile?u={quote(other,safe='')}", status_code=303)
+        if await db.friend_status(username, other) != "friends":
+            return RedirectResponse(f"/profile?u={quote(other,safe='')}&chat=friend_required", status_code=303)
     return RedirectResponse(f"/chat/private/{other}", status_code=303)
 
 
@@ -779,6 +802,11 @@ async def support_music_clear(request: Request):
 async def chat_private(request: Request, other: str):
     username, blocked = await _require_scope(request, "chat")
     if blocked: return blocked
+    if not _is_support(username):
+        if await db.any_block(username, other):
+            return HTMLResponse("این کاربر را بلاک کرده‌ای یا او شما را بلاک کرده است.", status_code=403)
+        if await db.friend_status(username, other) != "friends":
+            return HTMLResponse("برای شروع چت خصوصی، اول باید درخواست دوستی ارسال و توسط این کاربر پذیرفته شود.", status_code=403)
     room = ":".join(sorted([username, other]))
     history = await db.get_recent_messages(room)
     return tpl.chat_private_page(username, other, history)
@@ -793,6 +821,10 @@ async def ws_chat_private(websocket: WebSocket, other: str):
     if not _is_support(username) and await _ban_for(username, "chat"):
         await websocket.close(code=4003)
         return
+    if not _is_support(username):
+        if await db.any_block(username, other) or await db.friend_status(username, other) != "friends":
+            await websocket.close(code=4003)
+            return
     room = ":".join(sorted([username, other]))
     await chat_manager.connect_private(room, websocket)
     try:
@@ -804,6 +836,12 @@ async def ws_chat_private(websocket: WebSocket, other: str):
             if content:
                 if not _is_support(username) and await _ban_for(username, "chat"):
                     await websocket.send_json({"type":"banned","message":"دسترسی چت شما موقتاً محدود است."})
+                    continue
+                if not _is_support(username) and await db.any_block(username, other):
+                    await websocket.send_json({"type":"blocked","message":"این گفت‌وگو به‌دلیل بلاک بودن یکی از طرفین در دسترس نیست."})
+                    continue
+                if not _is_support(username) and await db.friend_status(username, other) != "friends":
+                    await websocket.send_json({"type":"friend_required","message":"برای پیام دادن اول باید دوست باشید."})
                     continue
                 await chat_manager.broadcast_private(room, username, content[:500], data.get("reply_to_id"))
     except WebSocketDisconnect:
@@ -817,7 +855,7 @@ async def ws_chat_private(websocket: WebSocket, other: str):
 DRAW_PREVIEW_SECONDS = 5
 DRAW_BREAK_SECONDS = 10
 DRAW_TOTAL_ROUNDS = 6
-DRAW_OPTIONS_COUNT = 12
+DRAW_OPTIONS_COUNT = 16
 DRAW_MODE_DURATION = {2: 45, 4: 35}
 
 
@@ -834,10 +872,11 @@ class DrawingBattleManager:
         out = {}
         for u in players:
             prof = await db.profile(u) or {}
+            profile_banned=bool(await db.get_active_ban(u,"profile"))
             out[u] = {
                 "username": u,
                 "display_name": prof.get("display_name") or u,
-                "avatar": prof.get("avatar") or "🎮",
+                "avatar": "" if profile_banned else (prof.get("avatar") or ""),
                 "wins": int(prof.get("wins") or 0),
                 "points": int(prof.get("points") or 0),
             }
@@ -869,7 +908,7 @@ class DrawingBattleManager:
                 "active": players[:], "sockets": {u:s for u,s in picked},
                 "scores": {u:0 for u in players}, "round":0,
                 "drawer":None, "guesser":None, "word":None, "options":[],
-                "wrong_words": {u:set() for u in players}, "guesses": {}, "round_points": {},
+                "wrong_words": {u:set() for u in players}, "attempted": set(), "guesses": {}, "round_points": {},
                 "round_active":False, "phase":"waiting", "deadline":0.0,
                 "strokes":[], "profiles": await self._profiles(players), "last_result": None,
             }
@@ -951,7 +990,7 @@ class DrawingBattleManager:
         target, options = words_draw.pick_round_words(min(DRAW_OPTIONS_COUNT, max(8, len(players)*2)))
         game.update({
             "drawer": drawer, "word": target, "options": options,
-            "wrong_words": {u:set() for u in players}, "guesses": {}, "round_points": {},
+            "wrong_words": {u:set() for u in players}, "attempted": set(), "guesses": {}, "round_points": {},
             "round_active": False, "phase":"preview",
             "deadline": time.monotonic() + DRAW_PREVIEW_SECONDS, "strokes":[],
         })
@@ -1020,11 +1059,12 @@ class DrawingBattleManager:
         gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
         if not game or not game["round_active"] or username==game["drawer"] or username not in game["active"]: return
         word=(word or "").strip()
-        if not word or username in game["guesses"] or word in game["wrong_words"].setdefault(username,set()): return
+        if not word or username in game.get("attempted",set()) or username in game["guesses"]:
+            return
+        game.setdefault("attempted",set()).add(username)
         if word == game["word"]:
             now=time.monotonic(); game["guesses"][username]=now
-            wrong_count=len(game["wrong_words"].get(username,set()))
-            pts=max(10, round(max(0,game["deadline"]-now)/self.duration*100) - 10*wrong_count)
+            pts=max(10, round(max(0,game["deadline"]-now)/self.duration*100))
             game["round_points"][username]=pts
             game["scores"][username]+=pts
             await db.update_stats(username, correct_guesses=1, points=pts)
@@ -1032,9 +1072,8 @@ class DrawingBattleManager:
             needed=max(1,len(game["active"])-1)
             if len(game["guesses"]) >= needed: await self._end_round(gid, True)
         else:
-            game["wrong_words"].setdefault(username,set()).add(word)
             await db.update_stats(username, wrong_guesses=1)
-            await self._to_user(game, username, {"type":"guess_wrong","word":word})
+            await self._to_user(game, username, {"type":"guess_wrong","word":word,"final":True})
 
     async def _end_round(self, gid, correct):
         game=self.games.get(gid)
