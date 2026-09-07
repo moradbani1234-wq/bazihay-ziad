@@ -1695,6 +1695,8 @@ BASE_CSS += """
   position:relative!important;
   overflow:visible!important;
   border-radius:50%!important;
+  border:0!important;
+  outline:0!important;
 }
 
 .lobby-profile-avatar[class*="frame-"]::before,
@@ -1705,6 +1707,7 @@ BASE_CSS += """
   inset:0!important;
   width:100%!important;
   height:100%!important;
+  box-sizing:border-box!important;
   transform:none!important;
   border-radius:50%!important;
   z-index:3!important;
@@ -1736,6 +1739,8 @@ BASE_CSS += """
   width:100%!important;
   height:100%!important;
   object-fit:cover!important;
+  border:0!important;
+  outline:0!important;
   border-radius:50%!important;
 }
 """
