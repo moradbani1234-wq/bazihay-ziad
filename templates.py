@@ -1839,3 +1839,160 @@ BASE_CSS += """
   50%{opacity:1;filter:brightness(1.18)}
 }
 """
+
+# === V15 — lightweight themed halo effects ===
+# The active frame remains the only avatar border.  Rich effects live on the
+# existing .aura-extra layer and use only transform/opacity for animation.
+BASE_CSS += """
+/* V15: animated themed effects — hero avatars + leaderboard podium only. */
+.profile-head>div:first-child[class*="frame-"]>.aura-extra,
+.lobby-profile-avatar[class*="frame-"]>.aura-extra,
+.draw-avatar[class*="frame-"]>.aura-extra,
+.leader-podium-card .leader-avatar-wrap[class*="frame-"]>.aura-extra{
+  display:block!important;
+  position:absolute!important;
+  inset:-14px!important;
+  border-radius:50%!important;
+  overflow:visible!important;
+  pointer-events:none!important;
+  z-index:8!important;
+  background:none!important;
+  box-shadow:none!important;
+  opacity:1!important;
+  will-change:transform,opacity;
+}
+
+/* Keep small/busy avatar lists lightweight: ring only, no particles. */
+.chat-avatar[class*="frame-"]>.aura-extra,
+.leader-list-avatar .leader-avatar-wrap[class*="frame-"]>.aura-extra{
+  display:none!important;
+}
+
+/* ---------- RAINBOW / GLOWING ---------- */
+.frame-premium>.aura-extra{
+  background:conic-gradient(from 0deg,#ff4fd8,#7b5cff,#19dfff,#57ff9a,#ffe45b,#ff7a45,#ff4fd8)!important;
+  -webkit-mask:radial-gradient(circle,transparent 72%,#000 73% 79%,transparent 80%)!important;
+  mask:radial-gradient(circle,transparent 72%,#000 73% 79%,transparent 80%)!important;
+  animation:rainbowHaloSpin 4.5s linear infinite!important;
+}
+@keyframes rainbowHaloSpin{to{transform:rotate(360deg)}}
+
+/* ---------- BLUE LIGHTNING ---------- */
+.frame-lightning>.aura-extra{
+  background:conic-gradient(from 0deg,transparent 0 8%,rgba(83,220,255,.9) 9% 10%,transparent 11% 24%,rgba(58,155,255,.95) 25% 26%,transparent 27% 49%,rgba(120,239,255,.9) 50% 51%,transparent 52% 74%,rgba(55,157,255,.95) 75% 76%,transparent 77% 100%)!important;
+  -webkit-mask:radial-gradient(circle,transparent 72%,#000 73% 82%,transparent 83%)!important;
+  mask:radial-gradient(circle,transparent 72%,#000 73% 82%,transparent 83%)!important;
+  animation:lightningOrbit 1.8s linear infinite!important;
+  filter:none!important;
+}
+.frame-lightning>.aura-extra::before,
+.frame-lightning>.aura-extra::after{
+  content:"";position:absolute;width:16px;height:32px;top:0;left:50%;
+  background:linear-gradient(145deg,#d9fbff 0 18%,#52dfff 19% 48%,#1677ff 49% 100%);
+  clip-path:polygon(55% 0,100% 0,63% 38%,92% 38%,20% 100%,38% 53%,5% 53%);
+  box-shadow:0 0 8px rgba(67,211,255,.95),0 0 18px rgba(35,119,255,.65);
+  transform-origin:50% 150px;
+}
+.frame-lightning>.aura-extra::after{transform:rotate(180deg);transform-origin:50% 150px}
+@keyframes lightningOrbit{to{transform:rotate(360deg)}}
+
+/* ---------- FIRE ---------- */
+.frame-fire>.aura-extra{
+  background:
+    radial-gradient(ellipse at 50% 4%,#fff7a8 0 4%,#ffbd32 5% 12%,#ff4d00 13% 20%,transparent 21%),
+    radial-gradient(ellipse at 95% 45%,#fff19a 0 3%,#ff8a00 4% 11%,#ff3000 12% 18%,transparent 19%),
+    radial-gradient(ellipse at 5% 55%,#fff19a 0 3%,#ff8a00 4% 11%,#ff3000 12% 18%,transparent 19%),
+    radial-gradient(ellipse at 50% 96%,#fff19a 0 3%,#ff8a00 4% 11%,#ff3000 12% 18%,transparent 19%)!important;
+  -webkit-mask:radial-gradient(circle,transparent 67%,#000 68% 88%,transparent 89%)!important;
+  mask:radial-gradient(circle,transparent 67%,#000 68% 88%,transparent 89%)!important;
+  animation:fireHalo 1.05s ease-in-out infinite alternate!important;
+}
+.frame-fire>.aura-extra::before,
+.frame-fire>.aura-extra::after{
+  content:"";position:absolute;inset:5px;border-radius:50%;
+  border:3px solid transparent;border-top-color:#ffb21c;border-bottom-color:#ff3d00;
+  animation:fireSpin 1.7s linear infinite;
+}
+.frame-fire>.aura-extra::after{inset:11px;border-width:2px;border-top-color:#fff08a;border-bottom-color:#ff6a00;animation-direction:reverse;animation-duration:1.2s}
+@keyframes fireHalo{from{transform:scale(.97);opacity:.82}to{transform:scale(1.04);opacity:1}}
+@keyframes fireSpin{to{transform:rotate(360deg)}}
+
+/* ---------- ANGEL WINGS ---------- */
+.frame-angel>.aura-extra::before,
+.frame-angel>.aura-extra::after{
+  content:"";position:absolute;top:12%;width:62%;height:76%;
+  background:repeating-linear-gradient(150deg,rgba(255,255,255,.95) 0 5px,rgba(199,230,255,.7) 6px 10px,transparent 11px 15px);
+  border-radius:65% 35% 65% 35%;
+  box-shadow:0 0 10px rgba(255,255,235,.75),0 0 24px rgba(160,215,255,.42);
+}
+.frame-angel>.aura-extra::before{left:-40%;transform-origin:100% 50%;clip-path:polygon(100% 50%,75% 5%,43% 18%,17% 38%,0 55%,26% 62%,56% 67%,78% 80%);animation:angelWingL 1.9s ease-in-out infinite alternate}
+.frame-angel>.aura-extra::after{right:-40%;transform-origin:0 50%;clip-path:polygon(0 50%,25% 5%,57% 18%,83% 38%,100% 55%,74% 62%,44% 67%,22% 80%);animation:angelWingR 1.9s ease-in-out infinite alternate}
+@keyframes angelWingL{from{transform:rotate(-7deg) scale(.96);opacity:.78}to{transform:rotate(4deg) scale(1.03);opacity:1}}
+@keyframes angelWingR{from{transform:rotate(7deg) scale(.96);opacity:.78}to{transform:rotate(-4deg) scale(1.03);opacity:1}}
+
+/* ---------- PURPLE SHADOW: two opposing orbit lines ---------- */
+.frame-purple>.aura-extra::before,
+.frame-purple>.aura-extra::after{
+  content:"";position:absolute;border-radius:50%;background:transparent;
+  border:3px solid transparent;
+  pointer-events:none;
+}
+.frame-purple>.aura-extra::before{
+  inset:7px;border-top-color:#e36cff;border-left-color:#9c45ff;
+  box-shadow:0 0 9px rgba(198,90,255,.85);animation:purpleCW 2.8s linear infinite;
+}
+.frame-purple>.aura-extra::after{
+  inset:13px;border-bottom-color:#6f62ff;border-right-color:#c65aff;
+  box-shadow:0 0 9px rgba(111,98,255,.8);animation:purpleCCW 2.2s linear infinite;
+}
+@keyframes purpleCW{to{transform:rotate(360deg)}}
+@keyframes purpleCCW{to{transform:rotate(-360deg)}}
+
+/* ---------- ICE: falling snow + white mist from below ---------- */
+.frame-ice>.aura-extra{
+  background:
+    radial-gradient(circle at 16% 4%,#fff 0 2px,transparent 3px),
+    radial-gradient(circle at 48% 0%,#e8fbff 0 2px,transparent 3px),
+    radial-gradient(circle at 78% 7%,#fff 0 2px,transparent 3px),
+    radial-gradient(circle at 31% 18%,#dffaff 0 2px,transparent 3px),
+    radial-gradient(circle at 67% 20%,#fff 0 2px,transparent 3px),
+    radial-gradient(ellipse at 50% 105%,rgba(255,255,255,.72),transparent 42%)!important;
+  animation:iceFall 2.7s linear infinite!important;
+}
+.frame-ice>.aura-extra::before,
+.frame-ice>.aura-extra::after{
+  content:"❄";position:absolute;color:#f7ffff;font-size:13px;text-shadow:0 0 7px #8feaff;
+  top:-8%;animation:snowDrop 2.2s linear infinite;
+}
+.frame-ice>.aura-extra::before{left:18%}
+.frame-ice>.aura-extra::after{left:72%;font-size:10px;animation-delay:-1.1s}
+@keyframes iceFall{from{transform:translateY(-3px)}to{transform:translateY(5px)}}
+@keyframes snowDrop{0%{transform:translateY(0) rotate(0);opacity:0}15%{opacity:1}100%{transform:translateY(110%) rotate(90deg);opacity:.1}}
+
+/* ---------- LEGENDARY GOLD: rotating golden leaves ---------- */
+.frame-king>.aura-extra{
+  background:repeating-conic-gradient(from 0deg,transparent 0 8deg,rgba(255,221,92,.98) 9deg 12deg,transparent 13deg 24deg)!important;
+  -webkit-mask:radial-gradient(circle,transparent 69%,#000 70% 87%,transparent 88%)!important;
+  mask:radial-gradient(circle,transparent 69%,#000 70% 87%,transparent 88%)!important;
+  animation:goldLeaves 6s linear infinite!important;
+}
+.frame-king>.aura-extra::before,
+.frame-king>.aura-extra::after{
+  content:"◆";position:absolute;color:#ffd95a;font-size:10px;text-shadow:0 0 8px #ffb800;
+  top:0;left:50%;transform-origin:50% 160px;animation:leafOrbit 4.2s linear infinite;
+}
+.frame-king>.aura-extra::after{animation-delay:-2.1s;font-size:8px;color:#fff0a0}
+@keyframes goldLeaves{to{transform:rotate(360deg)}}
+@keyframes leafOrbit{to{transform:rotate(360deg)}}
+
+/* Respect reduced-motion without breaking the effects. */
+@media(prefers-reduced-motion:reduce){
+  .frame-premium>.aura-extra,.frame-lightning>.aura-extra,.frame-fire>.aura-extra,.frame-ice>.aura-extra,.frame-king>.aura-extra,
+  .frame-angel>.aura-extra::before,.frame-angel>.aura-extra::after,
+  .frame-purple>.aura-extra::before,.frame-purple>.aura-extra::after,
+  .frame-fire>.aura-extra::before,.frame-fire>.aura-extra::after,
+  .frame-lightning>.aura-extra::before,.frame-lightning>.aura-extra::after,
+  .frame-ice>.aura-extra::before,.frame-ice>.aura-extra::after,
+  .frame-king>.aura-extra::before,.frame-king>.aura-extra::after{animation:none!important}
+}
+"""
