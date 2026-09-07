@@ -315,7 +315,6 @@ def _nav(username: str | None) -> str:
     </div>"""
 
 
-BASE_CSS += '\n/* V11: avatar-only lightweight auras. Legacy full-card rings are disabled. */\n.lobby-profile[class*="frame-"]::before,.lobby-profile[class*="frame-"]::after,.profile-card[class*="frame-"]::before,.profile-card[class*="frame-"]::after{content:none!important;display:none!important}\n.lobby-profile-avatar[class*="frame-"],.profile-head>div:first-child[class*="frame-"],.chat-avatar[class*="frame-"],.draw-avatar[class*="frame-"],.leader-avatar-wrap[class*="frame-"]{position:relative!important;overflow:visible!important;isolation:isolate!important;border-radius:50%!important;border:0!important;background:transparent!important;box-shadow:none!important;filter:none!important;z-index:3!important}\n.lobby-profile-avatar[class*="frame-"]>img,.profile-head>div:first-child[class*="frame-"]>img,.chat-avatar[class*="frame-"]>img,.draw-avatar[class*="frame-"]>img,.leader-avatar-wrap[class*="frame-"]>img,.leader-avatar-wrap[class*="frame-"]>.leader-avatar{position:relative!important;z-index:4!important;border-radius:50%!important;display:block!important}\n.lobby-profile-avatar[class*="frame-"]::before,.lobby-profile-avatar[class*="frame-"]::after,.profile-head>div:first-child[class*="frame-"]::before,.profile-head>div:first-child[class*="frame-"]::after,.chat-avatar[class*="frame-"]::before,.chat-avatar[class*="frame-"]::after,.draw-avatar[class*="frame-"]::before,.draw-avatar[class*="frame-"]::after,.leader-avatar-wrap[class*="frame-"]::before,.leader-avatar-wrap[class*="frame-"]::after{content:""!important;display:block!important;position:absolute!important;pointer-events:none!important}\n.frame-premium::before{inset:-3px!important;border:2px solid rgba(115,226,255,.95)!important;border-radius:50%!important;box-shadow:0 0 7px rgba(0,220,255,.55)!important;animation:auraBreath 2.4s ease-in-out infinite!important;z-index:1!important}.frame-premium::after{inset:-6px!important;border:1px solid rgba(139,102,255,.55)!important;border-radius:50%!important;animation:auraSpin 7s linear infinite!important;z-index:0!important}\n.frame-bronze::before{inset:-3px!important;border:2px solid #c88958!important;border-radius:50%!important;box-shadow:0 0 7px rgba(200,137,88,.58)!important;animation:auraBreath 2.7s ease-in-out infinite!important;z-index:1!important}.frame-bronze::after{inset:-5px!important;border:1px solid rgba(255,186,118,.45)!important;border-radius:50%!important;animation:auraSpin 9s linear infinite!important;z-index:0!important}\n.frame-davinci::before{inset:-3px!important;border:2px solid #45e1d8!important;border-radius:50%!important;box-shadow:0 0 8px rgba(56,222,214,.62)!important;animation:auraBreath 2.2s ease-in-out infinite!important;z-index:1!important}.frame-davinci::after{inset:-5px!important;border:1px solid rgba(88,184,255,.45)!important;border-radius:50%!important;animation:auraSpin 8s linear infinite!important;z-index:0!important}\n.frame-picasso::before{inset:-3px!important;border:2px solid #ff5da8!important;border-radius:50%!important;box-shadow:0 0 8px rgba(255,64,153,.62)!important;animation:auraBreath 2s ease-in-out infinite!important;z-index:1!important}.frame-picasso::after{inset:-5px!important;border:1px solid rgba(255,126,203,.5)!important;border-radius:50%!important;animation:auraSpinReverse 7s linear infinite!important;z-index:0!important}\n.frame-gold::before{inset:-4px!important;border:2px solid #ffd85c!important;border-radius:50%!important;box-shadow:0 0 9px rgba(255,195,45,.65)!important;animation:auraGoldLite 2.2s ease-in-out infinite!important;z-index:1!important}.frame-gold::after{inset:-6px!important;border:1px solid rgba(255,224,128,.5)!important;border-radius:50%!important;animation:auraSpin 8s linear infinite!important;z-index:0!important}\n.frame-ice::before{inset:-3px!important;border:2px solid #a7f6ff!important;border-radius:50%!important;box-shadow:0 0 8px rgba(82,221,255,.62)!important;animation:auraIceBreath 2.8s ease-in-out infinite!important;z-index:1!important}.frame-ice::after{left:50%!important;top:auto!important;bottom:-8px!important;width:74%!important;height:16px!important;transform:translateX(-50%)!important;border:0!important;border-radius:50%!important;background:radial-gradient(ellipse at center,rgba(190,250,255,.42),rgba(120,220,255,.10) 45%,transparent 72%)!important;filter:blur(2px)!important;animation:iceMist 2.6s ease-in-out infinite!important;z-index:2!important}\n.frame-angel::before{inset:-5px!important;border:2px solid rgba(255,248,216,.9)!important;border-radius:50%!important;box-shadow:0 0 9px rgba(255,236,169,.62)!important;animation:auraBreath 2.8s ease-in-out infinite!important;z-index:1!important}.frame-angel::after{left:50%!important;top:50%!important;width:128%!important;height:62%!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:50%!important;background:radial-gradient(ellipse at 5% 50%,rgba(255,250,225,.72) 0 8%,transparent 9%),radial-gradient(ellipse at 95% 50%,rgba(255,250,225,.72) 0 8%,transparent 9%),radial-gradient(ellipse at 0 48%,rgba(255,250,225,.46) 0 5%,transparent 6%),radial-gradient(ellipse at 100% 48%,rgba(255,250,225,.46) 0 5%,transparent 6%)!important;filter:drop-shadow(0 0 4px rgba(255,226,145,.5))!important;animation:angelWings 3.4s ease-in-out infinite!important;z-index:0!important}\n.frame-fire::before{left:50%!important;top:auto!important;bottom:-13px!important;width:82%!important;height:27px!important;transform:translateX(-50%)!important;border:0!important;border-radius:55% 55% 45% 45%!important;background:radial-gradient(ellipse at 50% 100%,rgba(255,71,0,.9),transparent 62%),radial-gradient(ellipse at 30% 75%,rgba(255,151,28,.78) 0 12%,transparent 35%),radial-gradient(ellipse at 70% 75%,rgba(255,94,0,.78) 0 13%,transparent 36%)!important;filter:blur(.6px) drop-shadow(0 0 5px rgba(255,73,0,.6))!important;animation:fireFlicker 1.05s ease-in-out infinite alternate!important;z-index:2!important}.frame-fire::after{inset:-3px!important;border:2px solid rgba(255,103,20,.82)!important;border-radius:50%!important;box-shadow:0 0 8px rgba(255,70,0,.52)!important;animation:auraBreath 1.8s ease-in-out infinite!important;z-index:0!important}\n.frame-lightning::before{left:auto!important;right:-7px!important;top:-10px!important;width:19px!important;height:31px!important;transform:rotate(8deg)!important;border:0!important;border-radius:0!important;background:#63dcff!important;clip-path:polygon(58% 0,100% 0,66% 38%,92% 38%,22% 100%,39% 53%,8% 53%)!important;filter:drop-shadow(0 0 5px #2ebfff)!important;opacity:0!important;animation:blueBolt 3.8s steps(1,end) infinite!important;z-index:6!important}.frame-lightning::after{inset:-3px!important;border:2px solid rgba(79,213,255,.82)!important;border-radius:50%!important;box-shadow:0 0 8px rgba(52,172,255,.52)!important;animation:lightningRing 3.8s steps(1,end) infinite!important;z-index:0!important}\n.frame-purple::before{left:50%!important;top:50%!important;width:116%!important;height:116%!important;transform:translate(-50%,-50%) rotate(24deg)!important;border:0!important;border-radius:50%!important;background:linear-gradient(112deg,transparent 45%,rgba(207,87,255,.95) 48%,transparent 51%),linear-gradient(292deg,transparent 45%,rgba(122,70,255,.92) 48%,transparent 51%)!important;box-shadow:0 0 8px rgba(171,55,255,.42)!important;animation:purpleLines 2.8s ease-in-out infinite!important;z-index:2!important}.frame-purple::after{inset:-3px!important;border:2px solid rgba(189,78,255,.7)!important;border-radius:50%!important;box-shadow:0 0 8px rgba(144,55,255,.45)!important;animation:auraBreath 2.4s ease-in-out infinite!important;z-index:0!important}\n.frame-king::before{inset:-5px!important;border:2px solid #ffd65b!important;border-radius:50%!important;box-shadow:0 0 9px rgba(255,195,54,.6),0 0 18px rgba(255,150,0,.22)!important;animation:kingPulse 2.5s ease-in-out infinite!important;z-index:1!important}.frame-king::after{left:50%!important;top:50%!important;width:126%!important;height:126%!important;transform:translate(-50%,-50%)!important;border:1px solid rgba(255,219,116,.5)!important;border-radius:50%!important;background:conic-gradient(from -12deg,transparent 0 8deg,rgba(255,214,91,.7) 9deg,transparent 10deg 48deg,rgba(255,214,91,.5) 49deg,transparent 50deg 90deg,rgba(255,214,91,.55) 91deg,transparent 92deg 360deg)!important;animation:auraSpin 10s linear infinite!important;z-index:0!important}\n@keyframes auraBreath{0%,100%{opacity:.72;transform:scale(.985)}50%{opacity:1;transform:scale(1.015)}}@keyframes auraGoldLite{0%,100%{opacity:.72;transform:scale(.985)}50%{opacity:1;transform:scale(1.02)}}@keyframes auraIceBreath{0%,100%{opacity:.7;transform:scale(.99)}50%{opacity:1;transform:scale(1.02)}}@keyframes auraSpin{to{transform:rotate(360deg)}}@keyframes auraSpinReverse{to{transform:rotate(-360deg)}}@keyframes iceMist{0%,100%{opacity:.35;transform:translateX(-50%) scaleX(.85)}50%{opacity:.8;transform:translateX(-50%) scaleX(1)}}@keyframes angelWings{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(.96)}50%{opacity:.9;transform:translate(-50%,-50%) scale(1.02)}}@keyframes fireFlicker{0%{opacity:.65;transform:translateX(-50%) scaleY(.82) scaleX(.92)}45%{opacity:1;transform:translateX(-50%) scaleY(1.08) scaleX(1.02)}100%{opacity:.78;transform:translateX(-50%) scaleY(.9) scaleX(.96)}}@keyframes blueBolt{0%,78%,100%{opacity:0}80%,84%{opacity:1}82%{opacity:.35}}@keyframes lightningRing{0%,78%,100%{opacity:.7;transform:scale(.99)}80%,84%{opacity:1;transform:scale(1.025);box-shadow:0 0 12px rgba(55,192,255,.8)}82%{opacity:.5}}@keyframes purpleLines{0%,100%{opacity:.62;transform:translate(-50%,-50%) rotate(24deg) scale(.97)}50%{opacity:1;transform:translate(-50%,-50%) rotate(24deg) scale(1.03)}}@keyframes kingPulse{0%,100%{opacity:.7;transform:scale(.985)}50%{opacity:1;transform:scale(1.018)}}\n@media(prefers-reduced-motion:reduce){.frame-premium::before,.frame-premium::after,.frame-bronze::before,.frame-bronze::after,.frame-davinci::before,.frame-davinci::after,.frame-picasso::before,.frame-picasso::after,.frame-gold::before,.frame-gold::after,.frame-ice::before,.frame-ice::after,.frame-angel::before,.frame-angel::after,.frame-fire::before,.frame-fire::after,.frame-lightning::before,.frame-lightning::after,.frame-purple::before,.frame-purple::after,.frame-king::before,.frame-king::after{animation:none!important}}\n'
 
 def page_shell(title: str, body: str, username: str | None = None) -> str:
     report_modal = """<div id="reportModal" class="report-modal" aria-hidden="true"><div class="report-modal-card"><button class="report-modal-close" onclick="closeReportModal()">×</button><div class="report-modal-title">🚩 گزارش کاربر</div><div class="report-modal-sub">دلیل گزارش را انتخاب کن:</div><div id="reportReasons" class="report-reasons"><button data-cat="collusion">🤝 تبانی/تقلب</button><button data-cat="profile">🖼️ پروفایل نامناسب</button><button data-cat="username">🆔 آیدی نامناسب</button><button data-cat="spam">📢 اسپم</button><button data-cat="chat">💬 پیام چت نامناسب</button><button data-cat="bio">📝 بیوگرافی نامناسب</button></div><textarea id="reportExtra" maxlength="300" placeholder="توضیح کوتاه (اختیاری)"></textarea><div class="report-modal-hint">با انتخاب یکی از گزینه‌ها گزارش ارسال می‌شود.</div></div></div>
@@ -1490,36 +1489,7 @@ BASE_CSS += """
 """
 
 BASE_CSS += """
-/* V6 — real shop item activation */
-.frame-premium{border:2px solid transparent!important;background:linear-gradient(var(--surface),var(--surface)) padding-box,conic-gradient(from 0deg,#00e5ff,#7c4dff,#ff4fd8,#ffd54a,#00e5ff) border-box!important;box-shadow:0 0 22px rgba(124,77,255,.28),inset 0 0 22px rgba(0,229,255,.06)!important;animation:premiumFrameSpin 5s linear infinite}
-.frame-bronze{border:2px solid #cd7f32!important;box-shadow:0 0 22px rgba(205,127,50,.38),inset 0 0 20px rgba(205,127,50,.08)!important}
-.frame-davinci{border:2px solid #32d9d0!important;box-shadow:0 0 25px rgba(50,217,208,.48),inset 0 0 24px rgba(50,217,208,.09)!important;animation:davinciPulse 1.8s ease-in-out infinite alternate}
-.frame-picasso{border:2px solid #ff4a4a!important;box-shadow:0 0 25px rgba(255,74,74,.45),0 0 50px rgba(255,82,210,.12)!important;animation:picassoPulse 1.6s ease-in-out infinite alternate}
-.frame-gold{border:2px solid #ffd75a!important;box-shadow:0 0 25px rgba(255,215,90,.5),0 0 55px rgba(255,170,20,.16)!important;animation:goldFramePulse 1.8s ease-in-out infinite alternate}
-.frame-ice{border:2px solid #52d6ff!important;box-shadow:0 0 25px rgba(82,214,255,.5),0 0 55px rgba(120,220,255,.16)!important;animation:iceFramePulse 1.8s ease-in-out infinite alternate}
-@keyframes goldFramePulse{from{box-shadow:0 0 14px rgba(255,215,90,.3)}to{box-shadow:0 0 34px rgba(255,215,90,.65)}}
-@keyframes iceFramePulse{from{box-shadow:0 0 14px rgba(82,214,255,.3)}to{box-shadow:0 0 34px rgba(82,214,255,.65)}}
-.has-img-frame{position:relative!important;overflow:visible!important}
-.avatar-frame-img,.profile-head>div:first-child img.avatar-frame-img,.has-img-frame img.avatar-frame-img{position:absolute!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;max-width:none!important;max-height:none!important;pointer-events:none;z-index:5;object-fit:contain!important;border-radius:0!important;width:170%!important;height:170%!important;filter:drop-shadow(0 0 6px rgba(0,0,0,.25))}
-.frame-img-gold,.profile-head>div:first-child img.frame-img-gold,.has-img-frame img.frame-img-gold{width:172%!important;height:172%!important}
-.frame-img-ice,.profile-head>div:first-child img.frame-img-ice,.has-img-frame img.frame-img-ice{width:163%!important;height:163%!important}
-.store-item-icon-img{width:100%;height:100%;object-fit:contain}
-.shop-badge.gold-owned{background:linear-gradient(135deg,#ffe58a,#ffb02e);color:#3a2400}
-.shop-badge.ice-owned{background:linear-gradient(135deg,#bdf3ff,#4fc7ff);color:#04283b}
-@media(max-width:600px){.avatar-frame-img{filter:none}}
-.gold-spark{position:absolute;width:5px;height:5px;border-radius:50%;background:radial-gradient(circle,#fff8e0,#ffd75a 55%,transparent 75%);opacity:0;pointer-events:none;z-index:6;animation:goldSparkTwinkle 2.2s ease-in-out infinite}
-.gold-spark-1{top:6%;left:20%;animation-delay:0s}
-.gold-spark-2{top:12%;left:76%;animation-delay:.6s}
-.gold-spark-3{top:80%;left:14%;animation-delay:1.2s}
-.gold-spark-4{top:84%;left:82%;animation-delay:1.7s}
-@keyframes goldSparkTwinkle{0%,100%{opacity:0;transform:scale(.3) translateY(0)}45%{opacity:1;transform:scale(1.3) translateY(-2px)}70%{opacity:.5;transform:scale(.8) translateY(0)}}
-.ice-shard{position:absolute;width:3px;height:9px;background:linear-gradient(180deg,#eafcff,#4fd1ff);border-radius:2px;opacity:0;pointer-events:none;z-index:6;animation:iceShardFall 2.8s ease-in infinite;box-shadow:0 0 4px rgba(120,220,255,.8)}
-.ice-shard-1{top:4%;left:16%;animation-delay:.1s}
-.ice-shard-2{top:2%;left:80%;animation-delay:1s}
-.ice-shard-3{top:88%;left:30%;animation-delay:1.8s}
-.ice-shard-4{top:90%;left:68%;animation-delay:2.3s}
-@keyframes iceShardFall{0%{opacity:0;transform:translateY(-4px) scale(.6) rotate(0deg)}18%{opacity:1}65%{opacity:.7}100%{opacity:0;transform:translateY(16px) scale(.85) rotate(12deg)}}
-@media(prefers-reduced-motion:reduce){.gold-spark,.ice-shard{animation:none;opacity:0}}
+/* League/effect glow around the whole card (unrelated to avatar frames) — kept from V6/V7 */
 .effect-davinci{position:relative;box-shadow:0 0 30px rgba(50,217,208,.35),inset 0 0 35px rgba(50,217,208,.06)!important}
 .effect-picasso{position:relative;box-shadow:0 0 30px rgba(255,74,74,.32),0 0 65px rgba(255,82,210,.16),inset 0 0 35px rgba(255,74,74,.06)!important}
 .effect-davinci::after,.effect-picasso::after{content:"";position:absolute;inset:6px;border-radius:inherit;pointer-events:none;opacity:.55;animation:itemAura 1.5s ease-in-out infinite alternate}
@@ -1534,85 +1504,30 @@ BASE_CSS += """
 .store-item[data-item="davinci_frame"] .store-item-icon,.store-item[data-item="davinci_effect"] .store-item-icon{filter:drop-shadow(0 0 8px rgba(50,217,208,.75))}
 .store-item[data-item="picasso_frame"] .store-item-icon,.store-item[data-item="picasso_effect"] .store-item-icon{filter:drop-shadow(0 0 8px rgba(255,74,74,.75))}
 .store-item[data-item="victory_fx"] .store-item-icon{animation:crownBounce 1s ease-in-out infinite alternate}
-@keyframes premiumFrameSpin{to{filter:hue-rotate(360deg)}}
-@keyframes davinciPulse{from{box-shadow:0 0 14px rgba(50,217,208,.25)}to{box-shadow:0 0 34px rgba(50,217,208,.58)}}
-@keyframes picassoPulse{from{box-shadow:0 0 14px rgba(255,74,74,.22)}to{box-shadow:0 0 34px rgba(255,74,74,.52)}}
 @keyframes itemAura{from{transform:scale(.985);opacity:.25}to{transform:scale(1);opacity:.8}}
 @keyframes crownBounce{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-2px) rotate(2deg)}}
 """
 
-
 BASE_CSS += """
-/* V7 — persistent single active frame + lightweight visual effects */
-.frame-effect-layer{position:absolute!important;inset:0!important;overflow:visible!important;pointer-events:none!important;z-index:4!important}
-.frame-effect-layer .avatar-frame-img{position:absolute!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:var(--frame-size)!important;height:var(--frame-size)!important;max-width:none!important;max-height:none!important;object-fit:contain!important;border:0!important;border-radius:0!important;pointer-events:none!important;z-index:4!important}.has-img-frame>.profile-avatar-img,.has-img-frame>.leader-avatar,.has-img-frame>.leader-avatar-fallback{position:relative!important;z-index:6!important}.profile-head>div:first-child>.profile-avatar-img{position:relative!important;z-index:6!important}.leader-avatar-wrap .leader-avatar{z-index:6!important}
-.frame-effect-layer.frame-fire .avatar-frame-img{animation:frameFireBreath 1.15s ease-in-out infinite alternate;transform-origin:center}
-.frame-effect-layer.frame-ice .avatar-frame-img{animation:frameIcePulse 2s ease-in-out infinite alternate}
-.frame-effect-layer.frame-lightning .avatar-frame-img{animation:frameLightningPulse 1.35s ease-in-out infinite}
-.frame-effect-layer.frame-purple .avatar-frame-img{animation:framePurplePulse 1.8s ease-in-out infinite alternate}
-.frame-effect-layer.frame-angel .avatar-frame-img{animation:frameAngelPulse 2.2s ease-in-out infinite alternate}
-.frame-effect-layer.frame-king .avatar-frame-img{animation:frameKingPulse 1.9s ease-in-out infinite alternate}
-@keyframes frameFireBreath{from{transform:translate(-50%,-50%) scale(.995);filter:brightness(1) drop-shadow(0 0 5px rgba(255,78,0,.45))}to{transform:translate(-50%,-50%) scale(1.018);filter:brightness(1.14) drop-shadow(0 0 13px rgba(255,120,0,.7))}}
-@keyframes frameIcePulse{from{filter:brightness(1) drop-shadow(0 0 5px rgba(72,205,255,.35))}to{filter:brightness(1.08) drop-shadow(0 0 14px rgba(92,225,255,.72))}}
-@keyframes frameLightningPulse{0%,100%{filter:brightness(1) drop-shadow(0 0 6px rgba(65,155,255,.45))}48%{filter:brightness(1.18) drop-shadow(0 0 17px rgba(83,211,255,.95))}52%{filter:brightness(.92) drop-shadow(0 0 5px rgba(150,78,255,.4))}}
-@keyframes framePurplePulse{from{filter:brightness(1) drop-shadow(0 0 6px rgba(180,45,255,.45))}to{filter:brightness(1.12) drop-shadow(0 0 16px rgba(235,55,255,.82))}}
-@keyframes frameAngelPulse{from{filter:brightness(1) drop-shadow(0 0 5px rgba(255,245,210,.38))}to{filter:brightness(1.1) drop-shadow(0 0 16px rgba(255,232,151,.72))}}
-@keyframes frameKingPulse{from{filter:brightness(1) drop-shadow(0 0 6px rgba(255,185,40,.42))}to{filter:brightness(1.1) drop-shadow(0 0 17px rgba(255,211,79,.78))}}
-.frame-effect-layer .fire-ember,.frame-effect-layer .gold-spark,.frame-effect-layer .ice-shard,.frame-effect-layer .lightning-flash,.frame-effect-layer .angel-feather,.frame-effect-layer .king-spark,.frame-effect-layer .purple-orbit,.frame-effect-layer .ice-mist{position:absolute;display:block;pointer-events:none;z-index:7}
-.fire-ember{width:4px;height:7px;border-radius:60% 40% 60% 40%;background:linear-gradient(180deg,#fff4a8,#ff7b16,#e42d0c);box-shadow:0 0 7px rgba(255,83,20,.8);animation:fireEmber 1.8s ease-out infinite}
-.fire-ember-1{left:12%;top:68%}.fire-ember-2{left:83%;top:52%;animation-delay:.25s}.fire-ember-3{left:22%;top:16%;animation-delay:.5s}.fire-ember-4{left:77%;top:18%;animation-delay:.8s}.fire-ember-5{left:34%;top:91%;animation-delay:1.05s}.fire-ember-6{left:66%;top:89%;animation-delay:1.35s}
-@keyframes fireEmber{0%{opacity:0;transform:translateY(5px) scale(.4) rotate(0)}20%{opacity:1}100%{opacity:0;transform:translateY(-20px) translateX(7px) scale(1) rotate(35deg)}}
-.ice-mist{width:22%;height:8%;border-radius:50%;background:radial-gradient(ellipse,rgba(213,249,255,.28),transparent 72%);filter:blur(2px);opacity:.2;animation:iceMist 2.8s ease-in-out infinite}
-.ice-mist-a{left:6%;top:25%}.ice-mist-b{right:5%;top:62%;animation-delay:1.4s}
-@keyframes iceMist{0%,100%{opacity:.05;transform:translateY(3px) scale(.8)}50%{opacity:.5;transform:translateY(-9px) scale(1.15)}}
-.ice-shard{width:3px;height:10px;border-radius:2px;background:linear-gradient(180deg,#f3ffff,#58d9ff);box-shadow:0 0 5px rgba(112,224,255,.8);animation:iceShard2 2.7s ease-in infinite}
-.ice-shard-1{left:15%;top:12%}.ice-shard-2{left:82%;top:10%;animation-delay:.7s}.ice-shard-3{left:27%;top:86%;animation-delay:1.4s}.ice-shard-4{left:70%;top:88%;animation-delay:2s}
-@keyframes iceShard2{0%{opacity:0;transform:translateY(-2px) rotate(0)}20%{opacity:1}100%{opacity:0;transform:translateY(20px) rotate(18deg)}}
-.lightning-flash{width:2px;height:18px;background:linear-gradient(#fff,#6deaff,#8d54ff);box-shadow:0 0 8px rgba(75,210,255,.9);opacity:0;animation:boltFlash 1.55s steps(2,end) infinite}
-.lightning-flash-1{left:18%;top:20%}.lightning-flash-2{right:14%;top:35%;animation-delay:.45s}.lightning-flash-3{left:34%;bottom:8%;animation-delay:.8s}.lightning-flash-4{right:31%;bottom:13%;animation-delay:1.15s}
-@keyframes boltFlash{0%,72%,100%{opacity:0;transform:scaleY(.6)}76%{opacity:1;transform:scaleY(1.2)}79%{opacity:.15}82%{opacity:1;transform:scaleY(1)}}
-.angel-feather{width:7px;height:14px;border-radius:90% 15% 90% 15%;background:linear-gradient(135deg,#fff,#dbeeff);box-shadow:0 0 5px rgba(255,255,255,.55);opacity:0;transform:rotate(35deg)}
-.angel-feather-1{left:20%;top:30%;animation:angelFeather 3.4s linear infinite}.angel-feather-2{left:75%;top:20%;animation:angelFeather 3.4s linear .8s infinite}.angel-feather-3{left:31%;top:75%;animation:angelFeather 3.4s linear 1.6s infinite}.angel-feather-4{left:67%;top:68%;animation:angelFeather 3.4s linear 2.4s infinite}
-@keyframes angelFeather{0%{opacity:0;transform:translateY(-4px) rotate(25deg) scale(.65)}18%{opacity:.95}100%{opacity:0;transform:translateY(28px) translateX(12px) rotate(105deg) scale(.85)}}
-.purple-orbit{inset:10%;border:1px solid rgba(219,79,255,.38);border-left-color:transparent;border-right-color:transparent;border-radius:50%;animation:purpleOrbit 3.8s linear infinite;box-shadow:0 0 12px rgba(193,51,255,.22)}
-.purple-orbit-b{inset:18%;animation-duration:5.5s;animation-direction:reverse;border-color:rgba(255,65,180,.26);border-top-color:transparent}
-@keyframes purpleOrbit{to{transform:rotate(360deg)}}
-.king-spark{width:4px;height:4px;border-radius:50%;background:#fff4b0;box-shadow:0 0 7px #ffd45a;opacity:0;animation:kingSpark 2s ease-in-out infinite}
-.king-spark-1{left:16%;top:19%}.king-spark-2{left:81%;top:24%;animation-delay:.45s}.king-spark-3{left:23%;top:80%;animation-delay:.9s}.king-spark-4{left:76%;top:79%;animation-delay:1.35s}.king-spark-5{left:50%;top:8%;animation-delay:1.7s}
-@keyframes kingSpark{0%,100%{opacity:0;transform:scale(.4)}45%{opacity:1;transform:scale(1.4)}70%{opacity:.2;transform:scale(.7)}}
-
-.leader-avatar-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:visible}.leader-avatar-wrap .frame-effect-layer{inset:0!important}.leader-avatar-wrap .leader-avatar{position:relative;z-index:1}
+/* Chat/draw avatar base box + shop frame-toggle controls (kept from V7) */
+.leader-avatar-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;overflow:visible}.leader-avatar-wrap .leader-avatar{position:relative;z-index:1}
 .chat-avatar{position:relative;width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:grid;place-items:center;background:#11152d;border:2px solid #7650ff;overflow:visible;font-size:14px}
-.chat-avatar::after,.draw-avatar::after{content:"";position:absolute;inset:-22%;background-repeat:no-repeat;background-position:center;background-size:contain;pointer-events:none;z-index:3}
 .chat-avatar-img,.draw-avatar img{position:relative;z-index:6;width:100%;height:100%;object-fit:cover;border-radius:inherit}
-.chat-avatar.frame-premium,.draw-avatar.frame-premium{border-color:#7c4dff;box-shadow:0 0 10px rgba(124,77,255,.45)}
-.chat-avatar.frame-bronze,.draw-avatar.frame-bronze{border-color:#cd7f32;box-shadow:0 0 10px rgba(205,127,50,.42)}
-.chat-avatar.frame-davinci,.draw-avatar.frame-davinci{border-color:#32d9d0;box-shadow:0 0 10px rgba(50,217,208,.42)}
-.chat-avatar.frame-picasso,.draw-avatar.frame-picasso{border-color:#ff4a4a;box-shadow:0 0 10px rgba(255,74,74,.42)}
-.chat-avatar.frame-gold,.draw-avatar.frame-gold{border-color:#ffd75a;box-shadow:0 0 12px rgba(255,215,90,.5)}
-.chat-avatar.frame-ice,.draw-avatar.frame-ice{border-color:#52d6ff;box-shadow:0 0 12px rgba(82,214,255,.55)}
-.chat-avatar.frame-angel,.draw-avatar.frame-angel{border-color:#fff;box-shadow:0 0 13px rgba(255,238,177,.55)}
-.chat-avatar.frame-fire,.draw-avatar.frame-fire{border-color:#ff6a19;box-shadow:0 0 14px rgba(255,82,20,.62)}
-.chat-avatar.frame-lightning,.draw-avatar.frame-lightning{border-color:#4adfff;box-shadow:0 0 15px rgba(65,185,255,.7)}
-.chat-avatar.frame-purple,.draw-avatar.frame-purple{border-color:#d04cff;box-shadow:0 0 15px rgba(193,50,255,.65)}
-.chat-avatar.frame-king,.draw-avatar.frame-king{border-color:#ffd45a;box-shadow:0 0 15px rgba(255,195,54,.62)}
 .chat-message-body{min-width:0;display:flex;flex-direction:column}.msg{display:flex;align-items:flex-start;gap:7px}.msg .chat-message-body{max-width:calc(100% - 42px)}.msg .sender{margin-bottom:1px}.chat-avatar-fallback{opacity:.7}
 .draw-avatar{position:relative;overflow:visible!important;z-index:1}
 .frame-store-item.purchased{border-color:rgba(39,216,173,.5)}.frame-toggle-btn{min-width:66px}.frame-toggle-btn.is-active{background:linear-gradient(135deg,#ff4fca,#754cff)!important;box-shadow:0 0 14px rgba(255,79,202,.32)}.frame-store-item .is-owned-badge{opacity:.65}.frame-store-item .is-active-badge{background:linear-gradient(135deg,#27d8ad,#19b8ff);color:#04231c;box-shadow:0 0 13px rgba(39,216,173,.28)}
-@media(max-width:600px){.chat-avatar{width:30px;height:30px;flex-basis:30px}.chat-avatar::after{inset:-22%}.msg .chat-message-body{max-width:calc(100% - 38px)}}
-@media(prefers-reduced-motion:reduce){.frame-effect-layer .avatar-frame-img,.fire-ember,.ice-mist,.ice-shard,.lightning-flash,.angel-feather,.purple-orbit,.king-spark{animation:none!important}.lightning-flash,.angel-feather,.fire-ember,.king-spark{opacity:.7!important}}
+@media(max-width:600px){.chat-avatar{width:30px;height:30px;flex-basis:30px}.msg .chat-message-body{max-width:calc(100% - 38px)}}
 """
 
 
 BASE_CSS += """
-/* V8 — compact frames and isolated leaderboard cells */
+/* Leaderboard avatar-wrap sizing (podium vs list) */
 .leader-podium{gap:18px;overflow:visible!important;padding:6px 8px 12px}
 .leader-podium-card{overflow:visible!important;min-width:0}
 .leader-podium-card .leader-avatar-wrap{width:82px;height:82px;margin:auto;position:relative;isolation:isolate}
 .leader-podium-card.rank-1 .leader-avatar-wrap{width:94px;height:94px}
 .leader-list-avatar{position:relative;isolation:isolate;overflow:visible!important}
 .leader-list-avatar .leader-avatar-wrap{width:34px;height:34px;position:relative;isolation:isolate}
-.leader-list-avatar .frame-effect-layer{transform:scale(.92)}
 .leader-name,.leader-age{position:relative;z-index:8;margin-inline:10px}
 .leader-row{min-width:0;overflow:visible!important}
 .leader-row>div:nth-child(3){min-width:0;margin-inline-start:8px}
@@ -1621,111 +1536,147 @@ BASE_CSS += """
   .leader-podium-card .leader-avatar-wrap{width:64px;height:64px}
   .leader-podium-card.rank-1 .leader-avatar-wrap{width:78px;height:78px}
   .leader-list-avatar .leader-avatar-wrap{width:30px;height:30px}
-  .leader-list-avatar .frame-effect-layer{transform:scale(.88)}
   .leader-row>div:nth-child(3){margin-inline-start:5px}
 }
-.profile-head>div:first-child.has-img-frame,.lobby-profile-avatar.has-img-frame,.leader-avatar-wrap.has-img-frame{isolation:isolate}
-.profile-head>div:first-child.has-img-frame>.profile-avatar-img,.leader-avatar-wrap.has-img-frame>.leader-avatar,.leader-avatar-wrap.has-img-frame>.leader-avatar-fallback{z-index:20!important}
-.frame-effect-layer{z-index:10!important}
-.frame-effect-layer .avatar-frame-img{z-index:10!important}
 """
+# ============================================================================
+# AVATAR HALO SYSTEM (v13 — single source of truth, replaces old V9/V10/V11/V12)
+#
+# Design goals asked for by the user:
+#   1) "دقیق اندازه" — the ring/halo must be sized EXACTLY right on every avatar,
+#      everywhere it appears (28px chat bubble ... 104px profile hero). We size
+#      every layer with `inset` in PERCENT (not fixed px), so the gap is always
+#      the same *proportion* of the avatar's own diameter — it can never look
+#      too tight on a big avatar or too huge on a small one.
+#   2) "خفن و جذاب" — richer look: a crisp inner ring + a soft glowing outer
+#      bloom (built from radial-gradient, which is naturally soft — no blur
+#      filter needed) + a themed animated accent for the special frames.
+#   3) "لگ نزنن" — only `transform`/`opacity` are ever animated (GPU
+#      compositor only, never triggers layout/paint), and the multi-layer rich
+#      version is limited to "hero" avatars (profile page, lobby card, the
+#      draw table, and the leaderboard podium — a handful of elements at
+#      once). Busy lists (public chat, leaderboard rows) get a single cheap,
+#      static ring so dozens of avatars on screen stay perfectly smooth.
+# ============================================================================
 
-# V9 — FIXED: auras are ONLY around the circular avatar, never around cards/page.
-# Lightweight: one pseudo-element, no rotating rings, no filters, no particle effects.
-BASE_CSS += r'''
+_HALO_BOX = ('.lobby-profile-avatar[class*="frame-"]',
+             '.profile-head>div:first-child[class*="frame-"]',
+             '.chat-avatar[class*="frame-"]',
+             '.draw-avatar[class*="frame-"]',
+             '.leader-avatar-wrap[class*="frame-"]')
+_HALO_HERO = ('.lobby-profile-avatar',
+              '.profile-head>div:first-child',
+              '.draw-avatar',
+              '.leader-podium-card>.leader-avatar-wrap')
 
-/* Kill the old V5/V7 frame pseudo-elements that could escape their avatar and create giant rings. */
-.frame-premium::before,.frame-premium::after,
-.frame-bronze::before,.frame-bronze::after,
-.frame-davinci::before,.frame-davinci::after,
-.frame-picasso::before,.frame-picasso::after,
-.frame-gold::before,.frame-gold::after,
-.frame-ice::before,.frame-ice::after,
-.frame-angel::before,.frame-angel::after,
-.frame-fire::before,.frame-fire::after,
-.frame-lightning::before,.frame-lightning::after,
-.frame-purple::before,.frame-purple::after,
-.frame-king::before,.frame-king::after{content:none!important;animation:none!important}
+def _halo_join(tpl):
+    return ','.join(tpl)
 
-/* The lobby/profile cards themselves must never carry an aura. */
-.lobby-profile[class*="frame-"],.profile-card[class*="frame-"]{
-  overflow:hidden!important;
-  isolation:auto!important;
-  position:relative!important;
-  box-shadow:0 12px 30px rgba(0,0,0,.24),0 0 20px rgba(100,74,255,.10)!important;
-}
+def _halo_hero_extra(frame_cls):
+    return ','.join(f'{p}.{frame_cls}[class*="frame-"] .aura-extra' for p in _HALO_HERO)
 
-/* Avatar containers are circular and are the ONLY place where an aura is painted. */
-.lobby-profile-avatar,
-.profile-head>div:first-child,
-.chat-avatar,
-.draw-avatar,
-.leader-avatar-wrap{
-  position:relative!important;
-  border-radius:50%!important;
-  overflow:visible!important;
-  isolation:isolate;
-}
-.lobby-profile-avatar{width:62px;height:62px;flex:0 0 62px;background:#11152d;border:2px solid rgba(255,255,255,.14);}
-.lobby-profile-avatar>img,.lobby-profile-avatar .profile-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%!important;position:relative;z-index:2}
-.profile-head>div:first-child{overflow:visible!important}
-.profile-head>div:first-child img{border-radius:50%!important;position:relative;z-index:2}
+_ALL_BEFORE = _halo_join([b + '::before' for b in _HALO_BOX])
+_ALL_IMG = _halo_join([
+    b + s for b in _HALO_BOX for s in ('>img',)
+] + ['.leader-avatar-wrap[class*="frame-"]>.leader-avatar', '.leader-avatar-wrap[class*="frame-"]>.leader-avatar-fallback'])
+_HERO_AFTER = _halo_join([b + '[class*="frame-"]::after' for b in _HALO_HERO])
 
-/* Shared lightweight aura ring. */
-.lobby-profile[class*="frame-"] .lobby-profile-avatar::before,
-.profile-card[class*="frame-"] .profile-head>div:first-child::before,
-.chat-avatar[class*="frame-"]::before,
-.draw-avatar[class*="frame-"]::before,
-.leader-avatar-wrap[class*="frame-"]::before{
-  content:""!important;
-  position:absolute!important;
-  left:50%!important;top:50%!important;
-  width:calc(100% + 8px)!important;height:calc(100% + 8px)!important;
-  transform:translate(-50%,-50%) scale(1)!important;
-  border-radius:50%!important;
-  pointer-events:none!important;
-  z-index:0!important;
-  opacity:.88;
+BASE_CSS += f'''
+/* -- 1) Normalize the avatar box itself: transparent, circular, ready to host the halo -- */
+{_halo_join(_HALO_BOX)}{{
+  position:relative!important;overflow:visible!important;isolation:isolate!important;
+  border-radius:50%!important;border:0!important;background:transparent!important;
+  box-shadow:none!important;filter:none!important;animation:none!important;
+}}
+{_ALL_IMG}{{position:relative!important;z-index:4!important;border-radius:50%!important;display:block!important}}
+.aura-extra{{position:absolute!important;inset:0!important;border-radius:50%!important;pointer-events:none!important;overflow:visible!important;z-index:2!important;display:block!important}}
+
+/* -- 2) Pseudo-element scaffolding: ::before everywhere, ::after only on hero avatars -- */
+{_ALL_BEFORE}{{content:""!important;display:block!important;position:absolute!important;pointer-events:none!important;border-radius:50%!important}}
+{_HERO_AFTER}{{content:""!important;display:block!important;position:absolute!important;pointer-events:none!important;border-radius:50%!important}}
+
+/* -- 3) Inner ring: crisp, close, proportional (-7% of the avatar's own box) -- */
+[class*="frame-"]::before{{
+  inset:-7%!important;border:2px solid transparent!important;z-index:3!important;
+  animation:haloBreath 2.6s ease-in-out infinite!important;
+}}
+.frame-premium::before  {{border-color:#74e9ff!important;box-shadow:0 0 6px rgba(44,216,255,.55)!important}}
+.frame-bronze::before   {{border-color:#d99a63!important;box-shadow:0 0 6px rgba(201,138,90,.5)!important}}
+.frame-davinci::before  {{border-color:#4be3d8!important;box-shadow:0 0 6px rgba(75,227,216,.55)!important}}
+.frame-picasso::before  {{border-color:#ff5fa9!important;box-shadow:0 0 6px rgba(255,95,169,.5)!important}}
+.frame-gold::before     {{border-color:#ffd75b!important;box-shadow:0 0 7px rgba(255,198,54,.58)!important}}
+.frame-ice::before      {{border-color:#a7f6ff!important;box-shadow:0 0 7px rgba(74,216,255,.58)!important}}
+.frame-angel::before    {{border-color:#fff6d9!important;box-shadow:0 0 7px rgba(255,226,150,.55)!important}}
+.frame-fire::before     {{border-color:#ff7518!important;box-shadow:0 0 7px rgba(255,71,0,.5)!important}}
+.frame-lightning::before{{border-color:#6be9ff!important;box-shadow:0 0 7px rgba(53,178,255,.5)!important}}
+.frame-purple::before   {{border-color:#c65aff!important;box-shadow:0 0 7px rgba(142,52,255,.5)!important}}
+.frame-king::before     {{border-color:#ffd75b!important;box-shadow:0 0 8px rgba(255,190,40,.6)!important}}
+
+/* -- 4) Outer soft halo bloom — HERO avatars only. A radial-gradient is naturally
+   soft-edged, so this gives the big glowing halo look with zero blur-filter cost. -- */
+{_HERO_AFTER}{{
+  inset:-55%!important;z-index:1!important;
+  animation:haloBloom 3s ease-in-out infinite!important;
+  background:radial-gradient(circle, var(--halo-c, transparent) 0%, transparent 68%)!important;
   will-change:transform,opacity;
-  animation:auraSoftPulse 2.1s ease-in-out infinite;
-}
+}}
+.frame-premium::after  {{--halo-c:rgba(116,233,255,.34)}}
+.frame-bronze::after   {{--halo-c:rgba(217,154,99,.30)}}
+.frame-davinci::after  {{--halo-c:rgba(75,227,216,.32)}}
+.frame-picasso::after  {{--halo-c:rgba(255,95,169,.32)}}
+.frame-gold::after     {{--halo-c:rgba(255,215,91,.36)}}
+.frame-ice::after      {{--halo-c:rgba(167,246,255,.34)}}
+.frame-angel::after    {{--halo-c:rgba(255,246,217,.42)}}
+.frame-fire::after     {{--halo-c:rgba(255,117,24,.34)}}
+.frame-lightning::after{{--halo-c:rgba(107,233,255,.32)}}
+.frame-purple::after   {{--halo-c:rgba(198,90,255,.34)}}
+.frame-king::after     {{--halo-c:rgba(255,215,91,.38)}}
 
-/* Each named aura has its own identity, while remaining a simple circular glow. */
-.lobby-profile.frame-premium .lobby-profile-avatar::before,.profile-card.frame-premium .profile-head>div:first-child::before,.chat-avatar.frame-premium::before,.draw-avatar.frame-premium::before,.leader-avatar-wrap.frame-premium::before{border:2px solid #8c7bff!important;box-shadow:0 0 8px rgba(124,77,255,.72),0 0 18px rgba(0,214,255,.30)}
-.lobby-profile.frame-bronze .lobby-profile-avatar::before,.profile-card.frame-bronze .profile-head>div:first-child::before,.chat-avatar.frame-bronze::before,.draw-avatar.frame-bronze::before,.leader-avatar-wrap.frame-bronze::before{border:2px solid #d28a55!important;box-shadow:0 0 8px rgba(210,138,85,.72),0 0 16px rgba(166,82,35,.28)}
-.lobby-profile.frame-davinci .lobby-profile-avatar::before,.profile-card.frame-davinci .profile-head>div:first-child::before,.chat-avatar.frame-davinci::before,.draw-avatar.frame-davinci::before,.leader-avatar-wrap.frame-davinci::before{border:2px solid #42e5df!important;box-shadow:0 0 8px rgba(50,217,208,.72),0 0 17px rgba(45,174,255,.30)}
-.lobby-profile.frame-picasso .lobby-profile-avatar::before,.profile-card.frame-picasso .profile-head>div:first-child::before,.chat-avatar.frame-picasso::before,.draw-avatar.frame-picasso::before,.leader-avatar-wrap.frame-picasso::before{border:2px solid #ff5b9f!important;box-shadow:0 0 8px rgba(255,74,148,.70),0 0 17px rgba(255,74,74,.28)}
-.lobby-profile.frame-gold .lobby-profile-avatar::before,.profile-card.frame-gold .profile-head>div:first-child::before,.chat-avatar.frame-gold::before,.draw-avatar.frame-gold::before,.leader-avatar-wrap.frame-gold::before{border:2px solid #ffd75a!important;box-shadow:0 0 9px rgba(255,215,90,.76),0 0 19px rgba(255,166,0,.30)}
-.lobby-profile.frame-ice .lobby-profile-avatar::before,.profile-card.frame-ice .profile-head>div:first-child::before,.chat-avatar.frame-ice::before,.draw-avatar.frame-ice::before,.leader-avatar-wrap.frame-ice::before{border:2px solid #9df5ff!important;box-shadow:0 0 9px rgba(82,214,255,.76),0 0 18px rgba(57,201,255,.30)}
-.lobby-profile.frame-angel .lobby-profile-avatar::before,.profile-card.frame-angel .profile-head>div:first-child::before,.chat-avatar.frame-angel::before,.draw-avatar.frame-angel::before,.leader-avatar-wrap.frame-angel::before{border:2px solid #fff4c7!important;box-shadow:0 0 9px rgba(255,255,255,.74),0 0 19px rgba(255,218,120,.30)}
-.lobby-profile.frame-fire .lobby-profile-avatar::before,.profile-card.frame-fire .profile-head>div:first-child::before,.chat-avatar.frame-fire::before,.draw-avatar.frame-fire::before,.leader-avatar-wrap.frame-fire::before{border:2px solid #ff7518!important;box-shadow:0 0 9px rgba(255,81,0,.78),0 0 19px rgba(255,145,0,.30)}
-.lobby-profile.frame-lightning .lobby-profile-avatar::before,.profile-card.frame-lightning .profile-head>div:first-child::before,.chat-avatar.frame-lightning::before,.draw-avatar.frame-lightning::before,.leader-avatar-wrap.frame-lightning::before{border:2px solid #6be9ff!important;box-shadow:0 0 9px rgba(75,220,255,.78),0 0 19px rgba(92,93,255,.30)}
-.lobby-profile.frame-purple .lobby-profile-avatar::before,.profile-card.frame-purple .profile-head>div:first-child::before,.chat-avatar.frame-purple::before,.draw-avatar.frame-purple::before,.leader-avatar-wrap.frame-purple::before{border:2px solid #c65aff!important;box-shadow:0 0 9px rgba(193,50,255,.78),0 0 19px rgba(128,42,255,.30)}
-.lobby-profile.frame-king .lobby-profile-avatar::before,.profile-card.frame-king .profile-head>div:first-child::before,.chat-avatar.frame-king::before,.draw-avatar.frame-king::before,.leader-avatar-wrap.frame-king::before{border:2px solid #ffd45a!important;box-shadow:0 0 9px rgba(255,195,54,.78),0 0 20px rgba(255,156,0,.30)}
+/* -- 5) Themed animated accents (aura-extra) — HERO avatars only -- */
+{_halo_hero_extra('frame-ice')}{{
+  background:radial-gradient(circle at 20% 15%,#fff 0 1.3px,transparent 2px),radial-gradient(circle at 75% 10%,#eafcff 0 1.1px,transparent 2px),radial-gradient(circle at 12% 72%,#fff 0 1.2px,transparent 2px),radial-gradient(circle at 85% 66%,#eafcff 0 1px,transparent 1.8px),radial-gradient(circle at 50% 90%,#fff 0 1.1px,transparent 2px)!important;
+  animation:iceSparkle 2.4s ease-in-out infinite!important;will-change:transform,opacity;
+}}
+{_halo_hero_extra('frame-angel')}{{
+  background:radial-gradient(ellipse at 6% 50%,rgba(255,250,225,.75) 0 9%,transparent 10%),radial-gradient(ellipse at 94% 50%,rgba(255,250,225,.75) 0 9%,transparent 10%)!important;
+  transform:scaleX(1.3)!important;transform-origin:center;
+  animation:angelWings 3.2s ease-in-out infinite!important;will-change:transform,opacity;
+}}
+{_halo_hero_extra('frame-fire')}{{
+  background:radial-gradient(ellipse at 50% 100%,rgba(255,90,0,.85),transparent 60%)!important;
+  transform-origin:50% 100%;
+  animation:fireFlicker 1s ease-in-out infinite alternate!important;will-change:transform,opacity;
+}}
+{_halo_hero_extra('frame-lightning')}{{
+  background:conic-gradient(from -20deg at 50% 50%,transparent 0 85%,rgba(120,220,255,.9) 90%,transparent 95%)!important;
+  animation:boltSweep 3.6s linear infinite!important;will-change:transform;
+}}
+{_halo_hero_extra('frame-purple')}{{
+  background:linear-gradient(115deg,transparent 46%,rgba(208,88,255,.9) 49%,transparent 52%),linear-gradient(295deg,transparent 46%,rgba(122,74,255,.85) 49%,transparent 52%)!important;
+  animation:purpleSpin 6s ease-in-out infinite!important;will-change:transform,opacity;
+}}
+{_halo_hero_extra('frame-king')}{{
+  background:conic-gradient(from 0deg,transparent 0 6%,rgba(255,214,91,.6) 8%,transparent 12% 40%,rgba(255,214,91,.5) 42% 46%,transparent 50% 88%,rgba(255,214,91,.55) 90% 94%,transparent 96%)!important;
+  animation:kingSpin 9s linear infinite!important;will-change:transform;
+}}
 
-/* The outer frame class is kept only as a selector; no visual effect on the card. */
-.lobby-profile.frame-premium,.lobby-profile.frame-bronze,.lobby-profile.frame-davinci,.lobby-profile.frame-picasso,.lobby-profile.frame-gold,.lobby-profile.frame-ice,.lobby-profile.frame-angel,.lobby-profile.frame-fire,.lobby-profile.frame-lightning,.lobby-profile.frame-purple,.lobby-profile.frame-king,
-.profile-card.frame-premium,.profile-card.frame-bronze,.profile-card.frame-davinci,.profile-card.frame-picasso,.profile-card.frame-gold,.profile-card.frame-ice,.profile-card.frame-angel,.profile-card.frame-fire,.profile-card.frame-lightning,.profile-card.frame-purple,.profile-card.frame-king{border-color:inherit!important}
+/* -- 6) List contexts (public chat, leaderboard rows) — static ring only, no bloom,
+   no accents, no animation. Keeps busy lists smooth with many avatars on screen. -- */
+.chat-avatar[class*="frame-"]::before,
+.leader-list-avatar .leader-avatar-wrap[class*="frame-"]::before{{
+  animation:none!important;opacity:.95!important;
+}}
 
-@keyframes auraSoftPulse{0%,100%{opacity:.72;transform:translate(-50%,-50%) scale(.98)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.035)}}
-@media(prefers-reduced-motion:reduce){
- .lobby-profile[class*="frame-"] .lobby-profile-avatar::before,.profile-card[class*="frame-"] .profile-head>div:first-child::before,.chat-avatar[class*="frame-"]::before,.draw-avatar[class*="frame-"]::before,.leader-avatar-wrap[class*="frame-"]::before{animation:none!important}
-}
+@keyframes haloBreath{{0%,100%{{opacity:.78;transform:scale(.99)}}50%{{opacity:1;transform:scale(1.03)}}}}
+@keyframes haloBloom{{0%,100%{{opacity:.55;transform:scale(.94)}}50%{{opacity:1;transform:scale(1.07)}}}}
+@keyframes iceSparkle{{0%,100%{{opacity:.5;transform:translateY(0)}}50%{{opacity:1;transform:translateY(-2px)}}}}
+@keyframes angelWings{{0%,100%{{opacity:.6;transform:scaleX(1.3) scale(.98)}}50%{{opacity:1;transform:scaleX(1.3) scale(1.03)}}}}
+@keyframes fireFlicker{{0%{{opacity:.7;transform:scaleY(.85) scaleX(.94)}}100%{{opacity:1;transform:scaleY(1.08) scaleX(1.02)}}}}
+@keyframes boltSweep{{to{{transform:rotate(360deg)}}}}
+@keyframes purpleSpin{{0%,100%{{opacity:.75;transform:rotate(0deg)}}50%{{opacity:1;transform:rotate(8deg)}}}}
+@keyframes kingSpin{{to{{transform:rotate(360deg)}}}}
+
+@media(prefers-reduced-motion:reduce){{
+  [class*="frame-"]::before,[class*="frame-"]::after,.aura-extra{{animation:none!important}}
+}}
 '''
-
-# V10 — keep the active aura from changing the avatar/card itself.
-BASE_CSS += r'''
-.lobby-profile-avatar.frame-premium,.lobby-profile-avatar.frame-bronze,.lobby-profile-avatar.frame-davinci,.lobby-profile-avatar.frame-picasso,.lobby-profile-avatar.frame-gold,.lobby-profile-avatar.frame-ice,.lobby-profile-avatar.frame-angel,.lobby-profile-avatar.frame-fire,.lobby-profile-avatar.frame-lightning,.lobby-profile-avatar.frame-purple,.lobby-profile-avatar.frame-king,
-.profile-head>div:first-child.frame-premium,.profile-head>div:first-child.frame-bronze,.profile-head>div:first-child.frame-davinci,.profile-head>div:first-child.frame-picasso,.profile-head>div:first-child.frame-gold,.profile-head>div:first-child.frame-ice,.profile-head>div:first-child.frame-angel,.profile-head>div:first-child.frame-fire,.profile-head>div:first-child.frame-lightning,.profile-head>div:first-child.frame-purple,.profile-head>div:first-child.frame-king,
-.chat-avatar.frame-premium,.chat-avatar.frame-bronze,.chat-avatar.frame-davinci,.chat-avatar.frame-picasso,.chat-avatar.frame-gold,.chat-avatar.frame-ice,.chat-avatar.frame-angel,.chat-avatar.frame-fire,.chat-avatar.frame-lightning,.chat-avatar.frame-purple,.chat-avatar.frame-king,
-.draw-avatar.frame-premium,.draw-avatar.frame-bronze,.draw-avatar.frame-davinci,.draw-avatar.frame-picasso,.draw-avatar.frame-gold,.draw-avatar.frame-ice,.draw-avatar.frame-angel,.draw-avatar.frame-fire,.draw-avatar.frame-lightning,.draw-avatar.frame-purple,.draw-avatar.frame-king,
-.leader-avatar-wrap.frame-premium,.leader-avatar-wrap.frame-bronze,.leader-avatar-wrap.frame-davinci,.leader-avatar-wrap.frame-picasso,.leader-avatar-wrap.frame-gold,.leader-avatar-wrap.frame-ice,.leader-avatar-wrap.frame-angel,.leader-avatar-wrap.frame-fire,.leader-avatar-wrap.frame-lightning,.leader-avatar-wrap.frame-purple,.leader-avatar-wrap.frame-king{
-  border:2px solid transparent!important;
-  background:#11152d!important;
-  box-shadow:none!important;
-  animation:none!important;
-  filter:none!important;
-}
-'''
-
-BASE_CSS += '\n/* V12 FINAL AURA OVERRIDES */\n.lobby-profile[class*="frame-"]::before,.lobby-profile[class*="frame-"]::after,.profile-card[class*="frame-"]::before,.profile-card[class*="frame-"]::after{display:none!important;content:none!important}\n.lobby-profile-avatar[class*="frame-"],.profile-head>div:first-child[class*="frame-"],.chat-avatar[class*="frame-"],.draw-avatar[class*="frame-"],.leader-avatar-wrap[class*="frame-"]{position:relative!important;overflow:visible!important;isolation:isolate!important;border-radius:50%!important;border:0!important;background:transparent!important;box-shadow:none!important;filter:none!important;animation:none!important;z-index:3!important}\n.lobby-profile-avatar[class*="frame-"]>img,.profile-head>div:first-child[class*="frame-"]>img,.chat-avatar[class*="frame-"]>img,.draw-avatar[class*="frame-"]>img,.leader-avatar-wrap[class*="frame-"]>.leader-avatar,.leader-avatar-wrap[class*="frame-"]>img{position:relative!important;z-index:4!important;border-radius:50%!important;display:block!important}\n.lobby-profile-avatar[class*="frame-"]::before,.lobby-profile-avatar[class*="frame-"]::after,.profile-head>div:first-child[class*="frame-"]::before,.profile-head>div:first-child[class*="frame-"]::after,.chat-avatar[class*="frame-"]::before,.chat-avatar[class*="frame-"]::after,.draw-avatar[class*="frame-"]::before,.draw-avatar[class*="frame-"]::after,.leader-avatar-wrap[class*="frame-"]::before,.leader-avatar-wrap[class*="frame-"]::after{content:""!important;display:block!important;position:absolute!important;pointer-events:none!important}\n.aura-extra{position:absolute!important;inset:0!important;border-radius:50%!important;pointer-events:none!important;z-index:5!important;display:block!important}\n.frame-premium::before,.frame-bronze::before,.frame-davinci::before,.frame-picasso::before,.frame-gold::before,.frame-ice::before,.frame-angel::before,.frame-fire::after,.frame-lightning::after,.frame-purple::after,.frame-king::before{inset:-3px!important;border-radius:50%!important;z-index:1!important;animation:auraBreathLite 2.4s ease-in-out infinite!important}\n.frame-premium::before{border:2px solid #74e9ff!important;box-shadow:0 0 6px rgba(44,216,255,.48)!important}.frame-bronze::before{border:2px solid #c98a5a!important;box-shadow:0 0 6px rgba(201,138,90,.42)!important}.frame-davinci::before{border:2px solid #4be3d8!important;box-shadow:0 0 6px rgba(75,227,216,.48)!important}.frame-picasso::before{border:2px solid #ff5fa9!important;box-shadow:0 0 6px rgba(255,95,169,.45)!important}.frame-gold::before{inset:-4px!important;border:2px solid #ffd75b!important;box-shadow:0 0 7px rgba(255,198,54,.52)!important}.frame-ice::before{border:2px solid #a7f6ff!important;box-shadow:0 0 7px rgba(74,216,255,.5)!important;animation:iceRingLite 2.8s ease-in-out infinite!important}.frame-angel::before{inset:-4px!important;border:2px solid rgba(255,249,221,.92)!important;box-shadow:0 0 7px rgba(255,226,150,.5)!important}.frame-fire::after{border:2px solid rgba(255,99,18,.78)!important;box-shadow:0 0 7px rgba(255,71,0,.42)!important;animation:fireRingLite 1.6s ease-in-out infinite!important}.frame-lightning::after{border:2px solid rgba(76,210,255,.78)!important;box-shadow:0 0 7px rgba(53,178,255,.42)!important;animation:boltPulse 3.8s steps(1,end) infinite!important}.frame-purple::after{border:2px solid rgba(193,78,255,.72)!important;box-shadow:0 0 7px rgba(142,52,255,.38)!important}.frame-king::before{inset:-4px!important;border:2px solid #ffd75b!important;box-shadow:0 0 8px rgba(255,190,40,.52)!important;animation:kingLite 2.6s ease-in-out infinite!important}\n.frame-lightning::before{left:auto!important;right:-7px!important;top:-10px!important;width:18px!important;height:29px!important;border:0!important;border-radius:0!important;background:#64dcff!important;clip-path:polygon(58% 0,100% 0,66% 38%,92% 38%,22% 100%,39% 53%,8% 53%)!important;opacity:0!important;filter:drop-shadow(0 0 4px #24bfff)!important;animation:blueBoltLite 3.8s steps(1,end) infinite!important;z-index:6!important}\n.frame-fire::before{left:50%!important;top:auto!important;bottom:-12px!important;width:78%!important;height:25px!important;transform:translateX(-50%)!important;border:0!important;border-radius:55% 55% 45% 45%!important;background:radial-gradient(ellipse at 50% 100%,rgba(255,75,0,.9),transparent 60%),radial-gradient(ellipse at 30% 75%,rgba(255,170,40,.78) 0 12%,transparent 34%),radial-gradient(ellipse at 70% 72%,rgba(255,90,0,.78) 0 12%,transparent 34%)!important;filter:blur(.5px) drop-shadow(0 0 4px rgba(255,70,0,.48))!important;animation:fireFlickerLite 1.05s ease-in-out infinite alternate!important;z-index:2!important}\n.frame-angel::after{left:50%!important;top:50%!important;width:132%!important;height:62%!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:50%!important;background:radial-gradient(ellipse at 4% 50%,rgba(255,250,225,.72) 0 8%,transparent 9%),radial-gradient(ellipse at 96% 50%,rgba(255,250,225,.72) 0 8%,transparent 9%),radial-gradient(ellipse at 0 48%,rgba(255,250,225,.42) 0 5%,transparent 6%),radial-gradient(ellipse at 100% 48%,rgba(255,250,225,.42) 0 5%,transparent 6%)!important;filter:drop-shadow(0 0 3px rgba(255,224,145,.45))!important;animation:angelLite 3.4s ease-in-out infinite!important;z-index:0!important}\n.frame-purple::before{left:50%!important;top:50%!important;width:128%!important;height:128%!important;transform:translate(-50%,-50%) rotate(24deg)!important;border:0!important;border-radius:50%!important;background:linear-gradient(112deg,transparent 44%,rgba(208,88,255,.95) 47%,transparent 50%),linear-gradient(292deg,transparent 44%,rgba(112,74,255,.92) 47%,transparent 50%)!important;animation:purpleLite 2.8s ease-in-out infinite!important;z-index:2!important}\n.frame-king::after{left:50%!important;top:50%!important;width:126%!important;height:126%!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:50%!important;background:conic-gradient(from -12deg,transparent 0 8deg,rgba(255,214,91,.58) 9deg,transparent 10deg 48deg,rgba(255,214,91,.42) 49deg,transparent 50deg 90deg,rgba(255,214,91,.45) 91deg,transparent 92deg 360deg)!important;animation:kingSpinLite 10s linear infinite!important;z-index:0!important}\n.frame-ice>.aura-extra{background:radial-gradient(circle at 18% 4%,rgba(255,255,255,.95) 0 1.4px,transparent 2px),radial-gradient(circle at 42% 16%,rgba(235,255,255,.9) 0 1.2px,transparent 1.8px),radial-gradient(circle at 70% 2%,rgba(255,255,255,.95) 0 1.3px,transparent 2px),radial-gradient(circle at 83% 28%,rgba(225,255,255,.9) 0 1.2px,transparent 1.8px),radial-gradient(circle at 28% 38%,rgba(255,255,255,.88) 0 1.1px,transparent 1.7px),radial-gradient(circle at 62% 46%,rgba(235,255,255,.85) 0 1.1px,transparent 1.7px)!important;animation:snowLite 2.5s ease-in-out infinite!important}.frame-ice>.aura-extra::before{content:"";position:absolute;left:50%;bottom:-8px;width:72%;height:14px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(192,249,255,.38),transparent 70%);filter:blur(2px);animation:mistLite 2.5s ease-in-out infinite}.frame-ice>.aura-extra::after{content:"";position:absolute;right:27%;bottom:-3px;width:3px;height:11px;border-radius:0 0 5px 5px;background:linear-gradient(rgba(190,247,255,.78),rgba(190,247,255,0))!important;box-shadow:-13px -2px 0 -1px rgba(210,250,255,.6),14px -4px 0 -1px rgba(210,250,255,.52);animation:dripLite 2.4s ease-in-out infinite}\n@keyframes auraBreathLite{0%,100%{opacity:.68;transform:scale(.99)}50%{opacity:1;transform:scale(1.015)}}@keyframes iceRingLite{0%,100%{opacity:.65;transform:scale(.99)}50%{opacity:1;transform:scale(1.02)}}@keyframes fireRingLite{0%,100%{opacity:.55;transform:scale(.99)}50%{opacity:1;transform:scale(1.02)}}@keyframes kingLite{0%,100%{opacity:.68;transform:scale(.99)}50%{opacity:1;transform:scale(1.015)}}@keyframes blueBoltLite{0%,78%,100%{opacity:0}80%,84%{opacity:1}82%{opacity:.3}}@keyframes boltPulse{0%,78%,100%{opacity:.62}80%,84%{opacity:1;transform:scale(1.02)}82%{opacity:.4}}@keyframes fireFlickerLite{0%{opacity:.62;transform:translateX(-50%) scaleY(.82)}50%{opacity:1;transform:translateX(-50%) scaleY(1.08)}100%{opacity:.74;transform:translateX(-50%) scaleY(.9)}}@keyframes angelLite{0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(.97)}50%{opacity:.9;transform:translate(-50%,-50%) scale(1.02)}}@keyframes purpleLite{0%,100%{opacity:.6;transform:translate(-50%,-50%) rotate(24deg) scale(.98)}50%{opacity:1;transform:translate(-50%,-50%) rotate(24deg) scale(1.02)}}@keyframes snowLite{0%,100%{opacity:.4;transform:translateY(-1px)}50%{opacity:1;transform:translateY(3px)}}@keyframes mistLite{0%,100%{opacity:.25;transform:translateX(-50%) scaleX(.85)}50%{opacity:.72;transform:translateX(-50%) scaleX(1)}}@keyframes dripLite{0%,60%,100%{opacity:.18;transform:translateY(-2px) scaleY(.7)}72%,88%{opacity:.9;transform:translateY(3px) scaleY(1)}}@keyframes kingSpinLite{to{transform:translate(-50%,-50%) rotate(360deg)}}\n@media(prefers-reduced-motion:reduce){.frame-premium::before,.frame-premium::after,.frame-bronze::before,.frame-bronze::after,.frame-davinci::before,.frame-davinci::after,.frame-picasso::before,.frame-picasso::after,.frame-gold::before,.frame-gold::after,.frame-ice::before,.frame-ice::after,.frame-angel::before,.frame-angel::after,.frame-fire::before,.frame-fire::after,.frame-lightning::before,.frame-lightning::after,.frame-purple::before,.frame-purple::after,.frame-king::before,.frame-king::after,.frame-ice>.aura-extra,.frame-ice>.aura-extra::before,.frame-ice>.aura-extra::after{animation:none!important}}\n'
