@@ -1044,11 +1044,11 @@ async def presence(request: Request, target: str):
 #                 DRAWING GAME — 2P / 4P
 # ============================================================
 
-DRAW_PREVIEW_SECONDS = 5
-DRAW_BREAK_SECONDS = 10
+DRAW_PREVIEW_SECONDS = 0
+DRAW_BREAK_SECONDS = 15
 DRAW_TOTAL_ROUNDS = 6
 DRAW_OPTIONS_COUNT = 20
-DRAW_MODE_DURATION = {2: 45, 4: 35}
+DRAW_MODE_DURATION = {2: 60, 4: 45}
 
 
 class DrawingBattleManager:
@@ -1059,7 +1059,6 @@ class DrawingBattleManager:
         self.games = {}
         self.player_game = {}
         self.lock = asyncio.Lock()
-        self.http_events = {}
 
     async def _profiles(self, players):
         out = {}
@@ -1121,11 +1120,8 @@ class DrawingBattleManager:
             for i, (u, s) in enumerate(self.waiting):
                 if u == username and s is ws:
                     self.waiting.pop(i)
-                    if ws:
-                        try: await ws.send_json({"type":"queue_timeout"})
-                        except Exception: pass
-                    else:
-                        self.http_events.setdefault(username, []).append({"type":"queue_timeout"})
+                    try: await ws.send_json({"type":"queue_timeout"})
+                    except Exception: pass
                     break
 
     async def _send(self, ws, payload):
@@ -1136,46 +1132,7 @@ class DrawingBattleManager:
 
     async def _to_user(self, game, username, payload):
         ws = game["sockets"].get(username)
-        if ws:
-            await self._send(ws, payload)
-        else:
-            self.http_events.setdefault(username, []).append(payload)
-            self.http_events[username] = self.http_events[username][-20:]
-
-    async def http_join(self, username):
-        async with self.lock:
-            gid = self.player_game.get(username)
-            if gid and gid in self.games:
-                return {"ok": True, "joined": True}
-            self.waiting = [(u, s) for u, s in self.waiting if u != username]
-            self.waiting.append((username, None))
-            self.http_events.setdefault(username, [])
-            if len(self.waiting) < self.mode:
-                self.http_events[username].append({"type":"waiting", "needed":self.mode, "count":len(self.waiting), "timeout":30})
-                asyncio.create_task(self._queue_timeout(username, None))
-                return {"ok": True, "waiting": True}
-            picked = self.waiting[:self.mode]
-            del self.waiting[:self.mode]
-            players = [u for u, _ in picked]
-            gid = secrets.token_hex(7)
-            game = {
-                "id": gid, "mode": self.mode, "players": players, "active": players[:],
-                "sockets": {}, "scores": {u:0 for u in players}, "round":0,
-                "drawer":None, "guesser":None, "word":None, "options":[],
-                "wrong_words": {u:set() for u in players}, "attempted": set(), "guesses": {}, "round_points": {},
-                "round_active":False, "phase":"waiting", "deadline":0.0, "strokes":[],
-                "profiles": await self._profiles(players), "last_result": None,
-            }
-            self.games[gid] = game
-            for u in players: self.player_game[u] = gid
-        await self._next_round(gid)
-        return {"ok": True, "joined": True}
-
-    async def http_events_for(self, username):
-        async with self.lock:
-            ev = self.http_events.get(username, [])
-            self.http_events[username] = []
-            return ev
+        if ws: await self._send(ws, payload)
 
     async def _broadcast(self, game, payload):
         for u in list(game["active"]):
@@ -1230,16 +1187,11 @@ class DrawingBattleManager:
         game.update({
             "drawer": drawer, "word": target, "options": options,
             "wrong_words": {u:set() for u in players}, "attempted": set(), "guesses": {}, "round_points": {},
-            "round_active": False, "phase":"preview",
-            "deadline": time.monotonic() + DRAW_PREVIEW_SECONDS, "strokes":[],
+            "round_active": False, "phase":"round",
+            "deadline": 0.0, "strokes":[],
         })
-        for u in players:
-            p = self._base_payload(game, u, "round_preview")
-            p["remaining"] = DRAW_PREVIEW_SECONDS
-            p["word"] = target if u == drawer else None
-            p["message"] = "موضوع را حفظ کن؛ تا چند ثانیه دیگر شروع می‌شود!"
-            await self._to_user(game, u, p)
-        asyncio.create_task(self._preview_timeout(gid, game["round"]))
+        # The old 5-second preview is intentionally removed.
+        await self._start_round(gid, game["round"])
 
     async def _preview_timeout(self, gid, round_number):
         await asyncio.sleep(DRAW_PREVIEW_SECONDS)
@@ -1328,7 +1280,10 @@ class DrawingBattleManager:
         points_guesser=sum(points_map.values()) if game["mode"]==4 else next(iter(points_map.values()),0)
         total_rounds=self.mode if self.mode==4 else DRAW_TOTAL_ROUNDS
         is_last=game["round"]>=total_rounds
-        payload={"type":"round_result","round":game["round"],"total_rounds":total_rounds,"correct":correct,"word":game["word"],"drawer":game["drawer"],"guesser":next(iter(points_map),None),"points_guesser":points_guesser,"points_drawer":points_drawer,"points_map":points_map,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"],"is_last":is_last,"break_seconds":DRAW_BREAK_SECONDS}
+        active=game["active"]
+        current_index=active.index(game["drawer"]) if game["drawer"] in active else -1
+        next_drawer=active[(current_index+1)%len(active)] if active and current_index>=0 else None
+        payload={"type":"round_result","round":game["round"],"total_rounds":total_rounds,"correct":correct,"word":game["word"],"drawer":game["drawer"],"next_drawer":next_drawer,"guesser":next(iter(points_map),None),"points_guesser":points_guesser,"points_drawer":points_drawer,"points_map":points_map,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"],"is_last":is_last,"break_seconds":DRAW_BREAK_SECONDS}
         game["last_result"] = payload
         await self._broadcast(game,payload)
         asyncio.create_task(self._advance(gid, game["round"]))
@@ -1413,33 +1368,6 @@ class DrawingBattleManager:
 
 two_player_drawing_manager=DrawingBattleManager(2)
 four_player_drawing_manager=DrawingBattleManager(4)
-
-@app.post("/api/drawing/join/{mode}")
-async def api_drawing_join(request: Request, mode: int):
-    username=request.session.get("username")
-    if not username or mode not in (2,4): return {"ok":False,"error":"login_required"}
-    manager=two_player_drawing_manager if mode==2 else four_player_drawing_manager
-    if not _is_support(username) and (await _ban_for(username,"games") or await _ban_for(username,"drawing")):
-        return {"ok":False,"error":"banned"}
-    return await manager.http_join(username)
-
-@app.get("/api/drawing/events/{mode}")
-async def api_drawing_events(request: Request, mode: int):
-    username=request.session.get("username")
-    if not username or mode not in (2,4): return {"ok":False,"error":"login_required"}
-    manager=two_player_drawing_manager if mode==2 else four_player_drawing_manager
-    return {"ok":True,"events":await manager.http_events_for(username)}
-
-@app.post("/api/drawing/action/{mode}")
-async def api_drawing_action(request: Request, mode: int):
-    username=request.session.get("username")
-    if not username or mode not in (2,4): return {"ok":False,"error":"login_required"}
-    manager=two_player_drawing_manager if mode==2 else four_player_drawing_manager
-    data=await request.json()
-    typ=data.get("type")
-    if typ in ("draw","draw_batch","clear"): await manager.draw(username,data)
-    elif typ=="guess": await manager.guess(username,data.get("word"))
-    return {"ok":True}
 
 @app.websocket("/ws/drawing-multi/{mode}")
 async def ws_drawing_multi(websocket: WebSocket, mode: int):
