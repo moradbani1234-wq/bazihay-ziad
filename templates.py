@@ -1680,3 +1680,62 @@ BASE_CSS += f'''
   [class*="frame-"]::before,[class*="frame-"]::after,.aura-extra{{animation:none!important}}
 }}
 '''
+
+
+BASE_CSS += """
+/* === FINAL AVATAR HALO FIX ===
+   One halo only: exactly the same diameter as the avatar.
+   The previous ::after layer created the unwanted second/outer ring.
+*/
+.lobby-profile-avatar[class*="frame-"],
+.profile-head>div:first-child[class*="frame-"],
+.chat-avatar[class*="frame-"],
+.draw-avatar[class*="frame-"],
+.leader-avatar-wrap[class*="frame-"]{
+  position:relative!important;
+  overflow:visible!important;
+  border-radius:50%!important;
+}
+
+.lobby-profile-avatar[class*="frame-"]::before,
+.profile-head>div:first-child[class*="frame-"]::before,
+.chat-avatar[class*="frame-"]::before,
+.draw-avatar[class*="frame-"]::before,
+.leader-avatar-wrap[class*="frame-"]::before{
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  transform:none!important;
+  border-radius:50%!important;
+  z-index:3!important;
+  animation:haloExactPulse 2.2s ease-in-out infinite!important;
+}
+
+/* No second ring / outer circle. */
+.lobby-profile-avatar[class*="frame-"]::after,
+.profile-head>div:first-child[class*="frame-"]::after,
+.draw-avatar[class*="frame-"]::after,
+.leader-avatar-wrap[class*="frame-"]::after,
+.chat-avatar[class*="frame-"]::after{
+  display:none!important;
+  content:none!important;
+}
+
+/* Keep the glow animated without changing the halo's size. */
+@keyframes haloExactPulse{
+  0%,100%{opacity:.72;filter:brightness(1)}
+  50%{opacity:1;filter:brightness(1.22)}
+}
+
+/* Avatar image always fills the avatar circle exactly. */
+.lobby-profile-avatar[class*="frame-"]>img,
+.profile-head>div:first-child[class*="frame-"]>img,
+.chat-avatar[class*="frame-"]>img,
+.draw-avatar[class*="frame-"]>img,
+.leader-avatar-wrap[class*="frame-"]>img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  border-radius:50%!important;
+}
+"""
