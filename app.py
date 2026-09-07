@@ -277,7 +277,6 @@ SHOP_CATALOG = {
     "rose_frame": {"cost":1500, "type":"custom"},
     "gold_feather_frame": {"cost":1800, "type":"custom"},
     "blue_ice_frame": {"cost":1800, "type":"custom"},
-    "royal_diamond_frame": {"cost":2600, "type":"custom"},
 }
 
 @app.post("/shop/buy")
@@ -305,7 +304,7 @@ async def shop_frame_toggle(request: Request):
     username=_require_login(request)
     if not username: return {"ok":False,"error":"login_required"}
     data=await request.json(); key=str(data.get("item_key") or "").strip()
-    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame","royal_diamond_frame"}
+    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame"}
     if key not in frame_keys: return {"ok":False,"status":"invalid_item"}
     prof=await db.profile(username) or {}
     owned=set(prof.get("owned_items") or [])

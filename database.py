@@ -105,7 +105,7 @@ async def init_db():
             await db.execute("UPDATE users SET active_frame='' WHERE active_frame IS NULL")
         except Exception:
             pass
-        frame_keys = ("profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame","royal_diamond_frame")
+        frame_keys = ("profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame")
         placeholders = ",".join("?" for _ in frame_keys)
         cur_active = await db.execute(f"SELECT username FROM users WHERE COALESCE(active_frame,'')='' ")
         for (uname,) in await cur_active.fetchall():
@@ -631,7 +631,7 @@ async def claim_daily(username):
         return True,{**w,"reward":reward}
 
 async def buy_item(username,item_key,cost):
-    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame","royal_diamond_frame"}
+    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame"}
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
         await db.execute("BEGIN IMMEDIATE")
@@ -652,7 +652,7 @@ async def buy_item(username,item_key,cost):
         return True,"ok",w
 
 async def set_active_frame(username, item_key):
-    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame","royal_diamond_frame"}
+    frame_keys={"profile_frame","bronze_frame","davinci_frame","picasso_frame","gold_frame","ice_frame","angel_frame","fire_frame","lightning_frame","purple_frame","king_frame","rose_frame","gold_feather_frame","blue_ice_frame"}
     item_key=str(item_key or '').strip()
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory=aiosqlite.Row
