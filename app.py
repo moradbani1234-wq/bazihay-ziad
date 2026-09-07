@@ -1303,11 +1303,31 @@ class DrawingBattleManager:
         if not game:return
         ranked=sorted(game["players"], key=lambda u:game["scores"].get(u,0), reverse=True)
         winner=ranked[0] if ranked and len([x for x in ranked if game["scores"].get(x,0)==game["scores"].get(ranked[0],0)])==1 else None
+        # پاداش نهایی بازی: فقط بعد از پایان همه دورها پرداخت و اعلام می‌شود.
+        # رتبه‌های بالاتر جام و سکه بیشتری می‌گیرند.
+        reward_table = {
+            1: {"trophies": 5, "coins": 500},
+            2: {"trophies": 3, "coins": 300},
+            3: {"trophies": 2, "coins": 200},
+            4: {"trophies": 1, "coins": 100},
+        }
+        final_rewards = {}
         if winner:
-            await db.update_stats(winner,wins=5)
-            for u in ranked[1:]: await db.update_stats(u,losses=1)
+            for i, u in enumerate(ranked, 1):
+                r = reward_table.get(i, {"trophies": 0, "coins": 0})
+                await db.adjust_wallet(u, r["coins"], r["trophies"])
+                final_rewards[u] = r
+                if i == 1:
+                    await db.update_stats(u, wins=1)
+                else:
+                    await db.update_stats(u, losses=1)
         else:
-            for u in ranked: await db.update_stats(u,draws=1)
+            # در صورت مساوی بودن، هر بازیکن پاداش پایه می‌گیرد و draw ثبت می‌شود.
+            for u in ranked:
+                r = {"trophies": 1, "coins": 100}
+                await db.adjust_wallet(u, r["coins"], r["trophies"])
+                final_rewards[u] = r
+                await db.update_stats(u, draws=1)
         ts=int(time.time())
         history_rows=[]
         for u in game["players"]:
@@ -1315,7 +1335,8 @@ class DrawingBattleManager:
             opponents = ",".join(game["profiles"].get(o,{}).get("public_username",o) for o in game["players"] if o!=u)
             history_rows.append({"username":u,"result":result,"points":game["scores"].get(u,0),"opponents":opponents,"mode":self.mode,"created_at":ts})
         await db.log_game_history(history_rows)
-        await self._broadcast(game,{"type":"game_over","winner":winner,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"]})
+        # نتیجه نهایی فقط پس از وقفه ۱۰ ثانیه‌ای آخرین دور ارسال می‌شود.
+        await self._broadcast(game,{"type":"game_over","winner":winner,"scores":game["scores"],"active":game["active"],"profiles":game["profiles"],"rewards":final_rewards,"ranked":ranked})
         for u in game["players"]: self.player_game.pop(u,None)
 
     async def leave(self,username):
