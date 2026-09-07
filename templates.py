@@ -701,7 +701,7 @@ def profile_page(username, prof):
     support_box='<a class="support-mini-card" href="/support/ticket">🛡️ <b>پشتیبانی رسمی</b><span>برای ارتباط مستقیم، تیکت ثبت کن</span></a>' if is_support else ''
     bio='<div class="moderation-hidden">این بخش به‌طور موقت محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get("chat_notice") else ''
-    body=f'''<div class="profile-card hero page-enter">{notice}<div class="profile-head"><div>{avatar_html}</div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(prof['username'])}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>جام</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f'''<div class="profile-card hero page-enter">{notice}<div class="profile-head"><div>{avatar_html}</div><div><h1>@{html.escape(prof['username'])}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{badge}</div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="stat-grid"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div><div class="stat-box"><b>{prof.get('wins',0)}</b><br>جام</div><div class="stat-box"><b>{prof.get('points',0)}</b><br>امتیاز</div></div>{actions}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 def settings_page(username, prof):
@@ -1141,7 +1141,7 @@ def profile_page(username, prof):
     bio='<div class="moderation-hidden">این بخش موقتاً محدود شده است.</div>' if bio_banned else html.escape(prof.get('bio') or 'این کاربر هنوز بیوگرافی ننوشته.')
     notice=f'<div class="error" style="margin-bottom:12px;text-align:center">💬 {html.escape(str(prof.get("chat_notice") or ""))}</div>' if prof.get('chat_notice') else ''
     history_html=_history_html(prof.get('game_history'))
-    body=f'''<div class="profile-card hero page-enter {theme} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-hero-row"><div class="profile-side-box"><b>🏆 {int(prof.get('wins',0) or 0)}</b><span>جام</span></div><div class="profile-hero-center"><div class="profile-head"><div class="{avatar_wrap_cls} {frame_class}"{avatar_wrap_style}>{avatar_html}{img_frame}<i class="aura-extra" aria-hidden="true"></i></div><div><div class="profile-kicker">PLAYER PROFILE</div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div></div><div class="profile-side-box"><b>⭐ {int(prof.get('points',0) or 0)}</b><span>امتیاز کل</span></div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="profile-mini-stats"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div></div>{actions}{history_html}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
+    body=f'''<div class="profile-card hero page-enter {theme} {effect_class} {"has-frame" if active_frame else ""} {"name-glow" if "name_effect" in owned else ""}">{notice}<div class="profile-hero-row"><div class="profile-side-box"><b>🏆 {int(prof.get('wins',0) or 0)}</b><span>جام</span></div><div class="profile-hero-center"><div class="profile-head"><div class="{avatar_wrap_cls} {frame_class}"{avatar_wrap_style}>{avatar_html}{img_frame}<i class="aura-extra" aria-hidden="true"></i></div><div><h1>@{html.escape(public_id)}</h1><div class="profile-age">🎂 {int(prof.get('age') or 18)} سال</div>{league_html}{badge}</div></div></div><div class="profile-side-box"><b>⭐ {int(prof.get('points',0) or 0)}</b><span>امتیاز کل</span></div></div>{tag_box}<div class="profile-bio">{bio}</div><div class="profile-mini-stats"><div class="stat-box"><b>{correct}%</b><br>حدس درست</div><div class="stat-box"><b>{wrong}%</b><br>حدس غلط</div></div>{actions}{history_html}{support_box}</div>{scripts}<div style="text-align:center;margin-top:14px"><a class="btn" href="/lobby">← بازگشت به لابی</a></div>'''
     return page_shell('پروفایل',body,username)
 
 
@@ -1742,5 +1742,100 @@ BASE_CSS += """
   border:0!important;
   outline:0!important;
   border-radius:50%!important;
+}
+"""
+
+
+BASE_CSS += """
+/* === V14 FINAL HALO / AVATAR CLEANUP ===
+   One thick halo only. No old border, no outer circle, no second aura layer.
+*/
+/* Remove every legacy avatar/frame border so it cannot appear underneath the halo. */
+.profile-head>div:first-child[class*="frame-"],
+.lobby-profile-avatar[class*="frame-"],
+.chat-avatar[class*="frame-"],
+.draw-avatar[class*="frame-"],
+.leader-avatar-wrap[class*="frame-"]{
+  border:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+
+/* The avatar image sits inside; the single halo sits above it and slightly outside. */
+.profile-head>div:first-child[class*="frame-"]::before,
+.lobby-profile-avatar[class*="frame-"]::before,
+.chat-avatar[class*="frame-"]::before,
+.draw-avatar[class*="frame-"]::before,
+.leader-avatar-wrap[class*="frame-"]::before{
+  content:""!important;
+  position:absolute!important;
+  inset:-3px!important;
+  width:auto!important;
+  height:auto!important;
+  box-sizing:border-box!important;
+  border:5px solid currentColor!important;
+  border-radius:50%!important;
+  background:transparent!important;
+  z-index:10!important;
+  pointer-events:none!important;
+  transform:none!important;
+  opacity:1!important;
+  animation:haloCleanPulse 2.2s ease-in-out infinite!important;
+}
+
+/* Frame colors. */
+.profile-head>div:first-child.frame-premium::before,
+.lobby-profile-avatar.frame-premium::before,
+.chat-avatar.frame-premium::before,
+.draw-avatar.frame-premium::before,
+.leader-avatar-wrap.frame-premium::before{color:#74e9ff!important;box-shadow:0 0 9px rgba(116,233,255,.85),0 0 18px rgba(116,233,255,.35)!important}
+.frame-bronze::before{color:#d99a63!important;box-shadow:0 0 9px rgba(217,154,99,.8)!important}
+.frame-davinci::before{color:#4be3d8!important;box-shadow:0 0 9px rgba(75,227,216,.85)!important}
+.frame-picasso::before{color:#ff5fa9!important;box-shadow:0 0 9px rgba(255,95,169,.85)!important}
+.frame-gold::before{color:#ffd75b!important;box-shadow:0 0 10px rgba(255,215,91,.9)!important}
+.frame-ice::before{color:#a7f6ff!important;box-shadow:0 0 10px rgba(167,246,255,.9)!important}
+.frame-angel::before{color:#fff6d9!important;box-shadow:0 0 10px rgba(255,246,217,.9)!important}
+.frame-fire::before{color:#ff7518!important;box-shadow:0 0 10px rgba(255,117,24,.9)!important}
+.frame-lightning::before{color:#6be9ff!important;box-shadow:0 0 10px rgba(107,233,255,.9)!important}
+.frame-purple::before{color:#c65aff!important;box-shadow:0 0 10px rgba(198,90,255,.9)!important}
+.frame-king::before{color:#ffd75b!important;box-shadow:0 0 10px rgba(255,215,91,.95)!important}
+
+/* Absolutely no second circle/bloom/extra aura. */
+.profile-head>div:first-child[class*="frame-"]::after,
+.lobby-profile-avatar[class*="frame-"]::after,
+.chat-avatar[class*="frame-"]::after,
+.draw-avatar[class*="frame-"]::after,
+.leader-avatar-wrap[class*="frame-"]::after,
+.aura-extra{display:none!important;content:none!important;background:none!important;box-shadow:none!important}
+
+/* Make avatar images clean and circular. */
+.profile-head>div:first-child[class*="frame-"]>img,
+.lobby-profile-avatar[class*="frame-"]>img,
+.chat-avatar[class*="frame-"]>img,
+.draw-avatar[class*="frame-"]>img,
+.leader-avatar-wrap[class*="frame-"]>.leader-avatar,
+.leader-avatar-wrap[class*="frame-"]>.leader-avatar-fallback{
+  position:relative!important;
+  z-index:5!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:50%!important;
+  object-fit:cover!important;
+}
+
+/* Ranking: remove the old white/purple border that made a second ring. */
+.leader-podium-card .leader-avatar,
+.leader-podium-card .leader-avatar-fallback,
+.leader-list-avatar .leader-avatar,
+.leader-list-avatar .leader-avatar-fallback{
+  border:0!important;
+  box-shadow:none!important;
+  border-radius:50%!important;
+}
+
+@keyframes haloCleanPulse{
+  0%,100%{opacity:.86;filter:brightness(1)}
+  50%{opacity:1;filter:brightness(1.18)}
 }
 """
