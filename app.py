@@ -1059,6 +1059,7 @@ class DrawingBattleManager:
         self.games = {}
         self.player_game = {}
         self.lock = asyncio.Lock()
+        self.http_events = {}
 
     async def _profiles(self, players):
         out = {}
@@ -1120,8 +1121,11 @@ class DrawingBattleManager:
             for i, (u, s) in enumerate(self.waiting):
                 if u == username and s is ws:
                     self.waiting.pop(i)
-                    try: await ws.send_json({"type":"queue_timeout"})
-                    except Exception: pass
+                    if ws:
+                        try: await ws.send_json({"type":"queue_timeout"})
+                        except Exception: pass
+                    else:
+                        self.http_events.setdefault(username, []).append({"type":"queue_timeout"})
                     break
 
     async def _send(self, ws, payload):
@@ -1132,7 +1136,46 @@ class DrawingBattleManager:
 
     async def _to_user(self, game, username, payload):
         ws = game["sockets"].get(username)
-        if ws: await self._send(ws, payload)
+        if ws:
+            await self._send(ws, payload)
+        else:
+            self.http_events.setdefault(username, []).append(payload)
+            self.http_events[username] = self.http_events[username][-20:]
+
+    async def http_join(self, username):
+        async with self.lock:
+            gid = self.player_game.get(username)
+            if gid and gid in self.games:
+                return {"ok": True, "joined": True}
+            self.waiting = [(u, s) for u, s in self.waiting if u != username]
+            self.waiting.append((username, None))
+            self.http_events.setdefault(username, [])
+            if len(self.waiting) < self.mode:
+                self.http_events[username].append({"type":"waiting", "needed":self.mode, "count":len(self.waiting), "timeout":30})
+                asyncio.create_task(self._queue_timeout(username, None))
+                return {"ok": True, "waiting": True}
+            picked = self.waiting[:self.mode]
+            del self.waiting[:self.mode]
+            players = [u for u, _ in picked]
+            gid = secrets.token_hex(7)
+            game = {
+                "id": gid, "mode": self.mode, "players": players, "active": players[:],
+                "sockets": {}, "scores": {u:0 for u in players}, "round":0,
+                "drawer":None, "guesser":None, "word":None, "options":[],
+                "wrong_words": {u:set() for u in players}, "attempted": set(), "guesses": {}, "round_points": {},
+                "round_active":False, "phase":"waiting", "deadline":0.0, "strokes":[],
+                "profiles": await self._profiles(players), "last_result": None,
+            }
+            self.games[gid] = game
+            for u in players: self.player_game[u] = gid
+        await self._next_round(gid)
+        return {"ok": True, "joined": True}
+
+    async def http_events_for(self, username):
+        async with self.lock:
+            ev = self.http_events.get(username, [])
+            self.http_events[username] = []
+            return ev
 
     async def _broadcast(self, game, payload):
         for u in list(game["active"]):
@@ -1370,6 +1413,33 @@ class DrawingBattleManager:
 
 two_player_drawing_manager=DrawingBattleManager(2)
 four_player_drawing_manager=DrawingBattleManager(4)
+
+@app.post("/api/drawing/join/{mode}")
+async def api_drawing_join(request: Request, mode: int):
+    username=request.session.get("username")
+    if not username or mode not in (2,4): return {"ok":False,"error":"login_required"}
+    manager=two_player_drawing_manager if mode==2 else four_player_drawing_manager
+    if not _is_support(username) and (await _ban_for(username,"games") or await _ban_for(username,"drawing")):
+        return {"ok":False,"error":"banned"}
+    return await manager.http_join(username)
+
+@app.get("/api/drawing/events/{mode}")
+async def api_drawing_events(request: Request, mode: int):
+    username=request.session.get("username")
+    if not username or mode not in (2,4): return {"ok":False,"error":"login_required"}
+    manager=two_player_drawing_manager if mode==2 else four_player_drawing_manager
+    return {"ok":True,"events":await manager.http_events_for(username)}
+
+@app.post("/api/drawing/action/{mode}")
+async def api_drawing_action(request: Request, mode: int):
+    username=request.session.get("username")
+    if not username or mode not in (2,4): return {"ok":False,"error":"login_required"}
+    manager=two_player_drawing_manager if mode==2 else four_player_drawing_manager
+    data=await request.json()
+    typ=data.get("type")
+    if typ in ("draw","draw_batch","clear"): await manager.draw(username,data)
+    elif typ=="guess": await manager.guess(username,data.get("word"))
+    return {"ok":True}
 
 @app.websocket("/ws/drawing-multi/{mode}")
 async def ws_drawing_multi(websocket: WebSocket, mode: int):
