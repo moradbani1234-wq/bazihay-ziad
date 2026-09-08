@@ -801,10 +801,11 @@ class ChatManager:
     def disconnect_public(self, ws: WebSocket):
         self.public_conns.discard(ws)
 
-    async def broadcast_public(self, sender: str, content: str, reply_to_id=None):
+    async def broadcast_public(self, sender: str, content: str, reply_to_id=None, sticker=None):
         mid = await db.save_message("public", sender, content, reply_to_id)
         prof = await db.profile(sender)
         payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender), "active_frame": (prof or {}).get("active_frame", ""), "owned_items": list((prof or {}).get("owned_items") or [])}
+        if sticker: payload["sticker"] = sticker
         dead = []
         for ws in self.public_conns:
             try:
@@ -829,15 +830,16 @@ class ChatManager:
         if room in self.private_conns:
             self.private_conns[room].discard(ws)
 
-    async def broadcast_private(self, room: str, sender: str, content: str, reply_to_id=None):
+    async def broadcast_private(self, room: str, sender: str, content: str, reply_to_id=None, sticker=None):
         mid = await db.save_message(room, sender, content, reply_to_id)
         try:
             a,b=room.split(":",1); receiver=b if sender==a else a
-            await db.create_notification(receiver, "message", "پیام خصوصی جدید", f"@{sender}: {content}")
+            await db.create_notification(receiver, "message", "پیام خصوصی جدید", f"@{sender}: 🎭 استیکر" if sticker else f"@{sender}: {content}")
         except Exception:
             pass
         prof = await db.profile(sender)
         payload = {"id": mid, "sender": sender, "public_username": (prof or {}).get("public_username", sender), "content": content, "reply_to_id": reply_to_id, "created_at": int(time.time()), "avatar": (prof or {}).get("avatar", ""), "display_name": (prof or {}).get("display_name", sender), "active_frame": (prof or {}).get("active_frame", ""), "owned_items": list((prof or {}).get("owned_items") or [])}
+        if sticker: payload["sticker"] = sticker
         for ws in list(self.private_conns.get(room, [])):
             try:
                 await ws.send_json(payload)
@@ -876,6 +878,11 @@ async def ws_chat_public(websocket: WebSocket):
             data = await websocket.receive_json()
             if data.get("type")=="typing":
                 await chat_manager.broadcast_typing("public", username, data.get("typing")); continue
+            if data.get("type") == "sticker":
+                sticker = str(data.get("sticker") or "")
+                if sticker == "fromg":
+                    await chat_manager.broadcast_public(username, "__sticker__:fromg", sticker="fromg")
+                continue
             content = (data.get("content") or "").strip()
             if content:
                 if not _is_support(username) and await _ban_for(username, "chat"):
@@ -1016,6 +1023,15 @@ async def ws_chat_private(websocket: WebSocket, other: str):
             data = await websocket.receive_json()
             if data.get("type")=="typing":
                 await chat_manager.broadcast_typing(room, username, data.get("typing")); continue
+            if data.get("type") == "sticker":
+                sticker = str(data.get("sticker") or "")
+                if sticker == "fromg":
+                    if not is_support_chat and not _is_support(username) and await db.any_block(username, other):
+                        continue
+                    if not is_support_chat and not _is_support(username) and await db.friend_status(username, other) != "friends":
+                        continue
+                    await chat_manager.broadcast_private(room, username, "__sticker__:fromg", sticker="fromg")
+                continue
             content = (data.get("content") or "").strip()
             if content:
                 if not _is_support(username) and await _ban_for(username, "chat"):
@@ -1246,6 +1262,12 @@ class DrawingBattleManager:
         game["strokes"].append(stroke)
         await self._broadcast(game, {"type":"draw",**stroke})
 
+    async def sticker(self, username, sticker):
+        if sticker != "fromg": return
+        gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
+        if not game or username not in game.get("active",[]): return
+        await self._broadcast(game, {"type":"sticker", "sticker":"fromg", "sender":username})
+
     async def guess(self, username, word):
         gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
         if not game or not game["round_active"] or username==game["drawer"] or username not in game["active"]: return
@@ -1380,6 +1402,7 @@ async def ws_drawing_multi(websocket: WebSocket, mode: int):
             data=await websocket.receive_json(); typ=data.get("type")
             if typ in ("draw","draw_batch","clear"): await four_player_drawing_manager.draw(username,data)
             elif typ=="guess": await four_player_drawing_manager.guess(username,data.get("word"))
+            elif typ=="sticker": await four_player_drawing_manager.sticker(username,data.get("sticker"))
     except WebSocketDisconnect: await four_player_drawing_manager.disconnect(username, websocket)
 
 @app.websocket("/ws/drawing")
@@ -1393,6 +1416,7 @@ async def ws_drawing(websocket: WebSocket):
             data=await websocket.receive_json(); typ=data.get("type")
             if typ in ("draw","draw_batch","clear"): await two_player_drawing_manager.draw(username,data)
             elif typ=="guess": await two_player_drawing_manager.guess(username,data.get("word"))
+            elif typ=="sticker": await two_player_drawing_manager.sticker(username,data.get("sticker"))
     except WebSocketDisconnect: await two_player_drawing_manager.disconnect(username, websocket)
 
 
