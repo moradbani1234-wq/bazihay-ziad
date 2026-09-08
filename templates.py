@@ -56,6 +56,16 @@ VIDEO_STICKER_URLS = {
     "pack_sticker_05": "/static/stickers/sticker_pack_05.mp4",
 }
 
+# پک جدید با WebP متحرک: روی موبایل مستقیم مثل تصویر پخش می‌شود و دکمهٔ Play ندارد.
+PACK_STICKER_WEBP_URLS = {
+    f"pack_sticker_{i:02d}": f"/static/stickers/webp/sticker_pack_{i:02d}.webp"
+    for i in range(1, 6)
+}
+PACK_STICKER_PRELOAD_LINKS = ''.join(
+    '<link rel="preload" href="' + PACK_STICKER_WEBP_URLS[sid] + '" as="image" fetchpriority="high">'
+    for sid in PACK_STICKER_IDS
+)
+
 IMAGE_STICKER_FALLBACKS = {sid: "data:image/webp;base64," + b64 for sid, b64 in IMAGE_STICKER_B64.items()}
 
 CAT_SVG = """<svg class="sticker-cat" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg"><g class="cat-bob"><polygon points="28,38 40,10 52,40" fill="#a855f7"/><polygon points="92,38 80,10 68,40" fill="#a855f7"/><polygon points="33,34 40,18 47,35" fill="#e9d5ff"/><polygon points="87,34 80,18 73,35" fill="#e9d5ff"/><circle cx="60" cy="66" r="42" fill="#a855f7"/><circle cx="42" cy="82" r="8" fill="#f9a8d4" opacity="0.6"/><circle cx="78" cy="82" r="8" fill="#f9a8d4" opacity="0.6"/><g class="cat-blink"><ellipse cx="44" cy="62" rx="12" ry="15" fill="#fff"/><ellipse cx="76" cy="62" rx="12" ry="15" fill="#fff"/><circle cx="46" cy="66" r="6" fill="#1e1033"/><circle cx="78" cy="66" r="6" fill="#1e1033"/></g><polygon points="60,74 55,80 65,80" fill="#f9a8d4"/><path d="M50,86 Q60,94 70,86" stroke="#1e1033" stroke-width="3" fill="none" stroke-linecap="round"/><line x1="14" y1="70" x2="34" y2="66" stroke="#1e1033" stroke-width="2"/><line x1="14" y1="78" x2="34" y2="78" stroke="#1e1033" stroke-width="2"/><line x1="106" y1="70" x2="86" y2="66" stroke="#1e1033" stroke-width="2"/><line x1="106" y1="78" x2="86" y2="78" stroke="#1e1033" stroke-width="2"/></g></svg>"""
@@ -66,10 +76,15 @@ STICKER_SVGS = {"cat": CAT_SVG, "star": STAR_SVG, "ghost": GHOST_SVG}
 
 def _sticker_visual_html(sid: str) -> str:
     if sid in IMAGE_STICKER_IDS:
-        label = STICKER_LABELS.get(sid, "استیکر")
+        label = html.escape(STICKER_LABELS.get(sid, "استیکر"))
         url = IMAGE_STICKER_URLS[sid]
         return ('<img src="' + url + '" alt="' + label + '" loading="eager" decoding="async" '
                 'data-sticker-id="' + sid + '" onerror="window.__stickerFallback&&window.__stickerFallback(this)">')
+    if sid in PACK_STICKER_WEBP_URLS:
+        label = html.escape(STICKER_LABELS.get(sid, "استیکر جدید"))
+        url = PACK_STICKER_WEBP_URLS[sid]
+        return ('<img class="sticker-animated-webp" src="' + url + '" alt="' + label + '" '
+                'loading="eager" decoding="async" fetchpriority="high" data-sticker-id="' + sid + '">')
     if sid in VIDEO_STICKER_IDS:
         label = html.escape(STICKER_LABELS.get(sid, "استیکر جدید"))
         url = VIDEO_STICKER_URLS[sid]
@@ -79,20 +94,12 @@ def _sticker_visual_html(sid: str) -> str:
 
 def _sticker_choice_html(sid: str) -> str:
     inner = _sticker_visual_html(sid)
-    if sid not in IMAGE_STICKER_IDS and sid not in VIDEO_STICKER_IDS:
-        inner = inner.replace('class="', 'class="sticker-preview ', 1)
+    if sid in PACK_STICKER_WEBP_URLS:
+        inner = inner.replace('class="sticker-animated-webp"', 'class="sticker-preview sticker-animated-webp"', 1)
     elif sid in IMAGE_STICKER_IDS:
         inner = inner.replace('<img ', '<img class="sticker-preview" ', 1)
     else:
-        inner = inner.replace('<video ', '<video class="sticker-preview sticker-video" ', 1)
-    return '<button type="button" class="sticker-choice" data-sticker-choice="' + sid + '" title="برای ارسال لمس کن">' + inner + '</button>'
-
-def _sticker_choice_html(sid: str) -> str:
-    inner = _sticker_visual_html(sid)
-    if sid not in IMAGE_STICKER_IDS:
         inner = inner.replace('class="', 'class="sticker-preview ', 1)
-    else:
-        inner = inner.replace('<img ', '<img class="sticker-preview" ', 1)
     return '<button type="button" class="sticker-choice" data-sticker-choice="' + sid + '" title="برای ارسال لمس کن">' + inner + '</button>'
 
 STICKER_CSS = r"""
@@ -130,7 +137,7 @@ STICKER_CSS = r"""
 """
 STICKER_PRELOAD_LINKS = ''.join('<link rel="preload" href="' + IMAGE_STICKER_URLS[sid] + '" as="image">' for sid in IMAGE_STICKER_IDS)
 STICKER_FALLBACK_MAP_JSON = '{' + ','.join('"' + sid + '":"' + IMAGE_STICKER_FALLBACKS[sid] + '"' for sid in IMAGE_STICKER_IDS) + '}'
-STICKER_BOOT = STICKER_PRELOAD_LINKS + '<style>' + STICKER_CSS + '</style><script>window.__stickerFallbackMap=' + STICKER_FALLBACK_MAP_JSON + ';window.__stickerFallback=window.__stickerFallback||function(img){if(!img||img.dataset.fb)return;img.dataset.fb="1";img.onerror=null;var sid=img.dataset.stickerId||"fromg";img.src=window.__stickerFallbackMap[sid]||window.__stickerFallbackMap.fromg};</script>'
+STICKER_BOOT = STICKER_PRELOAD_LINKS + PACK_STICKER_PRELOAD_LINKS + '<style>' + STICKER_CSS + '</style><script>window.__stickerFallbackMap=' + STICKER_FALLBACK_MAP_JSON + ';window.__stickerFallback=window.__stickerFallback||function(img){if(!img||img.dataset.fb)return;img.dataset.fb="1";img.onerror=null;var sid=img.dataset.stickerId||"fromg";img.src=window.__stickerFallbackMap[sid]||window.__stickerFallbackMap.fromg};</script>'
 def _sticker_picker_html(ids, button_text="🎭 استیکر", button_id="stickerBtn", picker_id="stickerPicker"):
     return '<div class="sticker-tools"><button type="button" class="sticker-btn" id="' + button_id + '" title="استیکر">' + button_text + '</button><div class="sticker-picker" id="' + picker_id + '"><div class="sticker-picker-grid">' + ''.join(_sticker_choice_html(sid) for sid in ids) + '</div></div></div>'
 
@@ -141,11 +148,13 @@ PACK_STICKER_PICKER_HTML = _sticker_picker_html(PACK_STICKER_IDS, "🎁 پک ا�
 STICKER_JS = r"""
 const STICKER_IMAGE_URLS={"fromg":"/static/stickers/fromg.webp","duck":"/static/stickers/duck.webp","sheep":"/static/stickers/sheep.webp"};
 const STICKER_VIDEO_URLS=__VIDEO_STICKER_URLS_JS_TOKEN__;
+const STICKER_ANIMATED_IMAGE_URLS=__PACK_STICKER_WEBP_URLS_JS_TOKEN__;
 window.__stickerFallbackMap=window.__stickerFallbackMap||{"fromg":"__STICKER_FALLBACK_URI_TOKEN__","duck":"__DUCK_FALLBACK_URI_TOKEN__","sheep":"__SHEEP_FALLBACK_URI_TOKEN__"};
 window.__stickerFallback=window.__stickerFallback||function(img){if(!img||img.dataset.fb)return;img.dataset.fb="1";img.onerror=null;const sid=img.dataset.stickerId||"fromg";img.src=window.__stickerFallbackMap[sid]||window.__stickerFallbackMap.fromg};
 Object.keys(STICKER_IMAGE_URLS).forEach(sid=>{const pre=new Image();pre.onerror=()=>{pre.dataset.stickerId=sid;window.__stickerFallback(pre)};pre.src=STICKER_IMAGE_URLS[sid]});
 const STICKER_SVGS={"cat":__CAT_SVG_JS_TOKEN__,"star":__STAR_SVG_JS_TOKEN__,"ghost":__GHOST_SVG_JS_TOKEN__};
 function makeStickerVisual(id){
+  if(STICKER_ANIMATED_IMAGE_URLS[id]){const img=document.createElement('img');img.className='sticker-animated-webp';img.alt='استیکر';img.loading='eager';img.decoding='async';img.dataset.stickerId=id;img.src=STICKER_ANIMATED_IMAGE_URLS[id];return img}
   if(STICKER_VIDEO_URLS[id]){
     const v=document.createElement('video');v.className='sticker-video';v.dataset.stickerId=id;v.muted=true;v.defaultMuted=true;v.autoplay=true;v.loop=true;v.playsInline=true;v.preload='metadata';
     v.src=STICKER_VIDEO_URLS[id];v.setAttribute('aria-label','استیکر');v.play().catch(()=>{});return v;
@@ -180,7 +189,7 @@ function initStickerVideoPerformance(){
   }
 }
 function initStickerPicker(sendFn){
-  const btn=document.getElementById('stickerBtn'),picker=document.getElementById('stickerPicker');
+  const btn=document.getElementById('stickerBtn')||document.getElementById('packStickerBtn')||document.querySelector('.sticker-btn'),picker=document.getElementById('stickerPicker')||document.getElementById('packStickerPicker')||document.querySelector('.sticker-picker');
   if(!btn||!picker)return;
   btn.onclick=(e)=>{e.stopPropagation();picker.classList.toggle('show')};
   picker.querySelectorAll('[data-sticker-choice]').forEach(choice=>{
@@ -202,6 +211,7 @@ STICKER_JS = STICKER_JS.replace("__STICKER_FALLBACK_URI_TOKEN__", STICKER_FALLBA
 STICKER_JS = STICKER_JS.replace("__DUCK_FALLBACK_URI_TOKEN__", IMAGE_STICKER_FALLBACKS["duck"])
 STICKER_JS = STICKER_JS.replace("__SHEEP_FALLBACK_URI_TOKEN__", IMAGE_STICKER_FALLBACKS["sheep"])
 STICKER_JS = STICKER_JS.replace("__VIDEO_STICKER_URLS_JS_TOKEN__", __import__("json").dumps(VIDEO_STICKER_URLS, ensure_ascii=False))
+STICKER_JS = STICKER_JS.replace("__PACK_STICKER_WEBP_URLS_JS_TOKEN__", __import__("json").dumps(PACK_STICKER_WEBP_URLS, ensure_ascii=False))
 STICKER_JS = STICKER_JS.replace("__CAT_SVG_JS_TOKEN__", '"<svg class=\\"sticker-cat\\" viewBox=\\"0 0 120 120\\" xmlns=\\"http://www.w3.org/2000/svg\\"><g class=\\"cat-bob\\"><polygon points=\\"28,38 40,10 52,40\\" fill=\\"#a855f7\\"/><polygon points=\\"92,38 80,10 68,40\\" fill=\\"#a855f7\\"/><polygon points=\\"33,34 40,18 47,35\\" fill=\\"#e9d5ff\\"/><polygon points=\\"87,34 80,18 73,35\\" fill=\\"#e9d5ff\\"/><circle cx=\\"60\\" cy=\\"66\\" r=\\"42\\" fill=\\"#a855f7\\"/><circle cx=\\"42\\" cy=\\"82\\" r=\\"8\\" fill=\\"#f9a8d4\\" opacity=\\"0.6\\"/><circle cx=\\"78\\" cy=\\"82\\" r=\\"8\\" fill=\\"#f9a8d4\\" opacity=\\"0.6\\"/><g class=\\"cat-blink\\"><ellipse cx=\\"44\\" cy=\\"62\\" rx=\\"12\\" ry=\\"15\\" fill=\\"#fff\\"/><ellipse cx=\\"76\\" cy=\\"62\\" rx=\\"12\\" ry=\\"15\\" fill=\\"#fff\\"/><circle cx=\\"46\\" cy=\\"66\\" r=\\"6\\" fill=\\"#1e1033\\"/><circle cx=\\"78\\" cy=\\"66\\" r=\\"6\\" fill=\\"#1e1033\\"/></g><polygon points=\\"60,74 55,80 65,80\\" fill=\\"#f9a8d4\\"/><path d=\\"M50,86 Q60,94 70,86\\" stroke=\\"#1e1033\\" stroke-width=\\"3\\" fill=\\"none\\" stroke-linecap=\\"round\\"/><line x1=\\"14\\" y1=\\"70\\" x2=\\"34\\" y2=\\"66\\" stroke=\\"#1e1033\\" stroke-width=\\"2\\"/><line x1=\\"14\\" y1=\\"78\\" x2=\\"34\\" y2=\\"78\\" stroke=\\"#1e1033\\" stroke-width=\\"2\\"/><line x1=\\"106\\" y1=\\"70\\" x2=\\"86\\" y2=\\"66\\" stroke=\\"#1e1033\\" stroke-width=\\"2\\"/><line x1=\\"106\\" y1=\\"78\\" x2=\\"86\\" y2=\\"78\\" stroke=\\"#1e1033\\" stroke-width=\\"2\\"/></g></svg>"')
 STICKER_JS = STICKER_JS.replace("__STAR_SVG_JS_TOKEN__", '"<svg class=\\"sticker-star\\" viewBox=\\"0 0 120 120\\" xmlns=\\"http://www.w3.org/2000/svg\\"><g class=\\"star-wobble\\"><polygon points=\\"60,8 74,46 115,46 82,70 94,110 60,86 26,110 38,70 5,46 46,46\\" fill=\\"#fbbf24\\" stroke=\\"#b45309\\" stroke-width=\\"3\\" stroke-linejoin=\\"round\\"/><circle cx=\\"48\\" cy=\\"62\\" r=\\"5\\" fill=\\"#1e1033\\"/><circle cx=\\"72\\" cy=\\"62\\" r=\\"5\\" fill=\\"#1e1033\\"/><path d=\\"M48,76 Q60,86 72,76\\" stroke=\\"#1e1033\\" stroke-width=\\"3\\" fill=\\"none\\" stroke-linecap=\\"round\\"/><circle cx=\\"38\\" cy=\\"72\\" r=\\"6\\" fill=\\"#f97316\\" opacity=\\"0.5\\"/><circle cx=\\"82\\" cy=\\"72\\" r=\\"6\\" fill=\\"#f97316\\" opacity=\\"0.5\\"/></g><circle class=\\"star-spark\\" cx=\\"18\\" cy=\\"30\\" r=\\"4\\" fill=\\"#fde68a\\"/><circle class=\\"star-spark\\" cx=\\"102\\" cy=\\"26\\" r=\\"3\\" fill=\\"#fde68a\\"/><circle class=\\"star-spark\\" cx=\\"14\\" cy=\\"90\\" r=\\"3\\" fill=\\"#fde68a\\"/></svg>"')
 STICKER_JS = STICKER_JS.replace("__GHOST_SVG_JS_TOKEN__", '"<svg class=\\"sticker-ghost\\" viewBox=\\"0 0 120 120\\" xmlns=\\"http://www.w3.org/2000/svg\\"><g class=\\"ghost-float\\"><path d=\\"M20,60 a40,40 0 0,1 80,0 v28 q-10,14 -20,0 q-10,14 -20,0 q-10,14 -20,0 q-10,14 -20,0 z\\" fill=\\"#8b5cf6\\"/><circle cx=\\"38\\" cy=\\"76\\" r=\\"7\\" fill=\\"#c4b5fd\\" opacity=\\"0.6\\"/><circle cx=\\"82\\" cy=\\"76\\" r=\\"7\\" fill=\\"#c4b5fd\\" opacity=\\"0.6\\"/><ellipse cx=\\"45\\" cy=\\"62\\" rx=\\"9\\" ry=\\"12\\" fill=\\"#1e1033\\"/><ellipse cx=\\"75\\" cy=\\"62\\" rx=\\"9\\" ry=\\"12\\" fill=\\"#1e1033\\"/><circle cx=\\"42\\" cy=\\"58\\" r=\\"2.5\\" fill=\\"#fff\\"/><circle cx=\\"72\\" cy=\\"58\\" r=\\"2.5\\" fill=\\"#fff\\"/><ellipse cx=\\"60\\" cy=\\"76\\" rx=\\"6\\" ry=\\"8\\" fill=\\"#1e1033\\"/></g></svg>"')
