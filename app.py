@@ -880,8 +880,8 @@ async def ws_chat_public(websocket: WebSocket):
                 await chat_manager.broadcast_typing("public", username, data.get("typing")); continue
             if data.get("type") == "sticker":
                 sticker = str(data.get("sticker") or "")
-                if sticker == "fromg":
-                    await chat_manager.broadcast_public(username, "__sticker__:fromg", sticker="fromg")
+                if sticker in tpl.STICKER_IDS:
+                    await chat_manager.broadcast_public(username, f"__sticker__:{sticker}", sticker=sticker)
                 continue
             content = (data.get("content") or "").strip()
             if content:
@@ -1025,12 +1025,12 @@ async def ws_chat_private(websocket: WebSocket, other: str):
                 await chat_manager.broadcast_typing(room, username, data.get("typing")); continue
             if data.get("type") == "sticker":
                 sticker = str(data.get("sticker") or "")
-                if sticker == "fromg":
+                if sticker in tpl.STICKER_IDS:
                     if not is_support_chat and not _is_support(username) and await db.any_block(username, other):
                         continue
                     if not is_support_chat and not _is_support(username) and await db.friend_status(username, other) != "friends":
                         continue
-                    await chat_manager.broadcast_private(room, username, "__sticker__:fromg", sticker="fromg")
+                    await chat_manager.broadcast_private(room, username, f"__sticker__:{sticker}", sticker=sticker)
                 continue
             content = (data.get("content") or "").strip()
             if content:
@@ -1263,10 +1263,10 @@ class DrawingBattleManager:
         await self._broadcast(game, {"type":"draw",**stroke})
 
     async def sticker(self, username, sticker):
-        if sticker != "fromg": return
+        if sticker not in tpl.STICKER_IDS: return
         gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
         if not game or username not in game.get("active",[]): return
-        await self._broadcast(game, {"type":"sticker", "sticker":"fromg", "sender":username})
+        await self._broadcast(game, {"type":"sticker", "sticker":sticker, "sender":username})
 
     async def guess(self, username, word):
         gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
