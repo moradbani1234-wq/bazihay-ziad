@@ -277,6 +277,7 @@ SHOP_CATALOG = {
     "rose_frame": {"cost":1500, "type":"custom"},
     "gold_feather_frame": {"cost":1800, "type":"custom"},
     "blue_ice_frame": {"cost":1800, "type":"custom"},
+    "sticker_pack_5": {"cost":250, "type":"sticker_pack"},
 }
 
 @app.post("/shop/buy")
@@ -880,7 +881,7 @@ async def ws_chat_public(websocket: WebSocket):
                 await chat_manager.broadcast_typing("public", username, data.get("typing")); continue
             if data.get("type") == "sticker":
                 sticker = str(data.get("sticker") or "")
-                if sticker in tpl.STICKER_IDS:
+                if sticker in tpl.LEGACY_STICKER_IDS:
                     await chat_manager.broadcast_public(username, f"__sticker__:{sticker}", sticker=sticker)
                 continue
             content = (data.get("content") or "").strip()
@@ -1025,12 +1026,17 @@ async def ws_chat_private(websocket: WebSocket, other: str):
                 await chat_manager.broadcast_typing(room, username, data.get("typing")); continue
             if data.get("type") == "sticker":
                 sticker = str(data.get("sticker") or "")
-                if sticker in tpl.STICKER_IDS:
+                allowed = sticker in tpl.LEGACY_STICKER_IDS
+                if sticker in tpl.PACK_STICKER_IDS and tpl.STICKER_PACK_KEY in set(await db.owned_items_for(username)):
+                    allowed = True
+                if sticker in tpl.STICKER_IDS and allowed:
                     if not is_support_chat and not _is_support(username) and await db.any_block(username, other):
                         continue
                     if not is_support_chat and not _is_support(username) and await db.friend_status(username, other) != "friends":
                         continue
                     await chat_manager.broadcast_private(room, username, f"__sticker__:{sticker}", sticker=sticker)
+                elif sticker in tpl.PACK_STICKER_IDS:
+                    await websocket.send_json({"type":"sticker_locked"})
                 continue
             content = (data.get("content") or "").strip()
             if content:
@@ -1263,9 +1269,12 @@ class DrawingBattleManager:
         await self._broadcast(game, {"type":"draw",**stroke})
 
     async def sticker(self, username, sticker):
-        if sticker not in tpl.STICKER_IDS: return
+        if sticker not in tpl.PACK_STICKER_IDS: return
         gid=self.player_game.get(username); game=self.games.get(gid) if gid else None
         if not game or username not in game.get("active",[]): return
+        if tpl.STICKER_PACK_KEY not in set(await db.owned_items_for(username)):
+            await self._to_user(game, username, {"type":"sticker_locked"})
+            return
         await self._broadcast(game, {"type":"sticker", "sticker":sticker, "sender":username})
 
     async def guess(self, username, word):
