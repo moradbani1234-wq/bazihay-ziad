@@ -1,5 +1,7 @@
 import time
 import re
+import os
+import shutil
 import aiosqlite
 
 DB_PATH = "webgame.db"
@@ -35,7 +37,7 @@ async def init_db():
         await db.execute("""CREATE TABLE IF NOT EXISTS stats (
             username TEXT PRIMARY KEY, wins INTEGER NOT NULL DEFAULT 0,
             losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0,
-            points INTEGER NOT NULL DEFAULT 0, correct_guesses INTEGER NOT NULL DEFAULT 0, wrong_guesses INTEGER NOT NULL DEFAULT 0)""")
+            points INTEGER NOT NULL DEFAULT 0, correct_guesses INTEGER NOT NULL DEFAULT 0, wrong_guesses INTEGER NOT NULL DEFAULT 0, games_played INTEGER NOT NULL DEFAULT 0)""")
         try:
             await db.execute("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER")
         except Exception:
@@ -54,6 +56,16 @@ async def init_db():
             pass
         try:
             await db.execute("ALTER TABLE stats ADD COLUMN wrong_guesses INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            cur = await db.execute("PRAGMA table_info(stats)")
+            stats_cols = [r[1] for r in await cur.fetchall()]
+            if "games_played" not in stats_cols:
+                if os.path.exists(DB_PATH):
+                    try: shutil.copy2(DB_PATH, f"{DB_PATH}.backup-{int(time.time())}")
+                    except Exception: pass
+                await db.execute("ALTER TABLE stats ADD COLUMN games_played INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
         await db.execute("""CREATE TABLE IF NOT EXISTS room_music (
@@ -208,11 +220,11 @@ async def ensure_stats(username):
         await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)",(username,))
         await db.commit()
 
-async def update_stats(username, *, wins=0, losses=0, draws=0, points=0, correct_guesses=0, wrong_guesses=0):
+async def update_stats(username, *, wins=0, losses=0, draws=0, points=0, correct_guesses=0, wrong_guesses=0, games_played=0):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)",(username,))
-        await db.execute("""UPDATE stats SET wins=wins+?, losses=losses+?, draws=draws+?, points=points+?, correct_guesses=correct_guesses+?, wrong_guesses=wrong_guesses+?
-                            WHERE username=?""",(wins,losses,draws,points,correct_guesses,wrong_guesses,username))
+        await db.execute("""UPDATE stats SET wins=wins+?, losses=losses+?, draws=draws+?, points=points+?, correct_guesses=correct_guesses+?, wrong_guesses=wrong_guesses+?, games_played=MAX(0,games_played+?)
+                            WHERE username=?""",(wins,losses,draws,points,correct_guesses,wrong_guesses,games_played,username))
         await db.commit()
 
 async def log_game_history(rows):
@@ -412,7 +424,7 @@ async def profile(username):
         db.row_factory=aiosqlite.Row
         cur=await db.execute("""SELECT u.username,COALESCE(u.public_username,u.username) public_username,u.bio,u.avatar,COALESCE(u.age,18) age,COALESCE(u.active_frame,'') active_frame,
                                       COALESCE(s.wins,0) wins,COALESCE(s.losses,0) losses,COALESCE(s.draws,0) draws,COALESCE(s.points,0) points,
-                                      COALESCE(s.correct_guesses,0) correct_guesses,COALESCE(s.wrong_guesses,0) wrong_guesses
+                                      COALESCE(s.correct_guesses,0) correct_guesses,COALESCE(s.wrong_guesses,0) wrong_guesses,COALESCE(s.games_played,0) games_played
                                FROM users u LEFT JOIN stats s ON s.username=u.username
                                WHERE u.username=? OR lower(u.username)=lower(?) LIMIT 1""", (username, username))
         r=await cur.fetchone()
@@ -733,13 +745,13 @@ async def tags_for(username):
         return [dict(r) for r in await cur.fetchall()]
 
 
-async def adjust_wallet(username, coins_delta=0, trophies_delta=0):
-    coins_delta=int(coins_delta or 0); trophies_delta=int(trophies_delta or 0)
+async def adjust_wallet(username, coins_delta=0, trophies_delta=0, games_delta=0):
+    coins_delta=int(coins_delta or 0); trophies_delta=int(trophies_delta or 0); games_delta=int(games_delta or 0)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR IGNORE INTO wallet(username) VALUES (?)", (username,))
         await db.execute("UPDATE wallet SET coins=MAX(0,coins+?) WHERE username=?", (coins_delta,username))
         await db.execute("INSERT OR IGNORE INTO stats(username) VALUES (?)", (username,))
-        await db.execute("UPDATE stats SET wins=MAX(0,wins+?) WHERE username=?", (trophies_delta,username))
+        await db.execute("UPDATE stats SET wins=MAX(0,wins+?), games_played=MAX(0,games_played+?) WHERE username=?", (trophies_delta,games_delta,username))
         await db.commit()
     return await wallet_for(username), await profile(username)
 
